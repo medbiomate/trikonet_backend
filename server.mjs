@@ -388,6 +388,7 @@ async function wordpressRecords(type, params) {
         record.metas._job_employer_name = employer.post_title;
         record.metas._job_employer_url = `https://trikonet.com/employer/${employer.post_name}`;
         record.metas._job_logo = logos.get(Number(employer.ID)) || employer.meta._employer_featured_image_img || employer.meta._employer_featured_image || '';
+        record.logo = record.metas._job_logo;
       }
     }
   }
@@ -402,6 +403,7 @@ async function wordpressRecords(type, params) {
     for (const record of byId.values()) {
       record.metas._employer_open_jobs = countMap.get(record.id) || 0;
       record.metas._employer_logo = logos.get(record.id) || '';
+      record.logo = record.metas._employer_logo;
     }
   }
 

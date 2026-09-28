@@ -1,0 +1,414 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "title": "tes",
+      "description": "tes",
+      "salaryType": "Monthly",
+      "minSalary": "",
+      "maxSalary": "",
+      "experience": "",
+      "qualification": "",
+      "gender": "Any",
+      "applyType": "External URL",
+      "applyUrl": "",
+      "applyEmail": "",
+      "deadline": "2027-09-23",
+      "expiryDate": "2027-09-23",
+      "address": "",
+      "photoUrl": "",
+      "status": "publish",
+      "slug": "tes",
+      "company": "NMC Healthcare",
+      "banner": "",
+      "logo": "/uploads/employers/11660.png",
+      "employerSlug": "nmc-healthcare",
+      "employerUrl": "/employer/nmc-healthcare",
+      "featured": false,
+      "urgent": false,
+      "filled": false,
+      "types": [],
+      "categories": [],
+      "locations": [],
+      "tags": [],
+      "local": true,
+      "date": "September 24, 2026",
+      "publishedDate": "September 23, 2026",
+      "updatedAt": "2026-09-23T18:40:33.693Z",
+      "createdAt": "2026-09-23T09:51:06.847Z",
+      "updatedDate": "September 24, 2026"
+    }
+  ],
+  "employers": [
+    {
+      "title": "Olena Properties",
+      "slug": "olena-properties",
+      "email": "olena@gmail.com",
+      "phone": "+971 2 642 7770",
+      "website": "https://www.olenaproperties.com",
+      "foundedDate": "2018",
+      "companySize": "10-50",
+      "showProfile": "show",
+      "featured": false,
+      "description": "At Olena Real Estate, we specialize in offering a premium selection of luxury properties and investment opportunities across Abu Dhabi. With an unwavering commitment to excellence, we provide personalized real estate services tailored to buyers, sellers, and investors' unique needs. Whether you're looking for a new home, an investment property, or guidance through the real estate market, we deliver trusted expertise and unparalleled insights to help you achieve your goals.\n\nOur Services Include:\nLuxury Villas & Apartments\nExclusive Off-Plan Projects\nCommercial Real Estate Solutions\nProperty Investment Advisory\n\nWe pride ourselves on our deep understanding of the local market, our network of exclusive properties, and our client-centric approach. Let's make your real estate aspirations a reality.",
+      "logo": "/assets/olena-logo.svg",
+      "coverPhoto": "",
+      "profilePhotos": [],
+      "address": "Abu Dhabi, United Arab Emirates",
+      "categories": [
+        "Business Consulting and Services"
+      ],
+      "locations": [
+        "United Arab Emirates",
+        "Abu Dhabi"
+      ],
+      "socials": {
+        "facebook": "https://facebook.com/testcompany",
+        "linkedin": "https://linkedin.com/company/testcompany",
+        "twitter": "https://x.com/testcompany",
+        "instagram": "https://instagram.com/testcompany",
+        "youtube": "https://youtube.com/@testcompany",
+        "whatsapp": "https://wa.me/971501234567",
+        "items": [
+          {
+            "platform": "facebook",
+            "url": "https://facebook.com/testcompany"
+          },
+          {
+            "platform": "linkedin",
+            "url": "https://linkedin.com/company/testcompany"
+          },
+          {
+            "platform": "twitter",
+            "url": "https://x.com/testcompany"
+          },
+          {
+            "platform": "instagram",
+            "url": "https://instagram.com/testcompany"
+          },
+          {
+            "platform": "youtube",
+            "url": "https://youtube.com/@testcompany"
+          },
+          {
+            "platform": "whatsapp",
+            "url": "https://wa.me/971501234567"
+          }
+        ]
+      },
+      "status": "publish",
+      "local": true,
+      "updatedAt": "2026-09-23T18:46:10.363Z",
+      "createdAt": "2026-09-22T17:32:10.000Z"
+    }
+  ],
+  "applications": [],
+  "taxonomies": {
+    "types": [
+      {
+        "name": "Freelance",
+        "slug": "freelance",
+        "parent": "",
+        "description": "",
+        "count": 12,
+        "bgColor": "#ebf7ee",
+        "textColor": "#1b5e20",
+        "employmentType": "FREELANCE"
+      },
+      {
+        "name": "Full Time",
+        "slug": "full-time",
+        "parent": "",
+        "description": "",
+        "count": 13480,
+        "bgColor": "#e8f1fd",
+        "textColor": "#0d47a1",
+        "employmentType": "FULL_TIME"
+      },
+      {
+        "name": "Internship",
+        "slug": "internship",
+        "parent": "",
+        "description": "",
+        "count": 18,
+        "bgColor": "#fff3e0",
+        "textColor": "#e65100",
+        "employmentType": "INTERN"
+      },
+      {
+        "name": "Part Time",
+        "slug": "part-time",
+        "parent": "",
+        "description": "",
+        "count": 52,
+        "bgColor": "#f3e5f5",
+        "textColor": "#4a148c",
+        "employmentType": "PART_TIME"
+      },
+      {
+        "name": "Temporary",
+        "slug": "temporary",
+        "parent": "",
+        "description": "",
+        "count": 8,
+        "bgColor": "#ffebee",
+        "textColor": "#b71c1c",
+        "employmentType": "TEMPORARY"
+      }
+    ],
+    "categories": [
+      {
+        "name": "Agriculture and Forestry",
+        "slug": "agriculture-and-forestry",
+        "parent": "",
+        "description": "",
+        "count": 42
+      },
+      {
+        "name": "Airlines and Aviation",
+        "slug": "airlines-and-aviation",
+        "parent": "",
+        "description": "",
+        "count": 68
+      },
+      {
+        "name": "Architecture and Planning",
+        "slug": "architecture-and-planning",
+        "parent": "",
+        "description": "",
+        "count": 95
+      },
+      {
+        "name": "Automotive",
+        "slug": "automotive",
+        "parent": "",
+        "description": "",
+        "count": 112
+      },
+      {
+        "name": "Banking",
+        "slug": "banking",
+        "parent": "",
+        "description": "",
+        "count": 184
+      },
+      {
+        "name": "Business Consulting and Services",
+        "slug": "business-consulting-and-services",
+        "parent": "",
+        "description": "",
+        "count": 320
+      },
+      {
+        "name": "Chemical Manufacturing",
+        "slug": "chemical-manufacturing",
+        "parent": "",
+        "description": "",
+        "count": 54
+      },
+      {
+        "name": "Conglomerate",
+        "slug": "conglomerate",
+        "parent": "",
+        "description": "",
+        "count": 78
+      },
+      {
+        "name": "Accounting or Finance",
+        "slug": "accounting-finance",
+        "parent": "",
+        "description": "",
+        "image": "/assets/category-finance.jpg",
+        "count": 1772
+      },
+      {
+        "name": "Accountant",
+        "slug": "accountant",
+        "parent": "Accounting or Finance",
+        "description": "",
+        "count": 1263
+      },
+      {
+        "name": "Chartered Accountant Jobs",
+        "slug": "chartered-accountant-jobs",
+        "parent": "Accounting or Finance",
+        "description": "",
+        "count": 25
+      },
+      {
+        "name": "Finance & Accounts Manager Jobs",
+        "slug": "finance-accounts-manager-jobs",
+        "parent": "Accounting or Finance",
+        "description": "",
+        "count": 14
+      },
+      {
+        "name": "Financial Auditor Jobs",
+        "slug": "financial-auditor-jobs",
+        "parent": "Accounting or Finance",
+        "description": "",
+        "count": 19
+      },
+      {
+        "name": "Payroll Jobs",
+        "slug": "payroll-jobs",
+        "parent": "Accounting or Finance",
+        "description": "",
+        "count": 31
+      },
+      {
+        "name": "Administration",
+        "slug": "administration",
+        "parent": "",
+        "description": "",
+        "count": 420
+      },
+      {
+        "name": "Construction",
+        "slug": "construction",
+        "parent": "",
+        "description": "",
+        "count": 850
+      },
+      {
+        "name": "Customer Service",
+        "slug": "customer-service",
+        "parent": "",
+        "description": "",
+        "count": 920
+      },
+      {
+        "name": "Education and Training",
+        "slug": "education-and-training",
+        "parent": "",
+        "description": "",
+        "count": 1105
+      },
+      {
+        "name": "HealthCare",
+        "slug": "healthcare",
+        "parent": "",
+        "description": "",
+        "count": 740
+      },
+      {
+        "name": "Human Resource",
+        "slug": "human-resource",
+        "parent": "",
+        "description": "",
+        "count": 680
+      },
+      {
+        "name": "Marketing and Sales",
+        "slug": "marketing-sales",
+        "parent": "",
+        "description": "",
+        "count": 2150
+      },
+      {
+        "name": "Technology",
+        "slug": "technology",
+        "parent": "",
+        "description": "",
+        "count": 3410
+      }
+    ],
+    "locations": [
+      {
+        "name": "UAE",
+        "slug": "uae",
+        "parent": "",
+        "description": "",
+        "count": 5120
+      },
+      {
+        "name": "Abu Dhabi",
+        "slug": "abu-dhabi",
+        "parent": "UAE",
+        "description": "",
+        "count": 3425
+      },
+      {
+        "name": "Al Ain",
+        "slug": "al-ain",
+        "parent": "Abu Dhabi",
+        "description": "",
+        "count": 333
+      },
+      {
+        "name": "Ajman",
+        "slug": "ajman",
+        "parent": "UAE",
+        "description": "",
+        "count": 389
+      },
+      {
+        "name": "Dubai",
+        "slug": "dubai",
+        "parent": "UAE",
+        "description": "",
+        "count": 6253
+      },
+      {
+        "name": "Fujairah",
+        "slug": "fujairah",
+        "parent": "UAE",
+        "description": "",
+        "count": 37
+      },
+      {
+        "name": "Ras Al Khaimah",
+        "slug": "ras-al-khaimah",
+        "parent": "UAE",
+        "description": "",
+        "count": 229
+      },
+      {
+        "name": "Sharjah",
+        "slug": "sharjah",
+        "parent": "UAE",
+        "description": "",
+        "count": 819
+      },
+      {
+        "name": "Umm Al Quwain",
+        "slug": "umm-al-quwain-uae",
+        "parent": "UAE",
+        "description": "",
+        "count": 17
+      }
+    ],
+    "tags": [
+      {
+        "name": "Urgently Hiring",
+        "slug": "urgently-hiring",
+        "description": "",
+        "count": 142
+      },
+      {
+        "name": "Remote",
+        "slug": "remote",
+        "description": "",
+        "count": 531
+      },
+      {
+        "name": "Freshers",
+        "slug": "freshers",
+        "description": "",
+        "count": 89
+      },
+      {
+        "name": "Immediate Joining",
+        "slug": "immediate-joining",
+        "description": "",
+        "count": 215
+      },
+      {
+        "name": "Visa Provided",
+        "slug": "visa-provided",
+        "description": "",
+        "count": 310
+      }
+    ]
+  }
+}

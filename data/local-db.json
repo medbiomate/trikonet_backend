@@ -1408,28 +1408,20 @@
     ],
     "locations": [
       {
+        "id": 258,
+        "name": "UAE",
+        "slug": "uae",
+        "parent": "",
+        "description": "",
+        "count": 4833
+      },
+      {
         "id": 259,
         "name": "Abu Dhabi",
         "slug": "abu-dhabi",
         "parent": "UAE",
         "description": "",
         "count": 3422
-      },
-      {
-        "id": 262,
-        "name": "Ajman",
-        "slug": "ajman",
-        "parent": "UAE",
-        "description": "",
-        "count": 389
-      },
-      {
-        "id": 843,
-        "name": "Al Ain",
-        "slug": "al-ain",
-        "parent": "Abu Dhabi",
-        "description": "",
-        "count": 333
       },
       {
         "id": 260,
@@ -1440,12 +1432,28 @@
         "count": 6252
       },
       {
-        "id": 265,
-        "name": "Fujairah",
-        "slug": "fujairah",
+        "id": 261,
+        "name": "Sharjah",
+        "slug": "sharjah-uae",
         "parent": "UAE",
         "description": "",
-        "count": 37
+        "count": 819
+      },
+      {
+        "id": 262,
+        "name": "Ajman",
+        "slug": "ajman",
+        "parent": "UAE",
+        "description": "",
+        "count": 389
+      },
+      {
+        "id": 263,
+        "name": "Umm Al Quwain",
+        "slug": "umm-al-quwain-uae",
+        "parent": "UAE",
+        "description": "",
+        "count": 17
       },
       {
         "id": 264,
@@ -1456,28 +1464,20 @@
         "count": 229
       },
       {
-        "id": 261,
-        "name": "Sharjah",
-        "slug": "sharjah-uae",
+        "id": 265,
+        "name": "Fujairah",
+        "slug": "fujairah",
         "parent": "UAE",
         "description": "",
-        "count": 819
+        "count": 37
       },
       {
-        "id": 258,
-        "name": "UAE",
-        "slug": "uae",
-        "parent": "",
+        "id": 843,
+        "name": "Al Ain",
+        "slug": "al-ain",
+        "parent": "Abu Dhabi",
         "description": "",
-        "count": 4833
-      },
-      {
-        "id": 263,
-        "name": "Umm Al Quwain",
-        "slug": "umm-al-quwain-uae",
-        "parent": "UAE",
-        "description": "",
-        "count": 17
+        "count": 333
       }
     ],
     "tags": [
@@ -2278,28 +2278,20 @@
     ],
     "employerLocations": [
       {
+        "id": 160,
+        "name": "United Arab Emirates",
+        "slug": "uae",
+        "parent": "",
+        "description": "",
+        "count": 655
+      },
+      {
         "id": 153,
         "name": "Abu Dhabi",
         "slug": "abu-dhabi",
         "parent": "United Arab Emirates",
         "description": "",
         "count": 450
-      },
-      {
-        "id": 156,
-        "name": "Ajman",
-        "slug": "ajman",
-        "parent": "United Arab Emirates",
-        "description": "",
-        "count": 62
-      },
-      {
-        "id": 990,
-        "name": "Al Ain",
-        "slug": "al-ain",
-        "parent": "Abu Dhabi",
-        "description": "",
-        "count": 20
       },
       {
         "id": 154,
@@ -2310,28 +2302,20 @@
         "count": 1680
       },
       {
-        "id": 159,
-        "name": "Fujairah",
-        "slug": "fujairah",
-        "parent": "United Arab Emirates",
-        "description": "",
-        "count": 18
-      },
-      {
-        "id": 158,
-        "name": "Ras Al Khaimah",
-        "slug": "ras-al-khaimah",
-        "parent": "United Arab Emirates",
-        "description": "",
-        "count": 37
-      },
-      {
         "id": 155,
         "name": "Sharjah",
         "slug": "sharjah",
         "parent": "United Arab Emirates",
         "description": "",
         "count": 122
+      },
+      {
+        "id": 156,
+        "name": "Ajman",
+        "slug": "ajman",
+        "parent": "United Arab Emirates",
+        "description": "",
+        "count": 62
       },
       {
         "id": 157,
@@ -2342,12 +2326,28 @@
         "count": 10
       },
       {
-        "id": 160,
-        "name": "United Arab Emirates",
-        "slug": "uae",
-        "parent": "",
+        "id": 158,
+        "name": "Ras Al Khaimah",
+        "slug": "ras-al-khaimah",
+        "parent": "United Arab Emirates",
         "description": "",
-        "count": 655
+        "count": 37
+      },
+      {
+        "id": 159,
+        "name": "Fujairah",
+        "slug": "fujairah",
+        "parent": "United Arab Emirates",
+        "description": "",
+        "count": 18
+      },
+      {
+        "id": 990,
+        "name": "Al Ain",
+        "slug": "al-ain",
+        "parent": "Abu Dhabi",
+        "description": "",
+        "count": 20
       }
     ]
   },

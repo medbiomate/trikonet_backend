@@ -675,6 +675,17 @@ const server = http.createServer(async (req, res) => {
           });
         }
       }
+      const UAE_LOC_ORDER = ['UAE', 'United Arab Emirates', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
+      const sortLocs = arr => (arr || []).sort((a, b) => {
+        let ia = UAE_LOC_ORDER.indexOf(a.name);
+        let ib = UAE_LOC_ORDER.indexOf(b.name);
+        if (ia === -1) ia = 999;
+        if (ib === -1) ib = 999;
+        if (ia !== ib) return ia - ib;
+        return a.name.localeCompare(b.name);
+      });
+      groups.locations = sortLocs(groups.locations);
+      groups.employerLocations = sortLocs(groups.employerLocations);
       return sendJson(req, res, 200, groups);
     } catch {
       return sendJson(req, res, 200, memoryStore.taxonomies || { types: [], categories: [], locations: [], tags: [], employerCategories: [], employerLocations: [] });

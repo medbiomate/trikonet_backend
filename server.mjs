@@ -457,6 +457,7 @@ const emptyDb = {
   applications: [],
   users: [],
   emailCampaigns: [],
+  resumes: [],
   taxonomies: { types: [], categories: [], locations: [], tags: [] }
 };
 
@@ -519,6 +520,8 @@ function sendJson(req, res, status, value) {
 }
 
 const sessions = new Map();
+const MAX_RESUMES_PER_USER = 3;
+const MAX_PROFILE_PHOTO_BYTES = 100 * 1024;
 const cookieValue = (req, name) =>
   String(req.headers.cookie || '')
     .split(';')
@@ -526,6 +529,11 @@ const cookieValue = (req, name) =>
     .find(([key]) => key === name)?.[1] || '';
 
 const currentSession = req => sessions.get(cookieValue(req, 'trikonet_session')) || null;
+const dataUrlBytes = value => {
+  const match = String(value || '').match(/^data:[^;,]+;base64,(.+)$/);
+  if (!match) return 0;
+  return Math.max(0, Math.floor(match[1].length * 3 / 4) - (match[1].endsWith('==') ? 2 : match[1].endsWith('=') ? 1 : 0));
+};
 const passwordHash = (password, salt = crypto.randomBytes(16).toString('hex')) => ({
   salt,
   hash: crypto.scryptSync(password, salt, 64).toString('hex')
@@ -725,6 +733,51 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/auth/logout' && req.method === 'POST') {
     sessions.delete(cookieValue(req, 'trikonet_session'));
     res.setHeader('Set-Cookie', getSessionCookieHeader(req, '', 0));
+    return sendJson(req, res, 200, { ok: true });
+  }
+
+  if (path === '/api/resumes' && req.method === 'GET') {
+    const session = currentSession(req);
+    if (!session) return sendJson(req, res, 401, { error: 'Sign in to access your résumé library.' });
+    const db = await readLocalDb();
+    const resumes = db.resumes.filter(item => item.userId === session.userId).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    return sendJson(req, res, 200, { resumes, limit: MAX_RESUMES_PER_USER });
+  }
+
+  if (path === '/api/resumes' && (req.method === 'POST' || req.method === 'PUT')) {
+    const session = currentSession(req);
+    if (!session) return sendJson(req, res, 401, { error: 'Sign in to save a résumé.' });
+    try {
+      const body = await readJsonBody(req);
+      const id = String(body.id || '').trim();
+      const state = body.state && typeof body.state === 'object' ? body.state : null;
+      if (!id || !state) return sendJson(req, res, 400, { error: 'A valid résumé is required.' });
+      if (dataUrlBytes(state.photo) > MAX_PROFILE_PHOTO_BYTES) return sendJson(req, res, 413, { error: 'Profile photo must be smaller than 100 KB.' });
+      const db = await readLocalDb();
+      const existingIndex = db.resumes.findIndex(item => item.id === id && item.userId === session.userId);
+      if (existingIndex < 0 && db.resumes.filter(item => item.userId === session.userId).length >= MAX_RESUMES_PER_USER) {
+        return sendJson(req, res, 409, { error: `You can save up to ${MAX_RESUMES_PER_USER} résumés. Delete one before creating another.` });
+      }
+      const now = Date.now();
+      const existing = existingIndex >= 0 ? db.resumes[existingIndex] : null;
+      const resume = { id, userId: session.userId, name: String(body.name || 'My professional résumé').slice(0, 120), template: String(body.template || 'classic').slice(0, 40), state, previewImage: dataUrlBytes(body.previewImage) <= MAX_PROFILE_PHOTO_BYTES ? String(body.previewImage || '') : '', createdAt: existing?.createdAt || now, updatedAt: now };
+      if (existingIndex >= 0) db.resumes[existingIndex] = resume; else db.resumes.push(resume);
+      await writeLocalDb(db);
+      return sendJson(req, res, existingIndex >= 0 ? 200 : 201, { resume, limit: MAX_RESUMES_PER_USER });
+    } catch (error) {
+      return sendJson(req, res, error.message === 'Request too large' ? 413 : 400, { error: error.message || 'Unable to save résumé.' });
+    }
+  }
+
+  if (path.startsWith('/api/resumes/') && req.method === 'DELETE') {
+    const session = currentSession(req);
+    if (!session) return sendJson(req, res, 401, { error: 'Sign in to delete a résumé.' });
+    const id = path.slice('/api/resumes/'.length);
+    const db = await readLocalDb();
+    const before = db.resumes.length;
+    db.resumes = db.resumes.filter(item => !(item.id === id && item.userId === session.userId));
+    if (db.resumes.length === before) return sendJson(req, res, 404, { error: 'Résumé not found.' });
+    await writeLocalDb(db);
     return sendJson(req, res, 200, { ok: true });
   }
 

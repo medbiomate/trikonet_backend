@@ -1,44 +1,6 @@
 {
   "version": 1,
-  "jobs": [
-    {
-      "title": "tes",
-      "description": "tes",
-      "salaryType": "Monthly",
-      "minSalary": "",
-      "maxSalary": "",
-      "experience": "",
-      "qualification": "",
-      "gender": "Any",
-      "applyType": "External URL",
-      "applyUrl": "",
-      "applyEmail": "",
-      "deadline": "2027-09-23",
-      "expiryDate": "2027-09-23",
-      "address": "",
-      "photoUrl": "",
-      "status": "publish",
-      "slug": "tes",
-      "company": "NMC Healthcare",
-      "banner": "",
-      "logo": "/uploads/employers/11660.png",
-      "employerSlug": "nmc-healthcare",
-      "employerUrl": "/employer/nmc-healthcare",
-      "featured": false,
-      "urgent": false,
-      "filled": false,
-      "types": [],
-      "categories": [],
-      "locations": [],
-      "tags": [],
-      "local": true,
-      "date": "September 24, 2026",
-      "publishedDate": "September 23, 2026",
-      "updatedAt": "2026-09-23T18:40:33.693Z",
-      "createdAt": "2026-09-23T09:51:06.847Z",
-      "updatedDate": "September 24, 2026"
-    }
-  ],
+  "jobs": [],
   "employers": [
     {
       "title": "Olena Properties",
@@ -410,5 +372,21 @@
         "count": 310
       }
     ]
-  }
+  },
+  "users": [
+    {
+      "id": "2be3b2d1-bc18-4e9c-be09-22579f10d3a7",
+      "name": "Amina Al Maktoum",
+      "email": "amina@bateel.com",
+      "role": "employer",
+      "employerSlug": "bateel-international",
+      "employerName": "Bateel International",
+      "salt": "fcfa09ca02a088df4a0124f6fcb4ed07",
+      "hash": "c08760fc1808bcf942a00547e0abcabd3207ff56463af229b45cd49170461db97db7bd2db3e9767120bdd596f905b0ba85e9063887293632e2de5e20bfa1baf0",
+      "createdAt": "2026-09-28T13:34:47.295Z"
+    }
+  ],
+  "emailCampaigns": [],
+  "savedJobs": [],
+  "employerClaims": []
 }

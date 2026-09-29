@@ -2426,6 +2426,18 @@
       "salt": "45eaa9ddd449b9a4eac1b1226ce395bd",
       "hash": "fffafb39f9f6fcec390c60ef8f1a7e14534a5a48893622000ec94343878d340a95a290661e54ce80ee761192c472970e503783de53da96b4dbf8488d6b0a38fa",
       "createdAt": "2026-09-29T13:27:09.263Z"
+    },
+    {
+      "id": "52dba143-6cf8-43be-a267-9a8324973ace",
+      "username": "fuhad",
+      "name": "Fuhad Saneen",
+      "email": "fuhadsaneenwork@gmail.com",
+      "role": "Administrator",
+      "status": "active",
+      "passwordSalt": "3439024c5e4c80a0d6eb6d0eb895dd8f",
+      "passwordHash": "1760c24171652cd4cf95ca39e91e20bc163553ec304f475f2d0e690a55c6fc158d9869aba6eee3a30bb795f9697931616f645df1109f442a539382e59f0b1094",
+      "createdAt": "2026-09-29T07:00:00.000Z",
+      "updatedAt": "2026-09-29T17:51:58.856Z"
     }
   ],
   "emailCampaigns": [],

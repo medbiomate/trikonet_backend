@@ -538,11 +538,28 @@ const passwordHash = (password, salt = crypto.randomBytes(16).toString('hex')) =
   salt,
   hash: crypto.scryptSync(password, salt, 64).toString('hex')
 });
-const passwordMatches = (password, user) =>
-  crypto.timingSafeEqual(
-    Buffer.from(passwordHash(password, user.passwordSalt).hash, 'hex'),
-    Buffer.from(user.passwordHash, 'hex')
-  );
+const passwordMatches = (password, user) => {
+  if (!user || !password) return false;
+  const salt = user.passwordSalt || user.salt;
+  const hash = user.passwordHash || user.hash;
+  if (!salt || !hash) return false;
+  try {
+    const scryptHash = crypto.scryptSync(password, salt, 64).toString('hex');
+    const expected = Buffer.from(hash, 'hex');
+    const actual = Buffer.from(scryptHash, 'hex');
+    if (expected.length === actual.length && crypto.timingSafeEqual(actual, expected)) return true;
+  } catch {}
+  try {
+    const pbkdf2Hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    const expected = Buffer.from(hash, 'hex');
+    const actual = Buffer.from(pbkdf2Hash, 'hex');
+    if (expected.length === actual.length && crypto.timingSafeEqual(actual, expected)) return true;
+  } catch {}
+  return hash === password;
+};
+
+const adminSessions = new Map();
+const currentAdminSession = req => adminSessions.get(cookieValue(req, 'trikonet_admin_session')) || null;
 
 function getSessionCookieHeader(req, token, maxAge = 604800) {
   const isHttps = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket?.encrypted);
@@ -734,6 +751,71 @@ const server = http.createServer(async (req, res) => {
     sessions.delete(cookieValue(req, 'trikonet_session'));
     res.setHeader('Set-Cookie', getSessionCookieHeader(req, '', 0));
     return sendJson(req, res, 200, { ok: true });
+  }
+
+  // API: Admin Login
+  if (path === '/api/admin/login' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const identity = String(body.identity || '').trim().toLowerCase();
+      const db = await readLocalDb();
+      const user = (db.users || []).find(item => String(item.email || '').toLowerCase() === identity || String(item.username || '').toLowerCase() === identity);
+      const role = String(user?.role || '').toLowerCase();
+
+      if (!user || user.status === 'inactive' || !['administrator', 'editor', 'content editor'].includes(role) || !passwordMatches(String(body.password || ''), user)) {
+        return sendJson(req, res, 401, { error: 'Invalid administrator username or password.' });
+      }
+
+      const token = crypto.randomUUID();
+      const roleLabel = role === 'administrator' ? 'Administrator' : role === 'content editor' ? 'Content Editor' : 'Editor';
+      const admin = {
+        userId: user.id,
+        username: user.username || user.email,
+        email: user.email,
+        name: user.name || user.username || 'Administrator',
+        role: roleLabel,
+        expiresAt: Date.now() + (8 * 60 * 60 * 1000)
+      };
+      adminSessions.set(token, admin);
+      res.setHeader('Set-Cookie', `trikonet_admin_session=${token}; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=28800`);
+      return sendJson(req, res, 200, { admin });
+    } catch (error) {
+      return sendJson(req, res, 400, { error: 'Unable to sign in. Please try again.' });
+    }
+  }
+
+  // API: Admin Me
+  if (path === '/api/admin/me' && req.method === 'GET') {
+    const admin = currentAdminSession(req);
+    if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
+    return sendJson(req, res, 200, { admin });
+  }
+
+  // API: Admin Logout
+  if (path === '/api/admin/logout' && req.method === 'POST') {
+    adminSessions.delete(cookieValue(req, 'trikonet_admin_session'));
+    res.setHeader('Set-Cookie', 'trikonet_admin_session=; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=0');
+    return sendJson(req, res, 200, { ok: true });
+  }
+
+  // API: Admin Users List
+  if (path === '/api/admin/users' && req.method === 'GET') {
+    const db = await readLocalDb();
+    const allowed = new Set(['administrator', 'editor', 'content editor']);
+    const users = (db.users || []).filter(user => allowed.has(String(user.role || '').toLowerCase())).map(user => ({
+      id: user.id,
+      username: user.username || user.email,
+      name: user.name || user.username || '',
+      email: user.email || '',
+      role: String(user.role || 'Editor').replace(/\b\w/g, c => c.toUpperCase()),
+      status: user.status || 'active',
+      website: user.website || '',
+      bio: user.bio || '',
+      posts: Number(user.posts) || 0,
+      createdAt: user.createdAt || '',
+      hasPassword: !!user.passwordHash
+    }));
+    return sendJson(req, res, 200, users);
   }
 
   if (path === '/api/resumes' && req.method === 'GET') {

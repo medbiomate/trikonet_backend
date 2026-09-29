@@ -933,6 +933,15 @@ const server = http.createServer(async (req, res) => {
   // API: Taxonomies
   if (path === '/api/local/taxonomies' && req.method === 'GET') {
     const db = await readLocalDb();
+    if (!db.taxonomies || !db.taxonomies.categories || db.taxonomies.categories.length < 50) {
+      if (memoryStore.taxonomies) {
+        db.taxonomies = {
+          ...memoryStore.taxonomies,
+          ...(db.taxonomies || {}),
+          categories: (memoryStore.taxonomies.categories && memoryStore.taxonomies.categories.length > 50) ? memoryStore.taxonomies.categories : db.taxonomies?.categories
+        };
+      }
+    }
     return sendJson(req, res, 200, db.taxonomies);
   }
 

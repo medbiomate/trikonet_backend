@@ -1,7 +1,8 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const defaults = {
   types: ['Freelance', 'Full Time', 'Internship', 'Part Time', 'Temporary'],
-  categories: ['Agriculture and Forestry', 'Airlines and Aviation', 'Architecture and Planning', 'Automotive', 'Banking', 'Business Consulting and Services', 'Chemical Manufacturing', 'Conglomerate', 'Accounting or Finance', 'Accountant', 'Chartered Accountant Jobs', 'Finance & Accounts Manager Jobs', 'Financial Auditor Jobs', 'Payroll Jobs', 'Administration', 'Construction', 'Customer Service', 'Education and Training', 'HealthCare', 'Human Resource', 'Marketing and Sales', 'Technology'],
+  categories: ["Academic Social Worker Jobs","Academic Supervisor Jobs","Accountant","Accounting or Finance","Accounting Teaching Jobs","Admin Officer Jobs","Administration","Admissions Counsellor Jobs","Anaesthia Specialist Jobs","Anesthesia Technician Jobs","Arabic Teacher Jobs","Art and Design Teaching Jobs","Assistant Teacher Jobs","Automotive","Beauty Therapist Jobs","Biomedical Jobs","Cashier Jobs","Chartered Accountant Jobs","Chemistry Teacher Jobs","Civil Engineer Jobs","Civil Technician Jobs","Computer Science Jobs","Computer Science Teacher Jobs","Construction","Consultant doctor Jobs","Content Marketing Jobs","Cook Jobs","CSSD Technician Jobs","Customer Service Associate Jobs","Data Analyst","Data Entry","Dental Assistant Jobs","Dental Jobs","Dentist Jobs","Dermatology","Design or Art","Dialysis Technician Jobs","Digital Marketing Internship Jobs","Digital Marketing Jobs","Digital Marketing Specialist Jobs","Document Controller Jobs","Draftsman Jobs","Driver","E-commerce Marketing Jobs","Education and Training","Electrical Engineer Jobs","Electrical Engineer Jobs","Electrical Supervisor Jobs","Electronics Engineer Jobs","EMT Paramedic Jobs","Engineering","English Teacher Jobs","ENT Department Jobs","Environment","Facility Management Jobs","Finance &amp; Accounts Manager Jobs","Financial Auditor Jobs","Food and Beverage Jobs","French Teacher Jobs","General Practitioner Jobs","Geography Teacher Jobs","Graphic Designer Jobs","Gynecologist Jobs","Health","Health, Safety, Environment","HealthCare","Healthcare Assistant Jobs","Hindi Teacher Jobs","Histo Technician Jobs","Homecare Nurse Jobs","Hospitality and Tourism","House Keeping Service","Human Resource","Human Resources Officer Jobs","ICT Teacher Jobs","Influencer Marketing Jobs","Information Technology Jobs","Instructor Jobs","Instrumentation Engineer Jobs","Insurance","Insurance Coordinator Jobs","Islamic Teacher Jobs","IT Department","KG Teacher Jobs","Language Teacher Jobs","Law and Enforcement","Logistics and Warehousing ","Maintenance Engineer Jobs","Marketing and Sales","Marketing Manager Jobs","Mathematics Teacher Jobs","Mechanical Engineer Jobs","Mechanical Supervisor Jobs","Medical Billing Jobs","Medical Coder Jobs","Medical Insurance Jobs","Medical Laboratory Jobs","Medical Laser Technician Jobs","Medical RCM Jobs","Medical Records Jobs","Medical Sales Jobs","MEP Jobs","Microbiologist Jobs","Midwife Jobs","Music Teacher Jobs","Neonatology Specialist Jobs","Nurse Jobs","Office Assistant Jobs","Oil and Gas Jobs","Operation","Optometrist Jobs","OT Technician Jobs","Payroll Jobs","PE Teacher Jobs","Pediatrician Jobs","Performance Marketing Jobs","Pharmacist Jobs","Pharmacy Jobs","Photographer Jobs","Physician Jobs","Physics Teacher","Physiotherapist Jobs","Plastic Surgeon Jobs","Procurement and Supply Chain","Psychology Jobs","Psychology Teacher","QA/QC Engineer Jobs","Quality Assurance &amp; Control","Radiographer Jobs","Receptionist","Receptionist Jobs","Registered Nurse Jobs","Research and Development","Retail","Safety","School Administration Jobs","School Nurse Jobs","School Teacher Jobs","Science Teacher Jobs","Search Engine Optimization SEO Job","Security","Skilled Jobs","Social Media Marketing Jobs","Social Studies Teacher Jobs","Software Engineer Jobs","Sonographer Jobs","Specialist Internal Medicine Jobs","Support Services","Surgery Doctor Jobs","System Support","Talent Acquisition Specialist Jobs","Teacher Jobs","Technician","Technology","Telecommunication","Testing Laboratory Jobs","Transportation","Ultrasound Job","Unskilled Jobs","Urologist Jobs","Video Editor Jobs","Videographer Jobs"],
+  employerCategories: ["Accounting","Advertising Services","Agriculture and Forestry","Airlines and Aviation","Architecture and Planning","Automotive","Banking","Business Consulting and Services","Chemical Manufacturing","Conglomerate","Construction","Educational Services","Energy","Engineering","Entertainment","Eye Clinic or Optical Shop","Facilities Services","Finance and Insurance","Food &amp; Beverages","Food and Dining","Furniture and Home Furnishings Manufacturing","Government Administration","Healthcare","Healthcare Group","Holding Companies","Home Health Care Services","Hospital","Hospitality","Information Technology","Interior Design","Investment Management","IT Services and IT Consulting","Legal Services","Manufacturing","Marketing Services","Medical Center","Medical Clinic","Medical Company","Medical Laboratory","Mining and Extraction","Oil and Gas","Other Services","Pharmaceutical Manufacturing","Pharmacy","Procurement and Supply Chain","Real Estate","Research Services","Retail","School","Software Development","Staffing and Recruiting","Telecommunications","Transportation","Travel and Tourism","University","Utilities","Warehousing and Logistics","Wellness &amp; Fitness","Wholesale","Wholesale Building Materials"],
   locations: ['United Arab Emirates', 'Abu Dhabi', 'Al Ain', 'Ajman', 'Dubai', 'Fujairah', 'Ras Al Khaimah', 'Sharjah', 'Umm Al Quwain'],
   tags: [],
   postCategories: [
@@ -1554,7 +1555,7 @@ export function renderAdmin() {
                   <div class="modern-grid-3">
                     <div class="modern-field-wrap">
                       <label class="modern-label" for="field-employer-website">Website URL</label>
-                      <input type="url" name="website" id="field-employer-website" class="modern-input" placeholder="https://example.com">
+                      <input type="text" inputmode="url" name="website" id="field-employer-website" class="modern-input" placeholder="www.example.com or https://example.com" autocomplete="url">
                     </div>
                     <div class="modern-field-wrap">
                       <label class="modern-label" for="field-employer-founded">Founded Year</label>
@@ -1701,7 +1702,7 @@ export function renderAdmin() {
                 <input type="hidden" name="logo" id="field-employer-logo-val" value="">
                 <button type="button" class="modern-btn-outline" id="set-employer-featured-img-btn">
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                  <span id="btn-set-employer-logo-text">Set Logo Image</span>
+                  <span id="btn-set-employer-logo-text">Choose Logo Image</span>
                 </button>
               </div>
 
@@ -2142,6 +2143,7 @@ export function renderAdmin() {
             <li class="all"><a href="#" class="current" data-user-role="all"><span>All</span> <span class="count" id="count-user-all">2</span></a></li>
             <li class="administrator"><a href="#" data-user-role="Administrator"><span>Administrator</span> <span class="count" id="count-user-admin">1</span></a></li>
             <li class="editor"><a href="#" data-user-role="Editor"><span>Editor</span> <span class="count" id="count-user-editor">1</span></a></li>
+            <li class="content-editor"><a href="#" data-user-role="Content Editor"><span>Content Editor</span> <span class="count" id="count-user-content-editor">0</span></a></li>
           </ul>
         </div>
 
@@ -2159,6 +2161,7 @@ export function renderAdmin() {
                 <option value="">Change role to…</option>
                 <option value="Administrator">Administrator</option>
                 <option value="Editor">Editor</option>
+                <option value="Content Editor">Content Editor</option>
                 <option value="Employer">Employer</option>
                 <option value="Candidate">Candidate</option>
               </select>
@@ -2188,6 +2191,7 @@ export function renderAdmin() {
                 <th class="user-col-role">Role</th>
                 <th class="user-col-posts">Posts</th>
                 <th class="user-col-status">Status</th>
+                <th class="user-col-actions">Actions</th>
               </tr>
             </thead>
             <tbody id="admin-user-rows"></tbody>
@@ -2262,6 +2266,7 @@ export function renderAdmin() {
               <select name="role" id="user-role" class="modern-select" required>
                 <option value="Administrator">Administrator (Full Access)</option>
                 <option value="Editor" selected>Editor (Can edit & publish any listings)</option>
+                <option value="Content Editor">Content Editor (Blog, Jobs & Employers)</option>
               </select>
               <span class="modern-field-hint">Defines permissions and portal access level.</span>
             </div>
@@ -3671,16 +3676,16 @@ export function showAdminNotice(message, type = 'success') {
     noticeBox.id = 'admin-global-toast';
     noticeBox.style.cssText = `
       position: fixed;
-      top: 24px;
+      top: 82px;
       right: 24px;
       z-index: 999999;
-      background: #0f172a;
-      color: #f8fafc;
-      padding: 14px 20px;
-      border-radius: 10px;
-      font-size: 14px;
+      background: #ffffff;
+      color: #172033;
+      padding: 11px 15px;
+      border-radius: 9px;
+      font-size: 13px;
       font-weight: 500;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4), 0 8px 10px -6px rgba(0,0,0,0.3);
+      box-shadow: 0 12px 28px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.1);
       display: flex;
       align-items: center;
       gap: 12px;
@@ -3689,7 +3694,7 @@ export function showAdminNotice(message, type = 'success') {
       opacity: 0;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       pointer-events: auto;
-      max-width: 440px;
+      max-width: 360px;
       font-family: Inter, -apple-system, sans-serif;
     `;
     document.body.appendChild(noticeBox);
@@ -3708,11 +3713,12 @@ export function showAdminNotice(message, type = 'success') {
   noticeBox._timeout = setTimeout(() => {
     noticeBox.style.transform = 'translateY(-20px)';
     noticeBox.style.opacity = '0';
-  }, 4000);
+  }, 3000);
 }
 window.showAdminNotice = showAdminNotice;
 
 export async function initAdmin() {
+  let activeAdminSession = {};
   // Logout handler
   document.getElementById('admin-logout-btn')?.addEventListener('click', async () => {
     await fetch('/api/admin/logout', { method: 'POST' }).catch(() => {});
@@ -3724,6 +3730,7 @@ export async function initAdmin() {
   // Populate logged-in admin user info in header
   try {
     const adminSess = JSON.parse(localStorage.getItem('trikonet_admin_session') || sessionStorage.getItem('trikonet_admin_session') || '{}');
+    activeAdminSession = adminSess;
     if (adminSess.name || adminSess.username) {
       const titleEl = document.querySelector('.admin-user-title');
       const subEl = document.querySelector('.admin-user-sub');
@@ -3733,6 +3740,15 @@ export async function initAdmin() {
       if (initEl) initEl.textContent = (adminSess.name || adminSess.username || 'A')[0].toUpperCase();
     }
   } catch {}
+
+  const isContentEditorSession = String(activeAdminSession.role || '').toLowerCase() === 'content editor';
+  const contentEditorViews = new Set(['jobs','reported-jobs','job-new','job-edit','taxonomy-types','taxonomy-categories','taxonomy-locations','taxonomy-tags','employers','employer-claims','employer-new','employer-edit','employer-categories','employer-locations','posts','post-new','post-edit','post-categories','post-tags']);
+  if (isContentEditorSession) {
+    ['media-menu-group','pages-menu-group','candidates-menu-group','site-chrome-menu-group','users-menu-group'].forEach(id => document.getElementById(id)?.remove());
+    document.querySelectorAll('.admin-nav-group-label').forEach(label => {
+      if (['APPEARANCE','USER ACCESS'].includes(label.textContent.trim())) label.remove();
+    });
+  }
 
   const jobForm = document.querySelector('#admin-job-form');
   const jobRows = document.querySelector('#admin-job-rows');
@@ -3806,6 +3822,7 @@ export async function initAdmin() {
 
   // View Routing: Show only the active section
   function switchView(viewName) {
+    if (isContentEditorSession && !contentEditorViews.has(viewName)) viewName = 'jobs';
     const views = {
       'jobs': 'view-jobs',
       'reported-jobs': 'view-reported-jobs',
@@ -3931,6 +3948,18 @@ export async function initAdmin() {
       if (catSlugInput) catSlugInput.placeholder = 'e.g. career-tips';
       if (catDescInput) catDescInput.placeholder = 'Category overview or topic scope…';
       if (catSubmitBtn) catSubmitBtn.textContent = 'Add New Post Category';
+    } else if (viewName === 'employer-categories') {
+      currentTaxonomyCategoryMode = 'employerCategories';
+      if (catPageTitle) catPageTitle.textContent = 'Employer Categories';
+      if (catPageBadge) catPageBadge.textContent = 'Employer Industries';
+      if (catFormTitle) catFormTitle.textContent = 'Add New Employer Category';
+      if (catFormSubtitle) catFormSubtitle.textContent = 'Create an employer industry category or sub-category.';
+      if (catFieldHint) catFieldHint.textContent = 'The category name displayed across employer filters.';
+      if (catSlugHint) catSlugHint.textContent = 'URL-friendly slug for employer category.';
+      if (catNameInput) catNameInput.placeholder = 'e.g. Healthcare Group';
+      if (catSlugInput) catSlugInput.placeholder = 'e.g. healthcare-group';
+      if (catDescInput) catDescInput.placeholder = 'Category overview or industry scope…';
+      if (catSubmitBtn) catSubmitBtn.textContent = 'Add New Employer Category';
     } else {
       currentTaxonomyCategoryMode = 'categories';
       if (catFormTitle) catFormTitle.textContent = 'Add New Category';
@@ -3942,10 +3971,7 @@ export async function initAdmin() {
       if (catDescInput) catDescInput.placeholder = 'Category overview or sector scope…';
       if (catSubmitBtn) catSubmitBtn.textContent = 'Add New Category';
 
-      if (viewName === 'employer-categories') {
-        if (catPageTitle) catPageTitle.textContent = 'Employer Categories';
-        if (catPageBadge) catPageBadge.textContent = 'Employer Industries';
-      } else if (viewName === 'candidate-categories') {
+      if (viewName === 'candidate-categories') {
         if (catPageTitle) catPageTitle.textContent = 'Candidate Categories';
         if (catPageBadge) catPageBadge.textContent = 'Candidate Specializations';
       } else if (viewName === 'taxonomy-categories') {
@@ -4713,13 +4739,14 @@ export async function initAdmin() {
     const catsWrap = document.getElementById('employer-checklist-categories');
     if (catsWrap) {
       const currentChecked = checkedCats instanceof Set ? checkedCats : new Set(checkedCats || [...catsWrap.querySelectorAll('input:checked')].map(x => x.value));
-      const hierCats = buildHierarchy(taxonomies.categories);
+      const empCats = (taxonomies.employerCategories && taxonomies.employerCategories.length) ? taxonomies.employerCategories : taxonomies.categories;
+      const hierCats = buildHierarchy(empCats);
       catsWrap.innerHTML = hierCats.map(c => {
         const isChecked = currentChecked.has(c.name) ? 'checked' : '';
         const lvlClass = c.depth ? `level-${c.depth}` : '';
         return `<label class="${lvlClass}"><input type="checkbox" name="employer_categories" value="${esc(c.name)}" ${isChecked}> ${esc(c.name)}</label>`;
       }).join('');
-      populateTaxonomyParentDropdown('select-new-employer-cat-parent', taxonomies.categories, '— Parent Category —');
+      populateTaxonomyParentDropdown('select-new-employer-cat-parent', empCats, '— Parent Category —');
     }
 
     // 2. Locations Hierarchical Tree Checklist
@@ -4771,7 +4798,10 @@ export async function initAdmin() {
     if (!job.expiryDate && jobForm.elements['expiryDate']) {
       jobForm.elements['expiryDate'].value = defaultDeadline;
     }
-    if (!job.datePosted && jobForm.elements['datePosted']) jobForm.elements['datePosted'].value = new Date().toISOString().slice(0, 10);
+    if (!job.datePosted && jobForm.elements['datePosted']) {
+      const now = new Date();
+      jobForm.elements['datePosted'].value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    }
     if (!job.addressCountry && jobForm.elements['addressCountry']) jobForm.elements['addressCountry'].value = 'AE';
     if (!job.employmentType && jobForm.elements['employmentType'] && (job.types?.[0] || job.type)) {
       const typeMap = { 'Full Time':'FULL_TIME', 'Part Time':'PART_TIME', 'Freelance':'CONTRACTOR', 'Contract':'CONTRACTOR', 'Internship':'INTERN', 'Temporary':'TEMPORARY' };
@@ -4936,7 +4966,7 @@ export async function initAdmin() {
           </span>
         </td>
         <td class="column-posted">
-          <span class="modern-date-posted">${formatWpDate(j.postedDate)}</span>
+          <span class="modern-date-posted">${formatWpDate(j.postedDate || j.datePosted || j.createdAt)}</span>
         </td>
         <td class="column-expires">
           <span class="modern-date-expires">${formatWpDate(j.expiryDate || '2027-02-06')}</span>
@@ -6083,9 +6113,10 @@ export async function initAdmin() {
 
   // Load all data
   async function loadData() {
-    const [local, tax, remote, employers, wpEmployers, registeredCandidates] = await Promise.all([
+    const [local, localTax, wpTax, remote, employers, wpEmployers, registeredCandidates] = await Promise.all([
       fetch('/api/local/jobs').then(r => r.json()).catch(() => []),
-      fetch('/api/local/taxonomies').then(r => r.json()).catch(() => defaults),
+      fetch('/api/local/taxonomies').then(r => r.json()).catch(() => null),
+      fetch('/api/wp/taxonomies').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/wp/job_listing?per_page=30&_fields=id,slug,title,status,date,metas,content,excerpt').then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/local/employers').then(r => r.json()).catch(() => []),
       fetch('/api/wp/employer?per_page=3000&_fields=id,slug,title,status,metas,content').then(r => r.ok ? r.json() : []).catch(() => []),
@@ -6135,6 +6166,39 @@ export async function initAdmin() {
       renderCandidateRows();
     }
 
+    let cachedTax = null;
+    const cachedTaxStr = localStorage.getItem('wp_admin_taxonomies');
+    if (cachedTaxStr) {
+      try {
+        cachedTax = JSON.parse(cachedTaxStr);
+      } catch {}
+    }
+
+    const mergeTerms = (primary = [], secondary = [], cached = []) => {
+      const map = new Map();
+      const add = (item) => {
+        if (!item) return;
+        const obj = typeof item === 'string'
+          ? { name: item, slug: item.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), parent: '', description: '', count: 0 }
+          : { ...item };
+        const key = (obj.slug || obj.name || '').toLowerCase();
+        if (!key) return;
+        const existing = map.get(key);
+        if (existing) {
+          map.set(key, { ...existing, ...obj, count: obj.count !== undefined ? obj.count : existing.count });
+        } else {
+          map.set(key, obj);
+        }
+      };
+      (primary || []).forEach(add);
+      (secondary || []).forEach(add);
+      // Merge cached terms if they add or update, but ignore if cached is just an old truncated array
+      if (Array.isArray(cached) && (cached.length > 25 || (!primary?.length && !secondary?.length))) {
+        cached.forEach(add);
+      }
+      return Array.from(map.values());
+    };
+
     const normalize = (items, defaultItems = []) => {
       const list = Array.isArray(items) && items.length ? items : defaultItems;
       return list.map(item => {
@@ -6151,23 +6215,19 @@ export async function initAdmin() {
       });
     };
 
-    const cachedTaxStr = localStorage.getItem('wp_admin_taxonomies');
-    if (cachedTaxStr) {
-      try {
-        const cached = JSON.parse(cachedTaxStr);
-        if (cached && typeof cached === 'object') {
-          tax = { ...cached, ...tax };
-        }
-      } catch {}
-    }
-
     taxonomies = {
-      types: normalize(tax.types, defaults.types.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
-      categories: normalize(tax.categories, defaults.categories.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 50 }))),
-      locations: normalize(tax.locations, defaults.locations.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 100 }))),
-      tags: normalize(tax.tags, defaults.tags.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
-      postCategories: normalize(tax.postCategories, defaults.postCategories)
+      types: normalize(mergeTerms(wpTax?.types, localTax?.types, cachedTax?.types), defaults.types.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
+      categories: normalize(mergeTerms(wpTax?.categories, localTax?.categories, cachedTax?.categories), defaults.categories.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 50 }))),
+      locations: normalize(mergeTerms(wpTax?.locations, localTax?.locations, cachedTax?.locations), defaults.locations.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 100 }))),
+      tags: normalize(mergeTerms(wpTax?.tags, localTax?.tags, cachedTax?.tags), defaults.tags.map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
+      employerCategories: normalize(mergeTerms(wpTax?.employerCategories, localTax?.employerCategories, cachedTax?.employerCategories), (defaults.employerCategories || []).map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
+      employerLocations: normalize(mergeTerms(wpTax?.employerLocations, localTax?.employerLocations, cachedTax?.employerLocations), (defaults.employerLocations || []).map(name => ({ name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), parent: '', description: '', count: 10 }))),
+      postCategories: normalize(cachedTax?.postCategories || localTax?.postCategories || wpTax?.postCategories, defaults.postCategories)
     };
+
+    try {
+      localStorage.setItem('wp_admin_taxonomies', JSON.stringify(taxonomies));
+    } catch {}
 
     try {
       const [pRes, pgRes, mRes] = await Promise.all([
@@ -6708,6 +6768,7 @@ export async function initAdmin() {
     jobStatusState.textContent = 'Saving…';
     const fd = new FormData(jobForm);
     const job = Object.fromEntries(fd.entries());
+    if (e.submitter?.id === 'publish-job-btn') job.status = 'publish';
     job.originalSlug = jobForm.originalSlug.value;
     job.description = document.getElementById('job-rich-content')?.innerHTML?.trim() || job.description?.trim() || '';
     if ((job.applyType === 'External URL' && !job.applyUrl) || (job.applyType === 'By Email' && !job.applyEmail)) {
@@ -6774,27 +6835,45 @@ export async function initAdmin() {
       job.publishedDate = todayFormatted;
     }
     job.date = todayFormatted;
+    job.postedDate = job.datePosted || job.postedDate || new Date(nowIso).toISOString().slice(0, 10);
 
-    const response = await fetch('/api/local/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(job)
-    });
-    const saved = await response.json();
-    if (!response.ok) {
-      jobStatusState.textContent = saved.error || 'Could not save';
-      return;
-    }
-    localJobs = localJobs.filter(x => x.slug !== job.originalSlug && x.slug !== saved.slug);
-    localJobs = localJobs.filter(x => x.slug !== job.originalSlug && x.slug !== saved.slug);
-    localJobs.unshift(saved);
-    jobForm.originalSlug.value = saved.slug;
-    document.querySelector('#admin-delete').hidden = false;
-    jobStatusState.textContent = 'Saved to the local server database.';
     const pubBtn = document.getElementById('publish-job-btn');
-    if (pubBtn) pubBtn.textContent = 'Update';
-    updateJobPreview();
-    renderJobRows();
+    const draftBtn = document.getElementById('save-draft-btn');
+    const originalPubText = pubBtn?.textContent || 'Publish Listing';
+    const originalDraftText = draftBtn?.textContent || 'Save Draft';
+    if (pubBtn) { pubBtn.disabled = true; pubBtn.textContent = 'Saving…'; }
+    if (draftBtn) draftBtn.disabled = true;
+    let jobSaveSucceeded = false;
+    try {
+      const response = await fetch('/api/local/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(job)
+      });
+      const saved = await response.json();
+      if (!response.ok) throw new Error(saved.error || 'Could not save the job.');
+      localJobs = localJobs.filter(x => x.slug !== job.originalSlug && x.slug !== saved.slug);
+      localJobs.unshift(saved);
+      jobForm.originalSlug.value = saved.slug;
+      document.querySelector('#admin-delete').hidden = false;
+      const statusLabel = saved.status === 'publish' ? 'published' : saved.status === 'pending' ? 'saved as pending' : saved.status === 'expired' ? 'saved as expired' : 'saved as a draft';
+      jobStatusState.textContent = `Job ${statusLabel} successfully.`;
+      showAdminNotice(`Job “${saved.title || job.title}” ${statusLabel} successfully.`);
+      jobSaveSucceeded = true;
+      updateJobPreview();
+      renderJobRows();
+    } catch (error) {
+      const message = error?.message || 'Could not save the job.';
+      jobStatusState.textContent = message;
+      showAdminNotice(message, 'error');
+    } finally {
+      if (pubBtn) {
+        pubBtn.disabled = false;
+        pubBtn.textContent = jobSaveSucceeded ? 'Saved ✓' : (jobForm.originalSlug.value ? 'Update' : originalPubText);
+        if (jobSaveSucceeded) setTimeout(() => { pubBtn.textContent = 'Update'; }, 1800);
+      }
+      if (draftBtn) { draftBtn.disabled = false; draftBtn.textContent = originalDraftText; }
+    }
   });
 
   document.querySelector('#admin-clear')?.addEventListener('click', () => fillJob({}));
@@ -7631,16 +7710,15 @@ export async function initAdmin() {
       }
       if (emptyBox) emptyBox.style.display = 'flex';
       if (removeBtn) removeBtn.style.display = 'none';
-      if (btnText) btnText.textContent = 'Set Logo Image';
+      if (btnText) btnText.textContent = 'Choose Logo Image';
     }
   }
 
   document.getElementById('set-employer-featured-img-btn')?.addEventListener('click', () => {
-    const hidden = document.getElementById('field-employer-logo-val');
-    const url = prompt('Enter Employer Logo URL:', hidden?.value || '');
-    if (url !== null) {
-      updateEmployerLogoPreview(url.trim());
-    }
+    showImageSourceChooser({
+      title: 'Choose company logo',
+      onSelect: url => updateEmployerLogoPreview(String(url || '').trim())
+    });
   });
 
   document.getElementById('btn-remove-employer-logo')?.addEventListener('click', () => {
@@ -7830,6 +7908,16 @@ export async function initAdmin() {
   });
 
   // Employer Form Submit Handler
+  const normalizeWebsiteUrl = value => {
+    const cleaned = String(value || '').trim();
+    if (!cleaned) return '';
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(cleaned)) return cleaned;
+    return `https://${cleaned.replace(/^\/+/, '')}`;
+  };
+  document.getElementById('field-employer-website')?.addEventListener('blur', event => {
+    event.target.value = normalizeWebsiteUrl(event.target.value);
+  });
+
   employerForm.addEventListener('submit', async e => {
     e.preventDefault();
     if (employerStatusState) employerStatusState.textContent = 'Saving…';
@@ -7849,7 +7937,7 @@ export async function initAdmin() {
       coverPhoto: document.getElementById('field-employer-cover')?.value.trim() || '',
       email: document.getElementById('field-employer-email')?.value.trim() || '',
       phone: document.getElementById('field-employer-phone')?.value.trim() || '',
-      website: document.getElementById('field-employer-website')?.value.trim() || '',
+      website: normalizeWebsiteUrl(document.getElementById('field-employer-website')?.value),
       foundedDate: document.getElementById('field-employer-founded')?.value.trim() || '',
       companySize: document.getElementById('field-employer-size')?.value.trim() || '',
       profilePhotos: split(document.getElementById('field-employer-photos')?.value),
@@ -7862,6 +7950,7 @@ export async function initAdmin() {
       local: true
     };
 
+    let employerSaveSucceeded = false;
     try {
       const res = await fetch('/api/local/employers', {
         method: 'POST',
@@ -7870,15 +7959,17 @@ export async function initAdmin() {
       });
       const saved = await res.json();
       if (!res.ok) {
-        if (employerStatusState) employerStatusState.textContent = saved.error || 'Could not save';
-        return;
+        throw new Error(saved.error || 'Could not save the employer.');
       }
       localEmployers = localEmployers.filter(x => x.slug !== employer.originalSlug && x.slug !== saved.slug);
       localEmployers.unshift(saved);
       employerForm.originalSlug.value = saved.slug;
       const deleteBtn = document.getElementById('employer-delete-btn');
       if (deleteBtn) deleteBtn.hidden = false;
-      if (employerStatusState) employerStatusState.textContent = 'Employer saved to local database.';
+      const statusLabel = saved.status === 'publish' ? 'published' : saved.status === 'pending' ? 'saved as pending' : 'saved as a draft';
+      if (employerStatusState) employerStatusState.textContent = `Employer ${statusLabel} successfully.`;
+      showAdminNotice(`Employer “${saved.title || employer.title}” ${statusLabel} successfully.`);
+      employerSaveSucceeded = true;
       updateEmployerPreview();
       renderEmployerRows();
 
@@ -7902,11 +7993,14 @@ export async function initAdmin() {
         }
       }
     } catch (err) {
-      if (employerStatusState) employerStatusState.textContent = 'Save failed.';
+      const message = err?.message || 'Could not save the employer.';
+      if (employerStatusState) employerStatusState.textContent = message;
+      showAdminNotice(message, 'error');
     } finally {
       if (saveBtn) {
         saveBtn.disabled = false;
-        saveBtn.textContent = 'Save';
+        saveBtn.textContent = employerSaveSucceeded ? 'Saved ✓' : 'Save';
+        if (employerSaveSucceeded) setTimeout(() => { saveBtn.textContent = 'Save'; }, 1800);
       }
     }
   });
@@ -8020,12 +8114,18 @@ export async function initAdmin() {
 
     // 2. Categories
     const isPostCat = currentTaxonomyCategoryMode === 'postCategories';
-    const catList = isPostCat
-      ? (taxonomies.postCategories && taxonomies.postCategories.length ? taxonomies.postCategories : defaults.postCategories).map(c => ({
-          ...c,
-          count: getPostCategoryCount(c.name)
-        }))
-      : taxonomies.categories;
+    const isEmpCat = currentTaxonomyCategoryMode === 'employerCategories';
+    let catList = [];
+    if (isPostCat) {
+      catList = (taxonomies.postCategories && taxonomies.postCategories.length ? taxonomies.postCategories : defaults.postCategories).map(c => ({
+        ...c,
+        count: getPostCategoryCount(c.name)
+      }));
+    } else if (isEmpCat) {
+      catList = taxonomies.employerCategories && taxonomies.employerCategories.length ? taxonomies.employerCategories : (defaults.employerCategories || []);
+    } else {
+      catList = taxonomies.categories;
+    }
 
     const catSearch = document.getElementById('search-tax-categories')?.value.toLowerCase().trim() || '';
     const hierCats = buildHierarchy(catList);
@@ -8033,10 +8133,10 @@ export async function initAdmin() {
     const tbodyCats = document.getElementById('tbody-tax-categories');
     if (tbodyCats) {
       tbodyCats.innerHTML = filteredCats.length ? filteredCats.map(c => {
-        const hasImg = c.image || (!isPostCat && c.slug === 'accounting-finance' ? '/assets/category-finance.jpg' : '');
-        const targetViewHref = isPostCat ? '#posts' : '#jobs';
-        const targetExternalUrl = isPostCat ? `/blog?category=${encodeURIComponent(c.name)}` : `/jobs?category=${encodeURIComponent(c.name)}`;
-        const delTaxType = isPostCat ? 'postCategories' : 'categories';
+        const hasImg = c.image || (!isPostCat && !isEmpCat && c.slug === 'accounting-finance' ? '/assets/category-finance.jpg' : '');
+        const targetViewHref = isPostCat ? '#posts' : (isEmpCat ? '#employers' : '#jobs');
+        const targetExternalUrl = isPostCat ? `/blog?category=${encodeURIComponent(c.name)}` : (isEmpCat ? `/employers?category=${encodeURIComponent(c.name)}` : `/jobs?category=${encodeURIComponent(c.name)}`);
+        const delTaxType = isPostCat ? 'postCategories' : (isEmpCat ? 'employerCategories' : 'categories');
 
         return `
           <tr id="tag-${esc(c.slug)}" class="modern-tax-tr">
@@ -8063,7 +8163,7 @@ export async function initAdmin() {
             <td class="count-col"><span class="modern-tax-count-chip">${Number(c.count || 0).toLocaleString()}</span></td>
           </tr>
         `;
-      }).join('') : `<tr><td colspan="5" style="text-align:center;padding:32px 16px;color:#64748b;font-size:13px;">No ${isPostCat ? 'post ' : ''}categories found.</td></tr>`;
+      }).join('') : `<tr><td colspan="5" style="text-align:center;padding:32px 16px;color:#64748b;font-size:13px;">No ${isPostCat ? 'post ' : (isEmpCat ? 'employer ' : 'job ')}categories found.</td></tr>`;
       const countCat1 = document.getElementById('count-tax-categories');
       if (countCat1) countCat1.textContent = `${filteredCats.length} items`;
     }
@@ -8199,7 +8299,14 @@ export async function initAdmin() {
       renderTaxonomyTables();
       renderGutenbergPostCategoriesChecklist();
       renderPostCategoryFilterDropdown();
+    } else if (currentTaxonomyCategoryMode === 'employerCategories') {
+      taxonomies.employerCategories = taxonomies.employerCategories || [];
+      taxonomies.employerCategories.push(newTerm);
+      await saveTaxonomies();
+      form.reset();
+      renderTaxonomyTables();
     } else {
+      taxonomies.categories = taxonomies.categories || [];
       taxonomies.categories.push(newTerm);
       await saveTaxonomies();
       form.reset();
@@ -8375,6 +8482,30 @@ export async function initAdmin() {
     }
   })();
 
+  // The authenticated administrator comes from the server database, while the
+  // editable table is cached locally. Keep the signed-in account represented in
+  // that table so real administrators never disappear behind demo seed users.
+  if (activeAdminSession.username || activeAdminSession.email) {
+    const username = activeAdminSession.username || activeAdminSession.email;
+    const name = activeAdminSession.name || username;
+    let signedInUser = users.find(user => user.username === username || (activeAdminSession.email && user.email === activeAdminSession.email));
+    if (!signedInUser) {
+      const stableId = 900000 + [...String(username)].reduce((total,character) => total + character.charCodeAt(0), 0);
+      signedInUser = { id: stableId, username, posts: 0, status: 'active', color: '#b91c1c', registered: new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) };
+      users.unshift(signedInUser);
+    }
+    const nameParts = name.trim().split(/\s+/);
+    Object.assign(signedInUser, {
+      name,
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' '),
+      email: activeAdminSession.email || signedInUser.email || '',
+      role: activeAdminSession.role || signedInUser.role || 'Administrator',
+      initials: nameParts.map(part => part[0]).join('').slice(0,2).toUpperCase()
+    });
+    localStorage.setItem('trikonet_users_cms', JSON.stringify(users));
+  }
+
   async function hashUserPassword(value) {
     const bytes = new TextEncoder().encode(value);
     const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -8421,6 +8552,9 @@ export async function initAdmin() {
 
     const cEditor = document.getElementById('count-user-editor');
     if (cEditor) cEditor.textContent = String(users.filter(u => u.role === 'Editor').length);
+
+    const cContentEditor = document.getElementById('count-user-content-editor');
+    if (cContentEditor) cContentEditor.textContent = String(users.filter(u => u.role === 'Content Editor').length);
   }
 
   let currentUserRole = 'all';
@@ -8443,10 +8577,10 @@ export async function initAdmin() {
     tbody.innerHTML = filtered.length ? filtered.map(u => {
       const displayName = u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username;
       const initials = (u.initials || (displayName.split(/\s+/).map(x => x[0]).join('').slice(0, 2)) || 'U').toUpperCase();
-      const roleClass = `pill-role-${(u.role || 'candidate').toLowerCase()}`;
+      const roleClass = `pill-role-${(u.role || 'candidate').toLowerCase().replace(/\s+/g, '-')}`;
       return `
         <tr id="user-${u.id}">
-          <td class="user-col-cb"><input type="checkbox" name="user_ids[]" value="${u.id}" class="modern-checkbox"></td>
+          <td class="user-col-cb"><input type="checkbox" name="user_ids[]" value="${u.id}" class="modern-checkbox" ${canDeleteUser(u) ? '' : 'disabled title="Protected account"'}></td>
           <td class="user-col-user">
             <div class="user-profile-cell-wrap">
               <span class="modern-user-avatar" style="background:${u.color || '#4f46e5'};">
@@ -8479,11 +8613,19 @@ export async function initAdmin() {
               <span>${u.status === 'inactive' ? 'Inactive' : 'Active'}</span>
             </span>
           </td>
+          <td class="user-col-actions">
+            <div class="user-action-buttons">
+              <button type="button" class="user-edit-button" data-user-edit="${u.id}" aria-label="Edit ${esc(u.username)}">Edit</button>
+              ${canDeleteUser(u)
+                ? `<button type="button" class="user-delete-button" data-user-delete="${u.id}" aria-label="Delete ${esc(u.username)}">Delete</button>`
+                : `<span class="user-protected-label" title="This administrator can be edited but cannot be deleted">Protected</span>`}
+            </div>
+          </td>
         </tr>
       `;
     }).join('') : `
       <tr>
-        <td colspan="6" class="modern-table-empty-cell">
+        <td colspan="7" class="modern-table-empty-cell">
           <div class="modern-table-empty-state">
             <div class="modern-empty-icon-wrap">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -8500,6 +8642,27 @@ export async function initAdmin() {
       </tr>
     `;
   }
+
+  async function syncServerAdminUsers() {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (!response.ok) return;
+      const serverUsers = await response.json();
+      if (!Array.isArray(serverUsers)) return;
+      const serverKeys = new Set();
+      const merged = serverUsers.map(serverUser => {
+        serverKeys.add(String(serverUser.email || '').toLowerCase());
+        serverKeys.add(String(serverUser.username || '').toLowerCase());
+        const cached = users.find(user => String(user.email || '').toLowerCase() === String(serverUser.email || '').toLowerCase() || String(user.username || '').toLowerCase() === String(serverUser.username || '').toLowerCase());
+        return { ...cached, ...serverUser, serverBacked: true };
+      });
+      merged.push(...users.filter(user => !serverKeys.has(String(user.email || '').toLowerCase()) && !serverKeys.has(String(user.username || '').toLowerCase())));
+      users = merged;
+      saveUsers();
+      renderUserRows();
+    } catch {}
+  }
+  syncServerAdminUsers();
 
   function fillUser(u = {}) {
     const form = document.getElementById('admin-user-form');
@@ -8569,13 +8732,13 @@ export async function initAdmin() {
   document.getElementById('btn-change-user-role')?.addEventListener('click', () => {
     const newRole = document.getElementById('filter-user-role-selector')?.value;
     if (!newRole) return;
-    const selectedIds = Array.from(document.querySelectorAll('#admin-user-rows input[type="checkbox"]:checked')).map(b => Number(b.value));
+    const selectedIds = Array.from(document.querySelectorAll('#admin-user-rows input[type="checkbox"]:checked')).map(b => String(b.value));
     if (!selectedIds.length) {
       alert('Please select at least one user.');
       return;
     }
     users.forEach(u => {
-      if (selectedIds.includes(u.id)) {
+      if (selectedIds.includes(String(u.id))) {
         u.role = newRole;
       }
     });
@@ -8587,14 +8750,14 @@ export async function initAdmin() {
   document.getElementById('btn-apply-user-bulk')?.addEventListener('click', () => {
     const action = document.getElementById('bulk-action-users-selector')?.value;
     if (action === 'delete') {
-      const selectedIds = Array.from(document.querySelectorAll('#admin-user-rows input[type="checkbox"]:checked')).map(b => Number(b.value));
+      const selectedIds = Array.from(document.querySelectorAll('#admin-user-rows input[type="checkbox"]:checked')).map(b => String(b.value));
       if (!selectedIds.length) {
         alert('Please select users to delete.');
         return;
       }
       if (!confirm(`Delete ${selectedIds.length} selected user(s)?`)) return;
-      const blocked = users.filter(u => selectedIds.includes(u.id) && !canDeleteUser(u));
-      users = users.filter(u => !selectedIds.includes(u.id) || !canDeleteUser(u));
+      const blocked = users.filter(u => selectedIds.includes(String(u.id)) && !canDeleteUser(u));
+      users = users.filter(u => !selectedIds.includes(String(u.id)) || !canDeleteUser(u));
       saveUsers();
       renderUserRows();
       if (blocked.length) alert('The signed-in account and the last administrator were kept to prevent an account lockout.');
@@ -8605,7 +8768,7 @@ export async function initAdmin() {
   document.getElementById('admin-user-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     const form = e.target;
-    const id = Number(form.userId.value);
+    const id = String(form.userId.value || '');
     const username = form.username.value.trim();
     const email = form.email.value.trim();
     const firstName = form.firstName.value.trim();
@@ -8622,90 +8785,49 @@ export async function initAdmin() {
       alert('New users must have a password of at least 8 characters.');
       return;
     }
-    if (users.some(u => u.id !== id && u.username.toLowerCase() === username.toLowerCase())) {
+    if (users.some(u => String(u.id) !== id && u.username.toLowerCase() === username.toLowerCase())) {
       alert('Username is already taken. Please choose another.');
       return;
     }
-    if (users.some(u => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
+    if (users.some(u => String(u.id) !== id && u.email.toLowerCase() === email.toLowerCase())) {
       alert('Email address is already assigned to another user.');
       return;
     }
 
-    if (id) {
-      const existing = users.find(u => u.id === id);
-      if (existing) {
-        const previousUsername = existing.username;
-        if (previousUsername === signedInAdminUsername() && status === 'inactive') {
-          alert('You cannot deactivate the account you are currently using.');
-          return;
-        }
-        if (existing.role === 'Administrator' && role !== 'Administrator' && users.filter(item => item.role === 'Administrator').length <= 1) {
-          alert('Create another administrator before changing the role of the last administrator.');
-          return;
-        }
-        if (!existing.passwordHash && password.length < 8) {
-          alert('Set a password of at least 8 characters before saving this user.');
-          return;
-        }
-        if (password && password.length < 8) {
-          alert('Passwords must contain at least 8 characters.');
-          return;
-        }
-        existing.username = username;
-        existing.email = email;
-        existing.firstName = firstName;
-        existing.lastName = lastName;
-        existing.name = name;
-        existing.website = website;
-        existing.role = role;
-        existing.status = status;
-        existing.bio = bio;
-        if (password) existing.passwordHash = await hashUserPassword(password);
-        if (previousUsername === signedInAdminUsername()) {
-          try {
-            const session = JSON.parse(localStorage.getItem('trikonet_admin_session') || sessionStorage.getItem('trikonet_admin_session') || '{}');
-            Object.assign(session, { username, email, name, role, expiresAt: Date.now() + (8 * 60 * 60 * 1000) });
-            localStorage.removeItem('trikonet_admin_session');
-            sessionStorage.setItem('trikonet_admin_session', JSON.stringify(session));
-          } catch {}
-        }
-      }
-    } else {
-      const palette = ['#4f46e5', '#0284c7', '#059669', '#d97706', '#dc2626', '#7c3aed', '#ec4899'];
-      const color = palette[Math.floor(Math.random() * palette.length)];
-      const initials = (name.split(/\s+/).map(x => x[0]).join('').slice(0, 2) || username.slice(0, 2)).toUpperCase();
-      const newUser = {
-        id: Date.now(),
-        username,
-        name,
-        firstName,
-        lastName,
-        email,
-        role,
-        posts: 0,
-        website,
-        color,
-        initials,
-        registered: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        status,
-        bio
-      };
-      if (password) newUser.passwordHash = await hashUserPassword(password);
-      users.unshift(newUser);
+    const wasEditing = Boolean(id);
+    const existing = id ? users.find(user => String(user.id) === id) : null;
+    if (existing?.username === signedInAdminUsername() && status === 'inactive') return alert('You cannot deactivate the account you are currently using.');
+    if (existing?.role === 'Administrator' && role !== 'Administrator' && users.filter(item => item.role === 'Administrator').length <= 1) return alert('Create another administrator before changing the role of the last administrator.');
+    if ((!existing?.serverBacked && password.length < 8) || (password && password.length < 8)) return alert('Set a password of at least 8 characters so this user can sign in.');
+
+    let savedUser;
+    try {
+      const response = await fetch('/api/admin/users', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:existing?.serverBacked?id:'',username,email,name,role,status,password,website,bio,posts:existing?.posts||0})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to save login account.');
+      savedUser = result;
+    } catch (error) {
+      showAdminNotice(error.message || 'Unable to save login account.', 'error');
+      return;
     }
+    const palette = ['#4f46e5','#0284c7','#059669','#d97706','#dc2626','#7c3aed','#ec4899'];
+    const userRecord = {...existing,...savedUser,firstName,lastName,name,website,bio,serverBacked:true,color:existing?.color||palette[Math.floor(Math.random()*palette.length)],initials:(name.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||username.slice(0,2)).toUpperCase(),registered:existing?.registered||new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+    users = users.filter(user => String(user.id)!==id && String(user.email||'').toLowerCase()!==email.toLowerCase());
+    users.unshift(userRecord);
 
     saveUsers();
+    showAdminNotice(`User “${username}” ${wasEditing ? 'updated' : 'created'} successfully.`);
     form.reset();
     location.hash = 'users';
   });
 
   // Click delegation for user edit / delete
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const editBtn = e.target.closest('[data-user-edit]');
     if (editBtn) {
       e.preventDefault();
-      const id = Number(editBtn.dataset.userEdit);
-      const u = users.find(x => x.id === id);
+      const id = String(editBtn.dataset.userEdit);
+      const u = users.find(x => String(x.id) === id);
       if (u) {
         fillUser(u);
         location.hash = 'user-editor';
@@ -8716,17 +8838,23 @@ export async function initAdmin() {
     const delBtn = e.target.closest('[data-user-delete]');
     if (delBtn) {
       e.preventDefault();
-      const id = Number(delBtn.dataset.userDelete);
-      const u = users.find(x => x.id === id);
+      const id = String(delBtn.dataset.userDelete);
+      const u = users.find(x => String(x.id) === id);
       if (!u) return;
       if (!canDeleteUser(u)) {
         alert(u.username === signedInAdminUsername() ? 'You cannot delete the account you are currently using.' : 'You cannot delete the last administrator account.');
         return;
       }
       if (!confirm(`Are you sure you want to delete user “${u.username}”?`)) return;
-      users = users.filter(x => x.id !== id);
+      if (u.serverBacked) {
+        const response = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {method:'DELETE'});
+        const result = await response.json().catch(()=>({}));
+        if (!response.ok) return showAdminNotice(result.error || 'Unable to delete user.', 'error');
+      }
+      users = users.filter(x => String(x.id) !== id);
       saveUsers();
       renderUserRows();
+      showAdminNotice(`User “${u.username}” deleted successfully.`);
     }
   });
 

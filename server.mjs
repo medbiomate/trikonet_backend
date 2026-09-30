@@ -637,10 +637,17 @@ const server = http.createServer(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
+    let storage = 'json-fallback';
+    try {
+      await ensurePersistentState();
+      const [stateRows] = await wpDb.query("SELECT updated_at FROM trikonet_app_state WHERE state_key='main' LIMIT 1");
+      if (stateRows.length) storage = 'mysql';
+    } catch {}
     return sendJson(req, res, 200, {
       status: 'ok',
       service: 'trikonet-backend',
       domain: 'https://api.trikonet.com',
+      storage,
       time: new Date().toISOString()
     });
   }

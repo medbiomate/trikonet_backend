@@ -110,6 +110,7 @@ function fallbackRecords(type, params) {
   const category = (params.get('category') || '').trim();
   const jobType = (params.get('job_type') || '').trim();
   const employerId = Number(params.get('employer_id'));
+  const employerSlug = (params.get('employer_slug') || '').trim();
 
   let list = [];
   if (type === 'job_listing') list = memoryStore.jobs || [];
@@ -118,6 +119,7 @@ function fallbackRecords(type, params) {
   else return [];
 
   let filtered = list;
+  if(params.get('id'))filtered=filtered.filter(item=>Number(item.id)===Number(params.get('id')));
 
   if (slug) {
     return filtered.filter(item => item.slug === slug);
@@ -148,6 +150,10 @@ function fallbackRecords(type, params) {
     }
     if (employerId) {
       filtered = filtered.filter(item => Number(item.metas?._job_employer_posted_by) === employerId);
+    }
+    if (employerSlug) {
+      const employer=(memoryStore.employers || []).find(item=>item.slug===employerSlug);
+      filtered=filtered.filter(item=>Number(item.metas?._job_employer_posted_by)===Number(employer?.id) || String(item.metas?._job_employer_url || '').replace(/\/$/,'').endsWith(`/employer/${employerSlug}`));
     }
   }
 

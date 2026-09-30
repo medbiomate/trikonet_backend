@@ -128,12 +128,11 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       const links=[];
       for(const category of taxonomies.categories || []) {
         const matching=active.filter(job=>matchesTaxonomy(job,'categories','_job_category',category.id,category.name,taxonomies.categories));
-        if(matching.length<20)continue;
         const main=published.find(page=>page.pageType==='main_category' && key(page.category)===key(category.name));
-        links.push({slug:main?.slug || `category/${category.slug}`,href:main?`/${main.slug}`:`/category/${category.slug}`,title:`${category.name.replace(/\s+jobs$/i,'')} Jobs`,category:category.name,location:'',pageType:'main_category',activeJobCount:matching.length});
+        links.push({slug:main?.slug || `category/${category.slug}`,categorySlug:category.slug,href:main?`/${main.slug}`:`/category/${category.slug}`,title:`${category.name.replace(/\s+jobs$/i,'')} Jobs`,category:category.name,location:'',pageType:'main_category',activeJobCount:matching.length});
         for(const page of published.filter(page=>page.pageType==='category_location' && key(page.category)===key(category.name))) {
           const count=matching.filter(job=>matchesTaxonomy(job,'locations','_job_location',page.locationId,page.location,taxonomies.locations)).length;
-          if(count>=20)links.push({slug:page.slug,href:`/${page.slug}`,title:page.title,category:category.name,location:page.location,pageType:page.pageType,activeJobCount:count});
+          if(count>=10)links.push({slug:page.slug,href:`/${page.slug}`,title:page.title,category:category.name,location:page.location,pageType:page.pageType,activeJobCount:count});
         }
       }
       directoryCache=links.sort((a,b)=>a.category.localeCompare(b.category)||a.location.localeCompare(b.location));

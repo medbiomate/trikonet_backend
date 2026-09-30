@@ -7,6 +7,6 @@ test('directory uses active jobs, 20-job boundary, and only existing published d
  const pool={query:async sql=>sql.startsWith('SELECT')?[pages.map(page=>({payload:JSON.stringify(page)}))]:[[]]};
  const repo=createSeoRepository(pool,async()=>({jobs:[]}),async()=>({jobs,taxonomies:{categories:[{id:1,name:'Healthcare',slug:'healthcare'},{id:2,name:'Engineering',slug:'engineering'}],locations:[{id:3,name:'Dubai'}]}}));
  const links=await repo.directory();
- assert.deepEqual(links.map(link=>link.href).sort(),['/category/healthcare','/health-in-dubai']);
- assert.ok(links.every(link=>link.activeJobCount===20));
+ assert.deepEqual(links.map(link=>link.href).sort(),['/category/engineering','/category/healthcare','/health-in-dubai']);
+ assert.equal(links.find(link=>link.category==='Engineering').activeJobCount,19);
 });

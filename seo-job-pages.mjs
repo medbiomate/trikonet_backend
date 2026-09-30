@@ -83,6 +83,10 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   let lastSync = 0;
   let directoryCache;
   let directoryCacheUntil = 0;
+  let directoryRefresh;
+  let recordsCache;
+  let recordsCacheUntil=0;
+  let recordsRefresh;
   const queue = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
   async function ensure() {
     ready ||= pool.query(`CREATE TABLE IF NOT EXISTS seo_job_pages (id VARCHAR(64) PRIMARY KEY, slug VARCHAR(191) UNIQUE NOT NULL, page_type VARCHAR(32) NOT NULL, payload LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(error => { ready = null; throw error; });
@@ -91,6 +95,12 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   async function rows() { await ensure(); const [list] = await pool.query('SELECT payload FROM seo_job_pages'); return list.map(row => JSON.parse(row.payload)); }
   async function save(page) { await ensure(); await pool.query('INSERT INTO seo_job_pages (id,slug,page_type,payload) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE slug=VALUES(slug),payload=VALUES(payload)', [page.id,page.slug,page.pageType,JSON.stringify(page)]); }
   async function counts() {
+    if(recordsCache && Date.now()<recordsCacheUntil)return recordsCache;
+    if(recordsRefresh)return recordsRefresh;
+    recordsRefresh=calculateCounts().then(value=>{recordsCache=value;recordsCacheUntil=Date.now()+60000;return value;}).finally(()=>{recordsRefresh=null;});
+    return recordsRefresh;
+  }
+  async function calculateCounts() {
     const db = await readLocalDb();
     const { jobs, taxonomies } = await loadRecords();
     const merged = new Map(jobs.map(job => [job.slug || String(job.id),job]));
@@ -119,15 +129,15 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     lastSync = Date.now();
     return [...mains,...pages];
   }
-  return {
-    directory: async () => {
-      if(directoryCache && Date.now()<directoryCacheUntil)return directoryCache;
+  async function refreshDirectory() {
       const {jobs,taxonomies}=await counts();
       const active=jobs.filter(job=>isActiveJob(job));
+      const categoryJobs=new Map();
+      for(const job of active)for(const name of new Set(values(job,'categories','_job_category').map(key))){if(!categoryJobs.has(name))categoryJobs.set(name,[]);categoryJobs.get(name).push(job);}
       const published=(await rows()).filter(indexable);
       const links=[];
       for(const category of taxonomies.categories || []) {
-        const matching=active.filter(job=>matchesTaxonomy(job,'categories','_job_category',category.id,category.name,taxonomies.categories));
+        const matching=categoryJobs.get(key(category.name)) || [];
         const main=published.find(page=>page.pageType==='main_category' && key(page.category)===key(category.name));
         links.push({slug:main?.slug || `category/${category.slug}`,categorySlug:category.slug,href:main?`/${main.slug}`:`/category/${category.slug}`,title:`${category.name.replace(/\s+jobs$/i,'')} Jobs`,category:category.name,location:'',pageType:'main_category',activeJobCount:matching.length});
         for(const page of published.filter(page=>page.pageType==='category_location' && key(page.category)===key(category.name))) {
@@ -138,8 +148,15 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       directoryCache=links.sort((a,b)=>a.category.localeCompare(b.category)||a.location.localeCompare(b.location));
       directoryCacheUntil=Date.now()+60000;
       return directoryCache;
+  }
+  return {
+    directory: async () => {
+      if(directoryCache && Date.now()<directoryCacheUntil)return directoryCache;
+      if(!directoryRefresh)directoryRefresh=refreshDirectory().finally(()=>{directoryRefresh=null;});
+      if(directoryCache){directoryRefresh.catch(error=>console.warn('Category refresh failed:',error.message));return directoryCache;}
+      return directoryRefresh;
     },
-    list: (force = false) => queue(() => syncUnlocked(force)),
+    list: (force = false) => queue(() => {if(force)recordsCacheUntil=0;return syncUnlocked(force);}),
     resolveDestination: async slug => {
       const {taxonomies}=await counts();
       const suffix=['UAE',...UAE_LOCATIONS].find(name=>slug.endsWith(`-in-${slugify(name)}`));

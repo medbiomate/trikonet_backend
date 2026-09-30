@@ -122,9 +122,12 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   async function syncUnlocked(force = false) {
     let list = await rows();
     if (!force && Date.now() - lastSync < 60000) return list;
-    const { result } = await counts();
+    const { result,taxonomies } = await counts();
     const mains = list.filter(p => p.pageType === 'main_category');
-    const pages = reconcile(list.filter(p => p.pageType === 'category_location'),mains,result);
+    // Every existing taxonomy already has a /category/:slug page. Use it as
+    // the source for destination generation without creating duplicate mains.
+    const sources=[...mains,...(taxonomies.categories || []).filter(term=>!mains.some(main=>key(main.category)===key(term.name))).map(term=>({category:term.name,categoryId:term.id || term.slug,slug:term.slug || slugify(term.name),status:'Published',locations:taxonomies.locations || []}))];
+    const pages = reconcile(list.filter(p => p.pageType === 'category_location'),sources,result);
     for (const page of pages) await save(page);
     lastSync = Date.now();
     return [...mains,...pages];

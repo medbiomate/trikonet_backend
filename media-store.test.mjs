@@ -12,3 +12,16 @@ test('failed durable storage rejects instead of falsely confirming upload',async
   const store=createMediaStore({query:async()=>{throw Error('unavailable');}});
   await assert.rejects(store.normalize('data:image/png;base64,iVBORw0KGgo='),/unavailable/);
 });
+test('verified public R2 copies replace origin URLs without exposing private uploads',async()=>{
+  const keys=['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET','R2_PUBLIC_URL'];
+  const saved=keys.map(key=>process.env[key]);const originalFetch=globalThis.fetch;
+  try {
+    keys.forEach(key=>process.env[key]='test');
+    const checksum='a'.repeat(64),public_url='https://media.trikonet.com/images/company-logo.webp';
+    globalThis.fetch=async()=>({ok:true});
+    const store=createMediaStore({query:async sql=>[sql.startsWith('SELECT attachment_id')?[{attachment_id:1,checksum,public_url}]:[]]});
+    assert.equal(await store.normalize(`https://api.trikonet.com/media/images/${checksum}/logo.webp`),public_url);
+    const privateUrl=`https://api.trikonet.com/media/images/${'b'.repeat(64)}/profile.webp`;
+    assert.equal(await store.normalize(privateUrl),privateUrl);
+  } finally {globalThis.fetch=originalFetch;keys.forEach((key,i)=>{if(saved[i]===undefined)delete process.env[key];else process.env[key]=saved[i];});}
+});

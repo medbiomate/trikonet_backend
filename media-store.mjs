@@ -9,10 +9,24 @@ export function createMediaStore(pool) {
   const cache=new Map();
   const resolved=new Map();
   const publicSources=new Map();
+  const publicByChecksum=new Map();
+  let publicUrlsReady;
   const r2Enabled=['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET','R2_PUBLIC_URL'].every(key=>process.env[key]);
   const r2=r2Enabled?new S3Client({region:'auto',endpoint:`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},maxAttempts:2}):null;
   let mappingReady;
   const ensureMapping=()=>mappingReady ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_public_media (attachment_id BIGINT PRIMARY KEY, object_key VARCHAR(255) NOT NULL, public_url VARCHAR(512) NOT NULL, checksum CHAR(64) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`).catch(error=>{mappingReady=null;throw error;});
+  async function loadPublicUrls(){
+    if(!r2Enabled)return;
+    return publicUrlsReady ||= (async()=>{
+      await ensureMapping();
+      const [rows]=await pool.query('SELECT attachment_id,public_url,checksum FROM trikonet_public_media');
+      const valid=rows.filter(row=>String(row.public_url).startsWith('https://media.trikonet.com/'));
+      if(!valid.length)return;
+      const check=await fetch(valid[0].public_url,{method:'HEAD',signal:AbortSignal.timeout(10000),redirect:'error'});
+      if(!check.ok)throw Error(`Public media verification failed: ${check.status}`);
+      for(const row of valid){publicByChecksum.set(row.checksum,row.public_url);resolved.set(Number(row.attachment_id),row.public_url);}
+    })().catch(error=>{publicUrlsReady=null;console.error('CDN unavailable; retaining origin images:',error.message);});
+  }
   // Only WordPress public attachments enter this bucket. Generic data URLs may
   // contain private profile/resume images and must remain in the existing store.
   async function publishAttachment(row,bytes){
@@ -28,6 +42,7 @@ export function createMediaStore(pool) {
     if(!check.ok)throw Error(`CDN verification failed: ${check.status}`);
     await ensureMapping();
     await pool.query('INSERT INTO trikonet_public_media (attachment_id,object_key,public_url,checksum) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE object_key=VALUES(object_key),public_url=VALUES(public_url),checksum=VALUES(checksum)',[row.ID,key,url,checksum]);
+    publicByChecksum.set(checksum,url);
     return url;
   }
   async function attachment(id){
@@ -47,7 +62,7 @@ export function createMediaStore(pool) {
       const stored=await normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
       let location=stored;
       try{location=await publishAttachment(row,bytes)||stored;}catch(error){console.error(`Public image ${id} retained on origin:`,error.message);}
-      const reliable = location.startsWith('https://media.trikonet.com/') ? stored : location;
+      const reliable = location;
       resolved.set(id,reliable);
       return reliable;
     })().catch(error=>{cache.delete(id);throw error;});
@@ -55,6 +70,8 @@ export function createMediaStore(pool) {
   }
   async function normalize(value, label='image') {
     if(typeof value==='string'){
+      const origin=value.match(/^https:\/\/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//);
+      if(origin){await loadPublicUrls();return publicByChecksum.get(origin[1]) || value;}
       const old=value.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
       // Never hold a public API response while downloading a legacy image.
       // Background migration fills this mapping; existing static URLs stay usable.
@@ -86,6 +103,7 @@ export function createMediaStore(pool) {
     for(const row of existing){
       resolved.set(Number(row.attachment_id),row.filename ? `https://api.trikonet.com/media/images/${row.checksum}/${row.filename}` : row.public_url);
     }
+    await loadPublicUrls();
     let rows;
     try{[rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");}
     catch(error){

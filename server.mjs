@@ -6,7 +6,7 @@ import mysql from 'mysql2/promise';
 import { createMediaStore } from './media-store.mjs';
 import crypto from 'node:crypto';
 import { newestFirst } from './record-order.mjs';
-import { createSeoRepository } from './seo-job-pages.mjs';
+import { createSeoRepository, isActiveJob } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
@@ -1322,6 +1322,31 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
     }
+  }
+
+  if(path==='/api/wp/top-employers' && req.method==='GET'){
+    await loadMemoryStore();
+    const local=await readLocalDb();
+    const jobs=new Map((memoryStore.jobs||[]).map(job=>[job.slug,job]));
+    for(const job of local.jobs||[])jobs.set(job.slug,job);
+    const counts=new Map();
+    for(const job of jobs.values()){
+      if(!isActiveJob(job))continue;
+      const id=Number(job.metas?._job_employer_posted_by);
+      const companyKey=id?`id:${id}`:`slug:${job.employerSlug||''}`;
+      counts.set(companyKey,(counts.get(companyKey)||0)+1);
+    }
+    const employers=new Map((memoryStore.employers||[]).map(employer=>[employer.slug,employer]));
+    for(const employer of local.employers||[])employers.set(employer.slug,employer);
+    const min=Math.max(20,Number(requestUrl.searchParams.get('min_jobs'))||20);
+    const limit=Math.min(50,Math.max(1,Number(requestUrl.searchParams.get('limit'))||20));
+    const records=[...employers.values()].filter(e=>['publish','published'].includes(e.status||'publish')).map(e=>{
+      const metas={...e.metas};
+      metas._employer_logo ||= e.logo||'';
+      metas._employer_open_jobs=(counts.get(`id:${Number(e.id)}`)||0)+(counts.get(`slug:${e.slug}`)||0);
+      return {...e,title:typeof e.title==='string'?{rendered:e.title}:e.title,metas};
+    }).filter(e=>e.metas._employer_open_jobs>=min).sort((a,b)=>b.metas._employer_open_jobs-a.metas._employer_open_jobs||a.slug.localeCompare(b.slug)).slice(0,limit);
+    return sendJson(req,res,200,records);
   }
 
   // API: WordPress records proxy

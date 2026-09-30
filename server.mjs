@@ -582,6 +582,7 @@ const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
 // This migration is insert-only: never overwrite saved manual settings.
 const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
+seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
 
 async function readJsonBody(req, maxBytes = 2_000_000) {
   let body = '';

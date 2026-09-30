@@ -167,7 +167,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       const now = new Date().toISOString();
       if (!slug || slug.length>191 || ['home','jobs','employers','admin','admin-login','login','register','blog','about','contact','faq'].includes(slug)) throw new Error('Choose a unique category landing page URL of up to 191 characters.');
       const main = { ...(existing || {}),id:existing?.id || crypto.randomUUID(),pageType:'main_category',categoryId:category.id || category.slug,category:category.name,slug,title:body.title || existing?.title || `${category.name.replace(/\s+jobs$/i,'')} Jobs`,status:body.status==='Draft'?'Draft':'Published',indexingStatus:'Index',createdAt:existing?.createdAt || now,updatedAt:now,locations:taxonomies.locations || [],cmsPageId:body.cmsPageId || existing?.cmsPageId,seoTitle:body.seoTitle || existing?.seoTitle,metaDescription:body.metaDescription ?? existing?.metaDescription,introContent:body.introContent ?? existing?.introContent };
-      await save(main); lastSync = 0; await syncUnlocked(true); return main;
+      await save(main); lastSync = 0; await syncUnlocked(true); directoryCache=null; return main;
     }),
     update: (id,changes,regenerate = false) => queue(async () => {
       const list = await rows(); const page = list.find(p => p.id === id && p.pageType === 'category_location');

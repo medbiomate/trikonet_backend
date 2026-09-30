@@ -97,6 +97,13 @@ async function populateMemoryStore() {
       memoryStore.jobs = JSON.parse(await readFile(join(dataRoot, 'jobs.json'), 'utf8'));
     }
   } catch {}
+  // A reassigned/imported job may not carry its employer's current logo.
+  const employersById = new Map((memoryStore.employers || []).map(item => [Number(item.id),item]));
+  for(const job of memoryStore.jobs || []) {
+    const employer=employersById.get(Number(job.metas?._job_employer_posted_by));
+    const logo=employer?.metas?._employer_logo || employer?.logo;
+    if(logo) {job.logo=logo;job.metas ||= {};job.metas._job_logo=logo;}
+  }
 }
 // Load memory store asynchronously in background
 loadMemoryStore().catch(console.error);

@@ -457,19 +457,63 @@ const emptyDb = {
   applications: [],
   users: [],
   emailCampaigns: [],
+  savedJobs: [],
+  employerClaims: [],
   resumes: [],
+  jobReports: [],
   taxonomies: { types: [], categories: [], locations: [], tags: [] }
 };
 
+let persistentStateReady;
+async function ensurePersistentState() {
+  if (!persistentStateReady) {
+    persistentStateReady = (async () => {
+      await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_app_state (
+        state_key VARCHAR(64) NOT NULL PRIMARY KEY,
+        payload LONGTEXT NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+      const [rows] = await wpDb.query("SELECT state_key FROM trikonet_app_state WHERE state_key='main' LIMIT 1");
+      if (!rows.length) {
+        let initial = structuredClone(emptyDb);
+        try { initial = { ...initial, ...JSON.parse(await readFile(localDbPath, 'utf8')) }; } catch {}
+        await wpDb.query(
+          "INSERT IGNORE INTO trikonet_app_state (state_key, payload) VALUES ('main', ?)",
+          [JSON.stringify(initial)]
+        );
+      }
+    })().catch(error => {
+      persistentStateReady = null;
+      throw error;
+    });
+  }
+  return persistentStateReady;
+}
+
 async function readLocalDb() {
   try {
-    return { ...emptyDb, ...JSON.parse(await readFile(localDbPath, 'utf8')) };
-  } catch {
-    return structuredClone(emptyDb);
+    await ensurePersistentState();
+    const [rows] = await wpDb.query("SELECT payload FROM trikonet_app_state WHERE state_key='main' LIMIT 1");
+    if (rows[0]?.payload) return { ...emptyDb, ...JSON.parse(rows[0].payload) };
+  } catch (error) {
+    console.error('Persistent state read failed; using deployment JSON fallback:', error.message);
   }
+  try { return { ...emptyDb, ...JSON.parse(await readFile(localDbPath, 'utf8')) }; }
+  catch { return structuredClone(emptyDb); }
 }
 
 async function writeLocalDb(db) {
+  const payload = JSON.stringify({ ...emptyDb, ...db });
+  try {
+    await ensurePersistentState();
+    await wpDb.query(
+      "INSERT INTO trikonet_app_state (state_key, payload) VALUES ('main', ?) ON DUPLICATE KEY UPDATE payload=VALUES(payload), updated_at=CURRENT_TIMESTAMP",
+      [payload]
+    );
+    return;
+  } catch (error) {
+    console.error('Persistent state write failed; using deployment JSON fallback:', error.message);
+  }
   await mkdir(dataRoot, { recursive: true });
   await writeFile(localDbPath, JSON.stringify(db, null, 2));
 }
@@ -811,6 +855,10 @@ const server = http.createServer(async (req, res) => {
 
   // API: Admin Users List
   if (path === '/api/admin/users' && req.method === 'GET') {
+    const admin = currentAdminSession(req);
+    if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
+      return sendJson(req, res, 403, { error: 'Administrator access required' });
+    }
     const db = await readLocalDb();
     const allowed = new Set(['administrator', 'editor', 'content editor']);
     const users = (db.users || []).filter(user => allowed.has(String(user.role || '').toLowerCase())).map(user => ({
@@ -827,6 +875,100 @@ const server = http.createServer(async (req, res) => {
       hasPassword: !!user.passwordHash
     }));
     return sendJson(req, res, 200, users);
+  }
+
+  if ((path === '/api/admin/user-save' || path === '/api/admin/users') && req.method === 'POST') {
+    const admin = currentAdminSession(req);
+    if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
+      return sendJson(req, res, 403, { error: 'Administrator access required' });
+    }
+    try {
+      const body = await readJsonBody(req);
+      const db = await readLocalDb();
+      const username = String(body.username || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      const name = String(body.name || username).trim();
+      const roleInput = String(body.role || 'Editor').trim().toLowerCase();
+      const role = roleInput === 'administrator' ? 'Administrator' : roleInput === 'content editor' ? 'Content Editor' : 'Editor';
+      const password = String(body.password || '');
+      if (!username || !/^\S+@\S+\.\S+$/.test(email)) {
+        return sendJson(req, res, 400, { error: 'Username and a valid email are required.' });
+      }
+      db.users = db.users || [];
+      let user = db.users.find(item =>
+        String(item.id) === String(body.id || '') ||
+        String(item.email || '').toLowerCase() === email ||
+        String(item.username || '').toLowerCase() === username.toLowerCase()
+      );
+      if (!user && password.length < 8) {
+        return sendJson(req, res, 400, { error: 'Set a password of at least 8 characters for this login.' });
+      }
+      if (db.users.some(item => item !== user && String(item.email || '').toLowerCase() === email)) {
+        return sendJson(req, res, 409, { error: 'Email address is already assigned to another user.' });
+      }
+      if (db.users.some(item => item !== user && String(item.username || '').toLowerCase() === username.toLowerCase())) {
+        return sendJson(req, res, 409, { error: 'Username is already taken.' });
+      }
+      if (!user) {
+        user = { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+        db.users.push(user);
+      }
+      Object.assign(user, {
+        username,
+        email,
+        name,
+        role,
+        status: body.status === 'inactive' ? 'inactive' : 'active',
+        website: String(body.website || ''),
+        bio: String(body.bio || ''),
+        posts: Number(body.posts) || Number(user.posts) || 0,
+        updatedAt: new Date().toISOString()
+      });
+      if (password) {
+        const credentials = passwordHash(password);
+        user.passwordSalt = credentials.salt;
+        user.passwordHash = credentials.hash;
+        delete user.salt;
+        delete user.hash;
+      }
+      await writeLocalDb(db);
+      return sendJson(req, res, 200, {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        website: user.website,
+        bio: user.bio,
+        posts: user.posts,
+        createdAt: user.createdAt,
+        hasPassword: Boolean(user.passwordHash)
+      });
+    } catch (error) {
+      return sendJson(req, res, 400, { error: error.message || 'Unable to save user.' });
+    }
+  }
+
+  if (path.startsWith('/api/admin/users/') && req.method === 'DELETE') {
+    const admin = currentAdminSession(req);
+    if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
+      return sendJson(req, res, 403, { error: 'Administrator access required' });
+    }
+    const id = path.slice('/api/admin/users/'.length);
+    const db = await readLocalDb();
+    const target = (db.users || []).find(user => String(user.id) === id);
+    if (!target) return sendJson(req, res, 404, { error: 'User not found' });
+    if (String(target.id) === String(admin.userId)) {
+      return sendJson(req, res, 400, { error: 'You cannot delete the account you are currently using.' });
+    }
+    const administrators = (db.users || []).filter(user => String(user.role || '').toLowerCase() === 'administrator');
+    if (String(target.role || '').toLowerCase() === 'administrator' && administrators.length <= 1) {
+      return sendJson(req, res, 400, { error: 'You cannot delete the last administrator account.' });
+    }
+    db.users = db.users.filter(user => String(user.id) !== id);
+    await writeLocalDb(db);
+    return sendJson(req, res, 200, { ok: true });
   }
 
   if (path === '/api/resumes' && req.method === 'GET') {

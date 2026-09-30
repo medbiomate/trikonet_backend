@@ -22,7 +22,7 @@ export function values(job, field, meta) {
   return (Array.isArray(value) ? value : value && typeof value === 'object' ? Object.values(value) : String(value || '').split(',')).map(String).map(v => v.trim()).filter(Boolean);
 }
 export function defaults(main, location) {
-  const base = String(main.slug).replace(/-jobs$/, '');
+  const base = String(main.slug).replace(/-in-uae$/, '').replace(/-jobs$/, '');
   const title = `${main.category.replace(/\s+jobs$/i, '')} Jobs in ${location.name}`;
   return { title, h1: title, slug: `${base}-jobs-in-${location.slug || slugify(location.name)}`, seoTitle: `${title} - Latest Vacancies | Trikonet`, metaDescription: `Find the latest ${main.category.replace(/\s+jobs$/i, '')} jobs in ${location.name}. Explore current vacancies and apply for relevant opportunities on Trikonet.` };
 }
@@ -126,6 +126,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       if (!category) throw new Error('Choose an existing job category.');
       const list = await rows();
       const existing = list.find(p => p.pageType === 'main_category' && key(p.category) === key(category.name));
+      if (existing && body.onlyIfMissing) return existing;
       const slug = slugify(body.slug);
       if (list.some(p => p.slug === slug && p.id !== existing?.id)) throw new Error('This URL already exists.');
       const now = new Date().toISOString();

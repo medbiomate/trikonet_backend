@@ -36,6 +36,7 @@ test('active count excludes drafts, filled, inactive and expired jobs using UAE 
 test('slug derives from administrator main URL and avoids duplicate Jobs wording',()=>{
   assert.equal(defaults({category:'Nurse Jobs',slug:'nurse-jobs'},{name:'Dubai'}).slug,'nurse-jobs-in-dubai');
   assert.equal(defaults({category:'Accounting & Finance',slug:'accounting-finance-jobs'},{name:'Dubai'}).slug,'accounting-finance-jobs-in-dubai');
+  assert.equal(defaults({category:'Accounting or Finance',slug:'accounting-finance-in-uae'},{name:'Dubai'}).slug,'accounting-finance-jobs-in-dubai');
 });
 test('durable repository merges local and imported jobs once and preserves manual status across a reload',async()=>{
   const table=new Map();const pool={async query(sql,args){if(sql.startsWith('CREATE'))return [[]];if(sql.startsWith('SELECT'))return [[...table.values()].map(payload=>({payload:JSON.stringify(payload)}))];if(sql.startsWith('INSERT')){table.set(args[0],JSON.parse(args[3]));return [[]];}throw Error(sql);}};
@@ -44,6 +45,8 @@ test('durable repository merges local and imported jobs once and preserves manua
   const db=async()=>({jobs:[{...jobs[0]}]});
   const repo=createSeoRepository(pool,db,source);
   await repo.createMain(main);
+  const retained=await repo.createMain({...main,slug:'replacement-jobs',onlyIfMissing:true});
+  assert.equal(retained.slug,'nurse-jobs');
   const page=(await repo.list(true)).find(p=>p.pageType==='category_location');assert.equal(page.activeJobCount,10);
   await repo.update(page.id,{status:'Draft'});
   const restarted=createSeoRepository(pool,db,source);

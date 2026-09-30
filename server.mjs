@@ -547,6 +547,10 @@ async function loadSeoRecords() {
   }
 }
 const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
+// Preserve the existing main category URL explicitly requested by the admin.
+// This migration is insert-only: never overwrite saved manual settings.
+const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
+registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
 
 async function readJsonBody(req) {
   let body = '';
@@ -1317,6 +1321,7 @@ server.listen(port, host, () => {
 });
 // Recheck eligibility and expiry even when no administrator has the Pages view open.
 const seoRefreshTimer = setInterval(() => {
+  registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
   seoRepository.list(true).catch(error => console.error('SEO page refresh failed:', error.message));
 }, 5 * 60 * 1000);
 seoRefreshTimer.unref();

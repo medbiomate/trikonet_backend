@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import mysql from 'mysql2/promise';
 import { createMediaStore } from './media-store.mjs';
 import crypto from 'node:crypto';
+import { newestFirst } from './record-order.mjs';
 import { createSeoRepository } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
 
@@ -166,7 +167,7 @@ function fallbackRecords(type, params) {
   }
 
   const offset = (page - 1) * limit;
-  return filtered.slice(offset, offset + limit);
+  return newestFirst(filtered).slice(offset, offset + limit);
 }
 
 function fallbackCount(type, params) {
@@ -280,7 +281,7 @@ async function wordpressRecords(type, params) {
 
   const [posts] = await wpDb.query(
     `SELECT ID, post_author, post_date, post_date_gmt, post_content, post_title, post_excerpt, post_status, post_name, post_modified, post_modified_gmt, guid, post_mime_type
-     FROM wp_posts WHERE ${where.join(' AND ')} ORDER BY post_date DESC LIMIT ? OFFSET ?`,
+     FROM wp_posts WHERE ${where.join(' AND ')} ORDER BY post_date DESC, ID DESC LIMIT ? OFFSET ?`,
     [...values, limit, offset]
   );
   if (!posts.length) return [];

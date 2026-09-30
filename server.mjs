@@ -1162,7 +1162,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (path.startsWith('/api/admin/seo-job-pages') || path.startsWith('/api/seo-job-pages') || path === '/sitemap-seo-job-pages.xml') {
+  if (path.startsWith('/api/admin/seo-job-pages') || path.startsWith('/api/seo-job-pages') || path === '/api/job-category-links' || path === '/sitemap-seo-job-pages.xml') {
     await handleSeoRequest(req,res,path,requestUrl,{seoRepository,currentAdminSession,sendJson,readJsonBody});
     return;
   }

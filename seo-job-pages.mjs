@@ -81,6 +81,8 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   let ready;
   let serial = Promise.resolve();
   let lastSync = 0;
+  let directoryCache;
+  let directoryCacheUntil = 0;
   const queue = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
   async function ensure() {
     ready ||= pool.query(`CREATE TABLE IF NOT EXISTS seo_job_pages (id VARCHAR(64) PRIMARY KEY, slug VARCHAR(191) UNIQUE NOT NULL, page_type VARCHAR(32) NOT NULL, payload LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(error => { ready = null; throw error; });
@@ -118,6 +120,26 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     return [...mains,...pages];
   }
   return {
+    directory: async () => {
+      if(directoryCache && Date.now()<directoryCacheUntil)return directoryCache;
+      const {jobs,taxonomies}=await counts();
+      const active=jobs.filter(job=>isActiveJob(job));
+      const published=(await rows()).filter(indexable);
+      const links=[];
+      for(const category of taxonomies.categories || []) {
+        const matching=active.filter(job=>matchesTaxonomy(job,'categories','_job_category',category.id,category.name,taxonomies.categories));
+        if(matching.length<20)continue;
+        const main=published.find(page=>page.pageType==='main_category' && key(page.category)===key(category.name));
+        links.push({slug:main?.slug || `category/${category.slug}`,href:main?`/${main.slug}`:`/category/${category.slug}`,title:`${category.name.replace(/\s+jobs$/i,'')} Jobs`,category:category.name,location:'',pageType:'main_category',activeJobCount:matching.length});
+        for(const page of published.filter(page=>page.pageType==='category_location' && key(page.category)===key(category.name))) {
+          const count=matching.filter(job=>matchesTaxonomy(job,'locations','_job_location',page.locationId,page.location,taxonomies.locations)).length;
+          if(count>=20)links.push({slug:page.slug,href:`/${page.slug}`,title:page.title,category:category.name,location:page.location,pageType:page.pageType,activeJobCount:count});
+        }
+      }
+      directoryCache=links.sort((a,b)=>a.category.localeCompare(b.category)||a.location.localeCompare(b.location));
+      directoryCacheUntil=Date.now()+60000;
+      return directoryCache;
+    },
     list: (force = false) => queue(() => syncUnlocked(force)),
     resolveDestination: async slug => {
       const {taxonomies}=await counts();

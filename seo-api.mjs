@@ -1,5 +1,9 @@
 import { indexable, slugify } from './seo-job-pages.mjs';
 export async function handleSeoRequest(req,res,path,requestUrl,{seoRepository,currentAdminSession,sendJson,readJsonBody}) {
+  if(path==='/api/job-category-links' && req.method==='GET') {
+    try{return sendJson(req,res,200,await seoRepository.directory());}
+    catch{return sendJson(req,res,503,{error:'Job categories are temporarily unavailable.'});}
+  }
   // SEO pages use a separate durable table; only administrators can manage them.
   if (path.startsWith('/api/admin/seo-job-pages')) {
     const admin = currentAdminSession(req);
@@ -35,7 +39,7 @@ export async function handleSeoRequest(req,res,path,requestUrl,{seoRepository,cu
       const jobs=await seoRepository.jobs(page);
       if(page.legacyDestination && page.pageType==='category_location' && jobs.length<10)return sendJson(req,res,404,{error:'Destination has fewer than 10 active jobs.',seoPage:true});
       const pageNumber=Math.max(1,Number(requestUrl.searchParams.get('page')) || 1);
-      return sendJson(req,res,200,{page:{...page,activeJobCount:jobs.length,canonical:'https://www.trikonet.com/'+page.slug},jobs:jobs.slice((pageNumber-1)*10,pageNumber*10),total:jobs.length,links:list.filter(indexable).filter(p=>p.category===page.category).map(p=>({slug:p.slug,title:p.title,category:p.category}))});
+      return sendJson(req,res,200,{page:{...page,activeJobCount:jobs.length,canonical:'https://www.trikonet.com/'+page.slug},jobs:jobs.slice((pageNumber-1)*10,pageNumber*10),total:jobs.length,links:(await seoRepository.directory()).filter(p=>p.category===page.category && p.slug!==page.slug)});
     } catch(error) { return sendJson(req,res,503,{error:'SEO pages are temporarily unavailable.'}); }
   }
   if (path === '/sitemap-seo-job-pages.xml' && req.method === 'GET') {

@@ -653,6 +653,11 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
+  const legacyImage=path.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
+  if(legacyImage && ['GET','HEAD'].includes(req.method)){
+    try{const location=await mediaStore.attachment(Number(legacyImage[1]));res.writeHead(302,{Location:location});return res.end();}
+    catch{res.writeHead(404);return res.end('Image source unavailable');}
+  }
   const mediaMatch=path.match(/^\/media\/images\/([a-f0-9]{64})\/[^/]+$/);
   if(mediaMatch && ['GET','HEAD'].includes(req.method)){
     try{
@@ -1331,6 +1336,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);
+  mediaStore.migrate().then(result=>console.log('Media migration:',JSON.stringify(result))).catch(error=>console.error('Media migration failed:',error.message));
 });
 // Recheck eligibility and expiry even when no administrator has the Pages view open.
 const seoRefreshTimer = setInterval(() => {

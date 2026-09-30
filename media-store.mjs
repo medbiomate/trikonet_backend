@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 export function createMediaStore(pool) {
   let ready;
@@ -6,7 +7,29 @@ export function createMediaStore(pool) {
   const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','image/avif':'avif'};
   const cache=new Map();
   const resolved=new Map();
+  const r2Enabled=['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET','R2_PUBLIC_URL'].every(key=>process.env[key]);
+  const r2=r2Enabled?new S3Client({region:'auto',endpoint:`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},maxAttempts:2}):null;
+  let mappingReady;
+  const ensureMapping=()=>mappingReady ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_public_media (attachment_id BIGINT PRIMARY KEY, object_key VARCHAR(255) NOT NULL, public_url VARCHAR(512) NOT NULL, checksum CHAR(64) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`).catch(error=>{mappingReady=null;throw error;});
+  // Only WordPress public attachments enter this bucket. Generic data URLs may
+  // contain private profile/resume images and must remain in the existing store.
+  async function publishAttachment(row,bytes){
+    if(!r2)return null;
+    const checksum=crypto.createHash('sha256').update(bytes).digest('hex');
+    const name=String(row.post_name||`image-${row.ID}`).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,100)||'image';
+    const key=`images/${name}-${row.ID}-${checksum.slice(0,12)}.${extensions[row.post_mime_type]}`;
+    const base=new URL(process.env.R2_PUBLIC_URL);
+    if(base.protocol!=='https:' || base.hostname!=='media.trikonet.com')throw Error('Invalid public media domain');
+    const url=new URL(key,`${base.origin}/`).href;
+    await r2.send(new PutObjectCommand({Bucket:process.env.R2_BUCKET,Key:key,Body:bytes,ContentType:row.post_mime_type,CacheControl:'public, max-age=31536000, immutable'}),{abortSignal:AbortSignal.timeout(30000)});
+    const check=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(10000),redirect:'error'});
+    if(!check.ok)throw Error(`CDN verification failed: ${check.status}`);
+    await ensureMapping();
+    await pool.query('INSERT INTO trikonet_public_media (attachment_id,object_key,public_url,checksum) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE object_key=VALUES(object_key),public_url=VALUES(public_url),checksum=VALUES(checksum)',[row.ID,key,url,checksum]);
+    return url;
+  }
   async function attachment(id){
+    if(resolved.has(id))return resolved.get(id);
     if(cache.has(id))return cache.get(id);
     const task=(async()=>{
       const [rows]=await pool.query("SELECT p.ID,p.post_name,p.post_mime_type, p.guid,f.meta_value attached_file FROM wp_posts p LEFT JOIN wp_postmeta f ON f.post_id=p.ID AND f.meta_key='_wp_attached_file' WHERE p.ID=? AND p.post_type='attachment' LIMIT 1",[id]);
@@ -20,8 +43,10 @@ export function createMediaStore(pool) {
       const bytes=Buffer.from(await response.arrayBuffer());
       if(bytes.length>10*1024*1024)throw Error('Image too large');
       const stored=await normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
-      resolved.set(id,stored);
-      return stored;
+      let location=stored;
+      try{location=await publishAttachment(row,bytes)||stored;}catch(error){console.error(`Public image ${id} retained on origin:`,error.message);}
+      resolved.set(id,location);
+      return location;
     })().catch(error=>{cache.delete(id);throw error;});
     cache.set(id,task);return task;
   }
@@ -52,9 +77,12 @@ export function createMediaStore(pool) {
     return value;
   }
   return {normalize,attachment,async migrate(){
+    await ensureMapping();
+    const [existing]=await pool.query('SELECT attachment_id,public_url FROM trikonet_public_media');
+    for(const row of existing)resolved.set(Number(row.attachment_id),row.public_url);
     const [rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");
     let migrated=0,failed=0,cursor=0;
-    await Promise.all(Array.from({length:4},async()=>{while(cursor<rows.length){const row=rows[cursor++];try{await attachment(row.ID);migrated++;}catch{failed++;}}}));
-    return {total:rows.length,migrated,failed};
+    await Promise.all(Array.from({length:2},async()=>{while(cursor<rows.length){const row=rows[cursor++];if(r2 && resolved.has(Number(row.ID))){migrated++;continue;}try{await attachment(row.ID);migrated++;}catch{failed++;}}}));
+    return {total:rows.length,migrated,failed,cdn:[...resolved.values()].filter(url=>url.startsWith('https://media.trikonet.com/')).length,r2Enabled};
   }, async get(id){await ensure();const [rows]=await pool.query('SELECT filename,mime,bytes FROM trikonet_media WHERE id=?',[id]);return rows[0];}};
 }

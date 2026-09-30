@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { readFile } from 'node:fs/promises';
 
 export function createMediaStore(pool) {
   let ready;
@@ -7,6 +8,7 @@ export function createMediaStore(pool) {
   const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','image/avif':'avif'};
   const cache=new Map();
   const resolved=new Map();
+  const publicSources=new Map();
   const r2Enabled=['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET','R2_PUBLIC_URL'].every(key=>process.env[key]);
   const r2=r2Enabled?new S3Client({region:'auto',endpoint:`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},maxAttempts:2}):null;
   let mappingReady;
@@ -32,12 +34,12 @@ export function createMediaStore(pool) {
     if(resolved.has(id))return resolved.get(id);
     if(cache.has(id))return cache.get(id);
     const task=(async()=>{
-      const [rows]=await pool.query("SELECT p.ID,p.post_name,p.post_mime_type, p.guid,f.meta_value attached_file FROM wp_posts p LEFT JOIN wp_postmeta f ON f.post_id=p.ID AND f.meta_key='_wp_attached_file' WHERE p.ID=? AND p.post_type='attachment' LIMIT 1",[id]);
+      const [rows]=publicSources.has(id)?[[publicSources.get(id)]]:await pool.query("SELECT p.ID,p.post_name,p.post_mime_type, p.guid,f.meta_value attached_file FROM wp_posts p LEFT JOIN wp_postmeta f ON f.post_id=p.ID AND f.meta_key='_wp_attached_file' WHERE p.ID=? AND p.post_type='attachment' LIMIT 1",[id]);
       const row=rows[0];if(!row || !extensions[row.post_mime_type])throw Error('Image attachment unavailable');
       const relative=String(row.attached_file||'').replace(/^\/+/, '');
-      const url=relative?`https://www.trikonet.com/wp-content/uploads/${relative.split('/').map(encodeURIComponent).join('/')}`:row.guid;
+      const url=row.sourceUrl || (relative?`https://www.trikonet.com/wp-content/uploads/${relative.split('/').map(encodeURIComponent).join('/')}`:row.guid);
       const parsed=new URL(url);
-      if(!['www.trikonet.com','trikonet.com'].includes(parsed.hostname))throw Error('Untrusted media source');
+      if(!['www.trikonet.com','trikonet.com','dev.trikonet.com'].includes(parsed.hostname))throw Error('Untrusted media source');
       const response=await fetch(url,{signal:AbortSignal.timeout(20000),redirect:'error'});
       if(!response.ok)throw Error(`Image source returned ${response.status}`);
       const bytes=Buffer.from(await response.arrayBuffer());
@@ -80,7 +82,20 @@ export function createMediaStore(pool) {
     await ensureMapping();
     const [existing]=await pool.query('SELECT attachment_id,public_url FROM trikonet_public_media');
     for(const row of existing)resolved.set(Number(row.attachment_id),row.public_url);
-    const [rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");
+    let rows;
+    try{[rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");}
+    catch(error){
+      if(error.code!=='ER_NO_SUCH_TABLE')throw error;
+      const employers=JSON.parse(await readFile(new URL('./data/employers.json',import.meta.url),'utf8'));
+      const mimes={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',avif:'image/avif'};
+      for(const employer of employers){
+        const match=String(employer.logo||'').match(/^\/uploads\/employers\/(\d+)\.(png|jpe?g|webp|gif|avif)$/i);
+        if(!match)continue;
+        const id=Number(match[1]);
+        publicSources.set(id,{ID:id,post_name:`${employer.slug}-logo`,post_mime_type:mimes[match[2].toLowerCase()],sourceUrl:`https://dev.trikonet.com${employer.logo}`});
+      }
+      rows=[...publicSources.keys()].map(ID=>({ID}));
+    }
     let migrated=0,failed=0,cursor=0;
     await Promise.all(Array.from({length:2},async()=>{while(cursor<rows.length){const row=rows[cursor++];if(r2 && resolved.has(Number(row.ID))){migrated++;continue;}try{await attachment(row.ID);migrated++;}catch{failed++;}}}));
     return {total:rows.length,migrated,failed,cdn:[...resolved.values()].filter(url=>url.startsWith('https://media.trikonet.com/')).length,r2Enabled};

@@ -86,12 +86,19 @@ export function createMediaStore(pool) {
     try{[rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");}
     catch(error){
       if(error.code!=='ER_NO_SUCH_TABLE')throw error;
+      try {
+        const [sources]=await pool.query("SELECT payload FROM trikonet_imported_data WHERE dataset_key='public_media_sources'");
+        for(const row of sources.length?JSON.parse(sources[0].payload):[]) publicSources.set(Number(row.ID),row);
+      } catch(sourceError) {
+        if(sourceError.code!=='ER_NO_SUCH_TABLE')throw sourceError;
+      }
       const employers=JSON.parse(await readFile(new URL('./data/employers.json',import.meta.url),'utf8'));
       const mimes={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',avif:'image/avif'};
       for(const employer of employers){
         const match=String(employer.logo||'').match(/^\/uploads\/employers\/(\d+)\.(png|jpe?g|webp|gif|avif)$/i);
         if(!match)continue;
         const id=Number(match[1]);
+        if(publicSources.has(id))continue;
         publicSources.set(id,{ID:id,post_name:`${employer.slug}-logo`,post_mime_type:mimes[match[2].toLowerCase()],sourceUrl:`https://dev.trikonet.com${employer.logo}`});
       }
       rows=[...publicSources.keys()].map(ID=>({ID}));

@@ -61,7 +61,21 @@ const memoryStore = {
   taxonomies: null
 };
 
-async function loadMemoryStore() {
+let memoryStoreReady;
+function loadMemoryStore() {
+  return memoryStoreReady ||= populateMemoryStore();
+}
+async function populateMemoryStore() {
+  // Migration datasets live in MySQL so redeployments cannot revert imported data.
+  // The packaged snapshots remain a fallback when the database is unavailable.
+  try {
+    const [rows] = await wpDb.query('SELECT dataset_key, payload FROM trikonet_imported_data');
+    for (const row of rows) {
+      if (Object.hasOwn(memoryStore, row.dataset_key)) memoryStore[row.dataset_key] = JSON.parse(row.payload);
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') console.error('Imported dataset read failed:', error.code || error.name);
+  }
   try {
     if (!memoryStore.taxonomies) {
       memoryStore.taxonomies = JSON.parse(await readFile(join(dataRoot, 'taxonomies.json'), 'utf8'));
@@ -1333,6 +1347,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+await loadMemoryStore();
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);

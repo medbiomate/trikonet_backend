@@ -5,6 +5,7 @@ export function createMediaStore(pool) {
   const ensure=()=>ready ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_media (id CHAR(64) PRIMARY KEY, filename VARCHAR(191) NOT NULL, mime VARCHAR(64) NOT NULL, bytes LONGBLOB NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`).catch(error=>{ready=null;throw error;});
   const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','image/avif':'avif'};
   const cache=new Map();
+  const resolved=new Map();
   async function attachment(id){
     if(cache.has(id))return cache.get(id);
     const task=(async()=>{
@@ -18,14 +19,18 @@ export function createMediaStore(pool) {
       if(!response.ok)throw Error(`Image source returned ${response.status}`);
       const bytes=Buffer.from(await response.arrayBuffer());
       if(bytes.length>10*1024*1024)throw Error('Image too large');
-      return normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
+      const stored=await normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
+      resolved.set(id,stored);
+      return stored;
     })().catch(error=>{cache.delete(id);throw error;});
     cache.set(id,task);return task;
   }
   async function normalize(value, label='image') {
     if(typeof value==='string'){
       const old=value.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
-      if(old){try{return await attachment(Number(old[1]));}catch{return value;}}
+      // Never hold a public API response while downloading a legacy image.
+      // Background migration fills this mapping; existing static URLs stay usable.
+      if(old)return resolved.get(Number(old[1])) || value;
       const match=value.match(/^data:(image\/(?:png|jpeg|webp|gif|avif));base64,([A-Za-z0-9+/=\s]+)$/);
       if(!match)return value;
       const bytes=Buffer.from(match[2],'base64');

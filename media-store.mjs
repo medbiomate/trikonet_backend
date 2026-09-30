@@ -47,8 +47,9 @@ export function createMediaStore(pool) {
       const stored=await normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
       let location=stored;
       try{location=await publishAttachment(row,bytes)||stored;}catch(error){console.error(`Public image ${id} retained on origin:`,error.message);}
-      resolved.set(id,location);
-      return location;
+      const reliable = location.startsWith('https://media.trikonet.com/') ? stored : location;
+      resolved.set(id,reliable);
+      return reliable;
     })().catch(error=>{cache.delete(id);throw error;});
     cache.set(id,task);return task;
   }
@@ -80,8 +81,11 @@ export function createMediaStore(pool) {
   }
   return {normalize,attachment,async migrate(){
     await ensureMapping();
-    const [existing]=await pool.query('SELECT attachment_id,public_url FROM trikonet_public_media');
-    for(const row of existing)resolved.set(Number(row.attachment_id),row.public_url);
+    await ensure();
+    const [existing]=await pool.query('SELECT p.attachment_id,p.public_url,p.checksum,m.filename FROM trikonet_public_media p LEFT JOIN trikonet_media m ON m.id=p.checksum');
+    for(const row of existing){
+      resolved.set(Number(row.attachment_id),row.filename ? `https://api.trikonet.com/media/images/${row.checksum}/${row.filename}` : row.public_url);
+    }
     let rows;
     try{[rows]=await pool.query("SELECT ID FROM wp_posts WHERE post_type='attachment' AND post_mime_type IN ('image/png','image/jpeg','image/webp','image/gif','image/avif')");}
     catch(error){

@@ -522,6 +522,7 @@ async function readLocalDb() {
 }
 
 async function writeLocalDb(db) {
+  db = await mediaStore.normalize(db);
   const payload = JSON.stringify({ ...emptyDb, ...db });
   try {
     await ensurePersistentState();
@@ -569,11 +570,11 @@ const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
 const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
 
-async function readJsonBody(req) {
+async function readJsonBody(req, maxBytes = 2_000_000) {
   let body = '';
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > 2_000_000) throw new Error('Request too large');
+    if (Buffer.byteLength(body) > maxBytes) throw new Error('Request too large');
   }
   return body ? JSON.parse(body) : {};
 }
@@ -717,6 +718,27 @@ const server = http.createServer(async (req, res) => {
       storage,
       time: new Date().toISOString()
     });
+  }
+
+  // Uploads must be confirmed in durable storage before the editor calls them saved.
+  if(path === '/api/admin/media' && ['GET','POST'].includes(req.method)) {
+    const admin=currentAdminSession(req);
+    if(!admin || admin.expiresAt <= Date.now())return sendJson(req,res,401,{error:'Sign in to manage media.'});
+    try {
+      await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_media_library (id CHAR(64) PRIMARY KEY, payload LONGTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
+      if(req.method==='GET') {
+        const [rows]=await wpDb.query('SELECT payload FROM trikonet_media_library ORDER BY created_at DESC');
+        return sendJson(req,res,200,rows.map(row=>JSON.parse(row.payload)));
+      }
+      const body=await readJsonBody(req,14_000_000);
+      if(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/.test(String(body.url || '')))return sendJson(req,res,400,{error:'A PNG, JPEG, WebP, GIF or AVIF image is required.'});
+      const url=await mediaStore.normalize(body.url,body.title || 'image');
+      const match=url.match(/^https:\/\/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//);
+      if(!match)throw Error('Image could not be stored. Maximum size is 10 MB.');
+      const saved={id:match[1],title:String(body.title || 'image').slice(0,191),url,dimensions:String(body.dimensions || ''),size:String(body.size || ''),type:'image',date:new Date().toISOString()};
+      await wpDb.query('INSERT INTO trikonet_media_library (id,payload) VALUES (?,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)',[saved.id,JSON.stringify(saved)]);
+      return sendJson(req,res,201,saved);
+    } catch(error) {return sendJson(req,res,400,{error:error.message || 'Image save failed.'});}
   }
 
   // API: WordPress counts

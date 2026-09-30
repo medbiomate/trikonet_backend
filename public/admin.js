@@ -9332,8 +9332,14 @@ export async function initAdmin() {
           const file = e.target.files?.[0];
           if (file) {
             const reader = new FileReader();
-            reader.onload = ev => {
-              if (typeof options.onSelect === 'function') options.onSelect(ev.target.result);
+            reader.onload = async ev => {
+              try {
+                const response=await fetch('/api/admin/media',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:file.name,url:ev.target.result,size:`${Math.round(file.size/1024)} KB`})});
+                const saved=await response.json();
+                if(!response.ok)throw Error(saved.error || 'Image upload failed');
+                media.unshift(saved);saveMedia();
+                if (typeof options.onSelect === 'function') options.onSelect(saved.url);
+              } catch(error) {alert(`Image not saved: ${error.message}`);}
             };
             reader.readAsDataURL(file);
           }
@@ -11664,13 +11670,35 @@ export async function initAdmin() {
     }
   })();
 
+  const pendingMediaSaves = new Set();
   function saveMedia() {
     try {
       localStorage.setItem('trikonet_media_cms', JSON.stringify(media));
     } catch {}
     const chip = document.getElementById('admin-media-count-chip');
     if (chip) chip.textContent = `${media.length} files`;
+    for (const item of media) {
+      if(!String(item.url || '').startsWith('data:image/') || pendingMediaSaves.has(item.id))continue;
+      pendingMediaSaves.add(item.id);
+      fetch('/api/admin/media',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(item)})
+        .then(async response=>{
+          const saved=await response.json();
+          if(!response.ok)throw Error(saved.error || 'Image save failed');
+          const index=media.findIndex(row=>row.id===item.id);
+          if(index>=0)media[index]=saved;
+          localStorage.setItem('trikonet_media_cms',JSON.stringify(media));
+          renderMediaGrid();
+        }).catch(error=>{console.error('Media upload was not saved:',error.message);alert(`Image not saved to the website: ${error.message}. Your local copy has been kept.`);});
+    }
   }
+
+  fetch('/api/admin/media',{credentials:'include'}).then(async response=>{
+    if(!response.ok)return;
+    const saved=await response.json();
+    const urls=new Set(saved.map(item=>item.url));
+    media=[...saved,...media.filter(item=>!urls.has(item.url))];
+    renderMediaGrid();
+  }).catch(error=>console.error('Media library unavailable:',error.message));
 
   let mediaPage = 1;
   const mediaPageSize = 60;

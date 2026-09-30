@@ -91,12 +91,18 @@ export function createMediaStore(pool) {
     if(value && typeof value==='object'){
       const title=value.slug || value.name || value.title?.rendered || (typeof value.title==='string'?value.title:label);
       const result={};
-      for(const [key,item] of Object.entries(value))result[key]=await normalize(item,`${title}-${key.replace(/^_/, '')}`);
+      for(const [key,item] of Object.entries(value))result[key]=key==='logoBackup'?item:await normalize(item,`${title}-${key.replace(/^_/, '')}`);
       return result;
     }
     return value;
   }
-  return {normalize,attachment,async migrate(){
+  return {normalize,attachment,async origin(value){
+    if(String(value).startsWith('https://api.trikonet.com/media/images/'))return value;
+    await ensureMapping();
+    const legacy=String(value).match(/^\/uploads\/(?:employers|media)\/(\d+)\./);
+    const [rows]=await pool.query(`SELECT p.checksum,m.filename FROM trikonet_public_media p JOIN trikonet_media m ON m.id=p.checksum WHERE ${legacy?'p.attachment_id':'p.public_url'}=? LIMIT 1`,[legacy?Number(legacy[1]):value]);
+    return rows[0]?`https://api.trikonet.com/media/images/${rows[0].checksum}/${rows[0].filename}`:'';
+  },async migrate(){
     await ensureMapping();
     await ensure();
     const [existing]=await pool.query('SELECT p.attachment_id,p.public_url,p.checksum,m.filename FROM trikonet_public_media p LEFT JOIN trikonet_media m ON m.id=p.checksum');

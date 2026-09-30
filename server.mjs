@@ -1346,6 +1346,7 @@ const server = http.createServer(async (req, res) => {
       metas._employer_open_jobs=(counts.get(`id:${Number(e.id)}`)||0)+(counts.get(`slug:${e.slug}`)||0);
       return {...e,title:typeof e.title==='string'?{rendered:e.title}:e.title,metas};
     }).filter(e=>e.metas._employer_open_jobs>=min).sort((a,b)=>b.metas._employer_open_jobs-a.metas._employer_open_jobs||a.slug.localeCompare(b.slug)).slice(0,limit);
+    await Promise.all(records.map(async record=>{record.logoBackup=await mediaStore.origin(record.metas._employer_logo).catch(()=>'');}));
     return sendJson(req,res,200,records);
   }
 

@@ -3,6 +3,7 @@ import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mysql from 'mysql2/promise';
+import { createMediaStore } from './media-store.mjs';
 import crypto from 'node:crypto';
 import { createSeoRepository } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
@@ -50,6 +51,7 @@ const dbConfig = process.env.TRIKONET_DB_HOST
     };
 
 const wpDb = mysql.createPool(dbConfig);
+const mediaStore = createMediaStore(wpDb);
 
 // In-memory dataset cache for complete database resilience
 const memoryStore = {
@@ -578,7 +580,9 @@ function getCorsOrigin(req) {
   return isAllowed ? origin : null;
 }
 
-function sendJson(req, res, status, value) {
+async function sendJson(req, res, status, value) {
+  // Persist embedded images before returning stable public URLs. Originals remain intact.
+  try { value=await mediaStore.normalize(value); } catch(error) { console.error('Media persistence unavailable:',error.message); }
   const origin = getCorsOrigin(req);
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -649,6 +653,15 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
+  const mediaMatch=path.match(/^\/media\/images\/([a-f0-9]{64})\/[^/]+$/);
+  if(mediaMatch && ['GET','HEAD'].includes(req.method)){
+    try{
+      const media=await mediaStore.get(mediaMatch[1]);
+      if(!media){res.writeHead(404);return res.end('Image not found');}
+      res.writeHead(200,{'Content-Type':media.mime,'Content-Length':media.bytes.length,'Cache-Control':'public,max-age=31536000,immutable','X-Content-Type-Options':'nosniff'});
+      return res.end(req.method==='HEAD'?undefined:media.bytes);
+    }catch{res.writeHead(503);return res.end('Image temporarily unavailable');}
+  }
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {

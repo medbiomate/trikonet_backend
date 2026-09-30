@@ -4,6 +4,8 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mysql from 'mysql2/promise';
 import crypto from 'node:crypto';
+import { createSeoRepository } from './seo-job-pages.mjs';
+import { handleSeoRequest } from './seo-api.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
@@ -517,6 +519,34 @@ async function writeLocalDb(db) {
   await mkdir(dataRoot, { recursive: true });
   await writeFile(localDbPath, JSON.stringify(db, null, 2));
 }
+
+async function loadSeoRecords() {
+  await loadMemoryStore();
+  try {
+    const [posts] = await wpDb.query("SELECT ID id, post_name slug, post_title title, post_status status, post_date date, post_content description FROM wp_posts WHERE post_type='job_listing'");
+    const [terms] = await wpDb.query("SELECT p.ID job_id, tt.taxonomy, t.term_id id, t.name, t.slug FROM wp_posts p JOIN wp_term_relationships r ON r.object_id=p.ID JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id=r.term_taxonomy_id JOIN wp_terms t ON t.term_id=tt.term_id WHERE p.post_type='job_listing' AND tt.taxonomy IN ('job_listing_category','job_listing_location','job_listing_type')");
+    const [metas] = await wpDb.query("SELECT m.post_id, m.meta_key, m.meta_value FROM wp_postmeta m JOIN wp_posts p ON p.ID=m.post_id WHERE p.post_type='job_listing' AND m.meta_key IN ('_job_expiry_date','_job_application_deadline_date','_filled','_job_employer_name','_job_logo')");
+    const jobs = new Map(posts.map(p => [Number(p.id),{ ...p,metas:{} }]));
+    const taxonomies = { categories:[],locations:[] };
+    terms.forEach(t => {
+      const job = jobs.get(Number(t.job_id));
+      const field = {job_listing_category:'categories',job_listing_location:'locations',job_listing_type:'types'}[t.taxonomy];
+      if (job) { job[field] ||= []; if (!job[field].includes(t.name)) job[field].push(t.name); }
+      if (taxonomies[field] && !taxonomies[field].some(item => item.id === t.id)) taxonomies[field].push({id:t.id,name:t.name,slug:t.slug});
+    });
+    metas.forEach(m => { const job=jobs.get(Number(m.post_id)); if (job) job.metas[m.meta_key]=m.meta_value; });
+    const local=await readLocalDb();
+    for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
+    return {jobs:[...jobs.values()],taxonomies};
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
+    const local=await readLocalDb();
+    const taxonomies={categories:[...(memoryStore.taxonomies?.categories || [])],locations:[...(memoryStore.taxonomies?.locations || [])]};
+    for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
+    return {jobs:memoryStore.jobs || [],taxonomies};
+  }
+}
+const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
 
 async function readJsonBody(req) {
   let body = '';
@@ -1060,6 +1090,11 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (path.startsWith('/api/admin/seo-job-pages') || path.startsWith('/api/seo-job-pages') || path === '/sitemap-seo-job-pages.xml') {
+    await handleSeoRequest(req,res,path,requestUrl,{seoRepository,currentAdminSession,sendJson,readJsonBody});
+    return;
+  }
+
   // API: Local Jobs
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const db = await readLocalDb();
@@ -1110,6 +1145,7 @@ const server = http.createServer(async (req, res) => {
         db.jobs.unshift(job);
       }
       await writeLocalDb(db);
+      seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
       return sendJson(req, res, 200, job);
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
@@ -1122,6 +1158,7 @@ const server = http.createServer(async (req, res) => {
     const before = db.jobs.length;
     db.jobs = db.jobs.filter(item => item.slug !== slug);
     await writeLocalDb(db);
+    seoRepository.list(true).catch(error=>console.error('SEO refresh after job removal failed:',error.message));
     return sendJson(req, res, before === db.jobs.length ? 404 : 200, { deleted: before !== db.jobs.length });
   }
 
@@ -1278,3 +1315,8 @@ server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);
 });
+// Recheck eligibility and expiry even when no administrator has the Pages view open.
+const seoRefreshTimer = setInterval(() => {
+  seoRepository.list(true).catch(error => console.error('SEO page refresh failed:', error.message));
+}, 5 * 60 * 1000);
+seoRefreshTimer.unref();

@@ -24,6 +24,29 @@ Backend API service and admin console for [Trikonet](https://trikonet.com), depl
   - `GET/POST/PUT /api/email-campaigns` — Email campaign builder.
 - **Admin Console**: Hosted at `/admin` (or root `/` when accessed via browser).
 
+## SEO Job Pages
+
+Administrators manage location landing pages under Pages → SEO Job Pages. Main
+category pages are registered manually (no minimum job count). UAE location
+variations are created at 10 published, active, unexpired jobs and are retained
+when counts later fall. Manual status, indexing and SEO overrides survive refresh.
+
+The configured MySQL database stores these records in `seo_job_pages`, separately
+from jobs and application state. The table is created automatically; database
+access must include CREATE/SELECT/INSERT/UPDATE. Back up this table with the
+existing application database. There is no automatic deletion or JSON fallback
+for SEO edits. Jobs are queried dynamically, not copied into this table.
+
+- `/api/admin/seo-job-pages` and its main-categories/bulk/edit routes require an Administrator session.
+- `/api/seo-job-pages` lists only Published + Index links.
+- `/api/seo-job-pages/:slug` serves published content; drafts return 404.
+- `/sitemap-seo-job-pages.xml` excludes Draft and Noindex records.
+- Eligibility refreshes after job edits, on admin refresh and every five minutes.
+
+Run `npm run test:seo` for rule tests. The optional
+`node --test seo-integration.test.mjs` uses local MySQL and an isolated temporary
+fixture table; it does not mutate real jobs or the production SEO table.
+
 ## Setup & Running Locally
 
 1. Install dependencies:

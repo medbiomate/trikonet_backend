@@ -23,9 +23,17 @@ export async function handleSeoRequest(req,res,path,requestUrl,{seoRepository,cu
       const list=await seoRepository.list();
       if (path==='/api/seo-job-pages') return sendJson(req,res,200,list.filter(indexable).map(p=>({slug:p.slug,title:p.title,category:p.category,location:p.location,pageType:p.pageType})));
       const slug=slugify(decodeURIComponent(path.slice('/api/seo-job-pages/'.length)));
-      const page=list.find(p=>p.slug===slug);
+      let page=list.find(p=>p.slug===slug);
+      if(!page){
+        const legacy=await seoRepository.resolveDestination?.(slug);
+        if(legacy){
+          const registered=list.find(p=>p.pageType===legacy.pageType && p.categoryId===legacy.categoryId && (p.pageType==='main_category'||p.location===legacy.location));
+          page=registered || legacy;
+        }
+      }
       if (!page || page.status !== 'Published') return sendJson(req,res,404,{error:'Page not found',seoPage:Boolean(page)});
       const jobs=await seoRepository.jobs(page);
+      if(page.legacyDestination && page.pageType==='category_location' && jobs.length<10)return sendJson(req,res,404,{error:'Destination has fewer than 10 active jobs.',seoPage:true});
       const pageNumber=Math.max(1,Number(requestUrl.searchParams.get('page')) || 1);
       return sendJson(req,res,200,{page:{...page,activeJobCount:jobs.length,canonical:'https://www.trikonet.com/'+page.slug},jobs:jobs.slice((pageNumber-1)*10,pageNumber*10),total:jobs.length,links:list.filter(indexable).filter(p=>p.category===page.category).map(p=>({slug:p.slug,title:p.title,category:p.category}))});
     } catch(error) { return sendJson(req,res,503,{error:'SEO pages are temporarily unavailable.'}); }

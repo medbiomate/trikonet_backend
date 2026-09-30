@@ -44,6 +44,11 @@ test('durable repository merges local and imported jobs once and preserves manua
   const source=async()=>({jobs,taxonomies:{categories:[{id:1,name:'Nurse'}],locations:[{id:2,name:'Dubai'}]}});
   const db=async()=>({jobs:[{...jobs[0]}]});
   const repo=createSeoRepository(pool,db,source);
+  const legacy=await repo.resolveDestination('nurse-in-dubai');
+  assert.equal(legacy.categoryId,1);assert.equal(legacy.locationId,2);
+  assert.equal(legacy.indexingStatus,'Noindex');assert.equal((await repo.jobs(legacy)).length,10);
+  assert.equal((await repo.list()).length,0,'legacy display does not create a main SEO page automatically');
+  assert.equal(await repo.resolveDestination('unknown-category-in-dubai'),null);
   await repo.createMain(main);
   const retained=await repo.createMain({...main,slug:'replacement-jobs',onlyIfMissing:true});
   assert.equal(retained.slug,'nurse-jobs');

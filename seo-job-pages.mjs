@@ -119,6 +119,20 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   }
   return {
     list: (force = false) => queue(() => syncUnlocked(force)),
+    resolveDestination: async slug => {
+      const {taxonomies}=await counts();
+      const suffix=['UAE',...UAE_LOCATIONS].find(name=>slug.endsWith(`-in-${slugify(name)}`));
+      if(!suffix)return null;
+      const stem=slug.slice(0,-(`-in-${slugify(suffix)}`).length);
+      const normal=value=>slugify(value).replace(/-jobs$/,'').replace(/-or-|-and-/g,'-');
+      const category=taxonomies.categories?.find(term=>normal(term.slug || term.name)===normal(stem) || normal(term.name)===normal(stem));
+      if(!category)return null;
+      const location=taxonomies.locations?.find(term=>key(term.name)===key(suffix));
+      const title=`${category.name.replace(/\s+jobs$/i,'')} Jobs${suffix==='UAE'?' in UAE':` in ${suffix}`}`;
+      // Legacy destination URLs can display their jobs without manufacturing a
+      // manually registered SEO main page. Only registered records are indexed.
+      return {id:`legacy:${slug}`,slug,title,h1:title,category:category.name,categoryId:category.id,location:suffix==='UAE'?'':suffix,locationId:location?.id || slugify(suffix),pageType:suffix==='UAE'?'main_category':'category_location',status:'Published',indexingStatus:'Noindex',legacyDestination:true,seoTitle:`${title} | Trikonet`,metaDescription:`Explore current ${category.name.replace(/\s+jobs$/i,'')} vacancies${suffix==='UAE'?' across the UAE':` in ${suffix}`}.`};
+    },
     createMain: body => queue(async () => {
       if (!body.category || !body.slug) throw new Error('Choose a category and a main page URL.');
       const { taxonomies } = await loadRecords();

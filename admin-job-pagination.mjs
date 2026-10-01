@@ -36,8 +36,18 @@ export function importedJobPage(imported, local, params) {
       company: job.company || m._job_employer_name || '',
       categories: names(job.categories || m._job_category), types: names(job.types || m._job_type)
     }, params);
-  }).sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')) || Number(b.id || 0) - Number(a.id || 0));
+  }).sort(adminJobsFirst);
   const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
   const plan = pagePlan(jobs, 0, Math.floor(Number(params.get('page')) || 1), size);
   return { jobs: plan.local, total: jobs.length, page: plan.page, perPage: size };
+}
+
+export function adminJobsFirst(a, b) {
+  const time = job => {
+    const value = job.postedDate || job.datePosted || job.publishedDate || job.date || job.createdAt || '';
+    const timestamp = Date.parse(String(value).replace(' ', 'T'));
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
+  return Number(b.status === 'draft') - Number(a.status === 'draft') || time(b) - time(a) ||
+    (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0) || Number(b.id || 0) - Number(a.id || 0);
 }

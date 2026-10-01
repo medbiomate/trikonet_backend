@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
+import { adminJobConditions, localJobMatches, pagePlan, importedJobPage, adminJobsFirst } from './admin-job-pagination.mjs';
+
+test('drafts first, then latest posting date, before pagination', () => {
+  const jobs = [
+    { slug: 'old', status: 'publish', date: '2026-09-30' },
+    { slug: 'recent', status: 'publish', postedDate: '2026-10-01' },
+    { slug: 'draft', status: 'draft', postedDate: '2026-09-29' }
+  ];
+  assert.deepEqual([...jobs].sort(adminJobsFirst).map(job => job.slug), ['draft', 'recent', 'old']);
+  assert.equal(importedJobPage(jobs, [], new URLSearchParams({ per_page: '1' })).jobs[0].slug, 'draft');
+});
 
 test('migrated jobs paginate, filter and preserve local overrides without WordPress tables', () => {
   const imported = Array.from({ length: 45 }, (_, id) => ({ id, slug: `job-${id}`, title: { rendered: 'Nurse' }, status: 'publish', date: '2026-10-01', metas: { _job_employer_name: 'Clinic', _job_category: { 1: 'Healthcare' }, _job_type: { 2: 'Full Time' } } }));

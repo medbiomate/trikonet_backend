@@ -240,7 +240,7 @@ async function wordpressRecords(type, params) {
 
   if (!postType) throw new Error('Unsupported content type');
 
-  const limit = Math.min(Math.max(Number(params.get('per_page')) || 10, 1), postType === 'attachment' || postType === 'employer' ? 5000 : 100);
+  const limit = Math.min(Math.max(Number(params.get('per_page')) || 10, 1), postType === 'attachment' || postType === 'employer' ? 5000 : postType === 'job_listing' ? 1000 : 100);
   const page = Math.max(Number(params.get('page')) || 1, 1);
   const offset = (page - 1) * limit;
   const slug = params.get('slug');

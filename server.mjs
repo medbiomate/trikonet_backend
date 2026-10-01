@@ -131,7 +131,8 @@ function fallbackRecords(type, params) {
   else if (type === 'posts') list = memoryStore.posts || [];
   else return [];
 
-  let filtered = list.filter(isPublicRecord);
+  const excluded=new Set((params.get('exclude_slugs')||'').split(',').filter(Boolean));
+  let filtered = list.filter(item=>isPublicRecord(item)&&!excluded.has(item.slug));
   if(params.get('id'))filtered=filtered.filter(item=>Number(item.id)===Number(params.get('id')));
 
   if (slug) {
@@ -254,6 +255,8 @@ async function wordpressRecords(type, params, adminOptions = null) {
   const where = ['post_type = ?'];
   const values = [postType];
 
+  const excludedPublicSlugs=(params.get('exclude_slugs')||'').split(',').filter(Boolean).slice(0,1000);
+  if(excludedPublicSlugs.length){where.push(`post_name NOT IN (${excludedPublicSlugs.map(()=>'?').join(',')})`);values.push(...excludedPublicSlugs);}
   if (type === 'media') where.push("post_mime_type LIKE 'image/%'");
   if (slug) {
     where.push('post_name = ?');

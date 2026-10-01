@@ -10,6 +10,7 @@ import { newestFirst } from './record-order.mjs';
 import { createSeoRepository, isActiveJob } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
 import { createAdminSessionStore } from './admin-session-store.mjs';
+import { isCandidateAccount } from './candidate-account.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
@@ -911,6 +912,7 @@ const server = http.createServer(async (req, res) => {
         id: crypto.randomUUID(),
         name,
         email,
+        role: 'Candidate',
         passwordSalt: credentials.salt,
         passwordHash: credentials.hash,
         createdAt: new Date().toISOString()
@@ -1219,7 +1221,7 @@ const server = http.createServer(async (req, res) => {
       try {
         imported.push(...await wordpressRecords('candidate', new URLSearchParams({ per_page: '100' }), { excludedSlugs: [] }));
       } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
-      const users = (db.users || []).filter(user => ['candidate', 'subscriber', 'job seeker', 'jobseeker'].includes(String(user.role || '').toLowerCase()));
+      const users = (db.users || []).filter(isCandidateAccount);
       const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt })), ...(db.candidates || [])];
       const merged = new Map();
       for (const record of records) {

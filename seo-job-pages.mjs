@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isPublicRecord } from './public-record.mjs';
 
 export const UAE_LOCATIONS = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Al Ain', 'Ras Al Khaimah', 'Umm Al Quwain', 'Fujairah'];
 export const slugify = value => String(value || '').toLowerCase().replace(/&amp;|&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -10,6 +11,7 @@ function matchesTaxonomy(job, field, meta, id, name, taxonomy = []) {
   return values(job,field,meta).some(value => key(value) === key(selected?.name || name));
 }
 export function isActiveJob(job, now = new Date()) {
+  if (!isPublicRecord(job)) return false;
   if (!['publish','published','active'].includes(key(job.status || 'publish')) || job.filled === true || job.active === false || key(job.activityStatus) === 'inactive' || key(job.metas?._filled) === '1') return false;
   const dates = [job.expiryDate, job.deadline, job.metas?._job_expiry_date, job.metas?._job_application_deadline_date].filter(Boolean);
   return dates.every(value => {

@@ -11,6 +11,7 @@ import { createSeoRepository, isActiveJob } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
 import { createAdminSessionStore } from './admin-session-store.mjs';
 import { isCandidateAccount } from './candidate-account.mjs';
+import { isPublicRecord } from './public-record.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
@@ -128,7 +129,7 @@ function fallbackRecords(type, params) {
   else if (type === 'posts') list = memoryStore.posts || [];
   else return [];
 
-  let filtered = list;
+  let filtered = type === 'job_listing' ? list.filter(isPublicRecord) : list;
   if(params.get('id'))filtered=filtered.filter(item=>Number(item.id)===Number(params.get('id')));
 
   if (slug) {
@@ -1296,13 +1297,17 @@ const server = http.createServer(async (req, res) => {
   // API: Local Jobs
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const db = await readLocalDb();
-    return sendJson(req, res, 200, db.jobs);
+    const adminView = requestUrl.searchParams.get('admin') === '1';
+    if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
+    return sendJson(req, res, 200, adminView ? db.jobs : db.jobs.filter(isPublicRecord));
   }
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'GET') {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
     const db = await readLocalDb();
-    const job = db.jobs.find(item => item.slug === slug);
+    const adminView = requestUrl.searchParams.get('admin') === '1';
+    if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
+    const job = db.jobs.find(item => item.slug === slug && (adminView || isPublicRecord(item)));
     return sendJson(req, res, job ? 200 : 404, job || { error: 'Job not found' });
   }
 

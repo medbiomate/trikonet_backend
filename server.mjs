@@ -1256,6 +1256,31 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if(path==='/api/admin/candidate-save' && req.method==='POST') {
+    const admin=await currentAdminSession(req);
+    if(!admin || !['Administrator','Editor'].includes(admin.role))return sendJson(req,res,403,{error:'Administrator access required'});
+    try {
+      const body=await readJsonBody(req);const db=await readLocalDb();
+      db.candidates ||= [];db.candidateTrash ||= [];
+      for(const id of body.removed || [])if(!db.candidateTrash.includes(String(id)))db.candidateTrash.push(String(id));
+      for(const record of body.records || []) {
+        if(!record.id || !record.name)continue;
+        const safe={id:record.id,name:record.name,slug:record.slug,email:record.email,phone:record.phone,jobTitle:record.jobTitle,category:record.category,location:record.location,experience:record.experience,qualification:record.qualification,bio:record.bio,status:record.status,featured:!!record.featured,createdAt:record.createdAt};
+        const index=db.candidates.findIndex(c=>String(c.id)===String(record.id));
+        if(index>=0)db.candidates[index]={...db.candidates[index],...safe};else db.candidates.push(safe);
+      }
+      await writeLocalDb(db);return sendJson(req,res,200,{saved:true});
+    }catch(error){return sendJson(req,res,400,{error:error.message});}
+  }
+  if(path.startsWith('/api/admin/candidate-profile/') && req.method==='GET') {
+    const admin=await currentAdminSession(req);
+    if(!admin || !['Administrator','Editor'].includes(admin.role))return sendJson(req,res,403,{error:'Administrator access required'});
+    const id=decodeURIComponent(path.slice('/api/admin/candidate-profile/'.length));const db=await readLocalDb();
+    const user=(db.users || []).find(u=>String(u.id)===id && isCandidateAccount(u));
+    const candidate=(db.candidates || []).find(c=>String(c.id)===id);
+    if(!user && !candidate)return sendJson(req,res,404,{error:'Candidate not found'});
+    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:candidate?.name||user?.name,email:candidate?.email||user?.email,createdAt:user?.createdAt||candidate?.createdAt},resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
+  }
   if (['/api/admin/candidates', '/api/local/candidates'].includes(path) && req.method === 'GET') {
     const admin = await currentAdminSession(req);
     if (!admin || !['Administrator', 'Editor'].includes(admin.role)) return sendJson(req, res, 403, { error: 'Administrator access required' });
@@ -1282,11 +1307,11 @@ const server = http.createServer(async (req, res) => {
           experience: record.experience || m._candidate_experience || '', qualification: record.qualification || '',
           bio: record.bio || record.content?.rendered || '', photo: record.photo || m._candidate_photo || '',
           status: record.status === 'pending' ? 'Pending' : record.status === 'inactive' || record.status === 'draft' ? 'Inactive' : 'Active',
-          featured: !!record.featured, createdAt: record.createdAt || record.date || ''
+          featured: !!record.featured, phone:record.phone || m._candidate_phone || '', createdAt: users.find(u=>String(u.id)===String(record.id))?.createdAt || record.createdAt || record.date || ''
         };
         merged.set(String(candidate.id || candidate.email || candidate.slug), candidate);
       }
-      return sendJson(req, res, 200, [...merged.values()]);
+      return sendJson(req, res, 200, [...merged.values()].filter(c=>!(db.candidateTrash || []).includes(String(c.id))));
     } catch (error) {
       console.error(JSON.stringify({ event: 'admin_candidates_load_failed', code: error.code || error.name }));
       return sendJson(req, res, 503, { error: 'Unable to load candidate profiles.' });

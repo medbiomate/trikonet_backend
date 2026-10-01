@@ -12,6 +12,7 @@ import { handleSeoRequest } from './seo-api.mjs';
 import { createAdminSessionStore } from './admin-session-store.mjs';
 import { isCandidateAccount } from './candidate-account.mjs';
 import { isPublicRecord } from './public-record.mjs';
+import { employerJobPage } from './employer-jobs.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
@@ -746,6 +747,17 @@ const server = http.createServer(async (req, res) => {
       storage,
       time: new Date().toISOString()
     });
+  }
+
+  if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
+    try {
+      await loadMemoryStore();
+      const db = await readLocalDb();
+      const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
+      const employer = (db.employers || []).find(item => item.slug === slug && isPublicRecord(item)) || (memoryStore.employers || []).find(item => item.slug === slug);
+      if (!employer) return sendJson(req,res,404,{error:'Employer not found'});
+      return sendJson(req,res,200,employerJobPage(memoryStore.jobs || [],db.jobs || [],employer,requestUrl.searchParams.get('page')));
+    } catch { return sendJson(req,res,503,{error:'Unable to load employer jobs.'}); }
   }
 
   if (path === '/api/admin/job-presence' && ['GET','POST'].includes(req.method)) {

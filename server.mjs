@@ -1174,6 +1174,27 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req, res, 200, { ok: true });
   }
 
+  if(['/api/candidate/profile','/api/candidate/activity'].includes(path)) {
+    const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});
+    const db=await readLocalDb();const user=(db.users || []).find(u=>String(u.id)===String(session.userId));
+    if(!user)return sendJson(req,res,404,{error:'Account not found'});
+    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:user.profile || {name:user.name,email:user.email},completionPercentage:Math.round(['name','email','phone','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','languages','salaryExpectation','availability','noticePeriod','locations','summary'].filter(key=>{const value=user.profile?.[key];return Array.isArray(value)?value.length:typeof value==='string'?value.trim():Boolean(value);}).length/20*100)}:user.memberActivity || {});
+    if(['POST','PUT'].includes(req.method)) {
+      try {
+        const body=await readJsonBody(req);
+        if(path.endsWith('/activity')){
+          user.memberActivity ||= {};
+          for(const kind of ['saved_jobs','applied_jobs','followed_companies'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
+        } else {
+          const fields=['name','email','phone','photo','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','licenseStatus','languages','salaryExpectation','availability','noticePeriod','hospitalType','locations','summary','skills','education','workExperience','socialLinks','website','linkedin','gender','dateOfBirth','address'];
+          user.profile ||= {};
+          for(const key of fields)if(Object.hasOwn(body,key))user.profile[key]=body[key];
+          user.profile.updatedAt=new Date().toISOString();
+        }
+        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,activity:user.memberActivity,saved:true});
+      }catch(error){return sendJson(req,res,400,{error:error.message});}
+    }
+  }
   if (path === '/api/resumes' && req.method === 'GET') {
     const session = currentSession(req);
     if (!session) return sendJson(req, res, 401, { error: 'Sign in to access your résumé library.' });
@@ -1279,7 +1300,7 @@ const server = http.createServer(async (req, res) => {
     const user=(db.users || []).find(u=>String(u.id)===id && isCandidateAccount(u));
     const candidate=(db.candidates || []).find(c=>String(c.id)===id);
     if(!user && !candidate)return sendJson(req,res,404,{error:'Candidate not found'});
-    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:candidate?.name||user?.name,email:candidate?.email||user?.email,createdAt:user?.createdAt||candidate?.createdAt},resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
+    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:candidate?.name||user?.name,email:candidate?.email||user?.email,createdAt:user?.createdAt||candidate?.createdAt},account:{username:user?.username || user?.name,email:user?.email,createdAt:user?.createdAt},submittedProfile:user?.profile || {},activity:user?.memberActivity || {},applications:(db.applications || []).filter(a=>String(a.userId)===id || (user?.email && a.email===user.email)),resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
   }
   if (['/api/admin/candidates', '/api/local/candidates'].includes(path) && req.method === 'GET') {
     const admin = await currentAdminSession(req);

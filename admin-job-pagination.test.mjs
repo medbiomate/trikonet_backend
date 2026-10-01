@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminJobConditions, localJobMatches, pagePlan } from './admin-job-pagination.mjs';
+import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
+
+test('migrated jobs paginate, filter and preserve local overrides without WordPress tables', () => {
+  const imported = Array.from({ length: 45 }, (_, id) => ({ id, slug: `job-${id}`, title: { rendered: 'Nurse' }, status: 'publish', date: '2026-10-01', metas: { _job_employer_name: 'Clinic', _job_category: { 1: 'Healthcare' }, _job_type: { 2: 'Full Time' } } }));
+  const page = importedJobPage(imported, [], new URLSearchParams({ page: '2', per_page: '20', q: 'clinic', category: 'Healthcare', job_type: 'Full Time' }));
+  assert.equal(page.total, 45);
+  assert.equal(page.jobs.length, 20);
+  assert.equal(page.page, 2);
+  const override = { slug: 'job-1', title: 'Updated', status: 'draft' };
+  const draft = importedJobPage(imported, [override], new URLSearchParams({ status: 'draft' }));
+  assert.equal(draft.total, 1);
+  assert.equal(draft.jobs[0].local, true);
+  assert.equal(importedJobPage(imported, [override], new URLSearchParams({ status: 'mine' })).total, 1);
+});
 
 test('each page requests only its 20 rows', () => {
   assert.deepEqual(pagePlan([], 13846, 3, 20), { total: 13846, page: 3, local: [], remoteOffset: 40, remoteLimit: 20 });

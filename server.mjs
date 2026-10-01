@@ -1,4 +1,4 @@
-import { adminJobConditions, localJobMatches, pagePlan } from './admin-job-pagination.mjs';
+import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -762,6 +762,16 @@ const server = http.createServer(async (req, res) => {
       const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
       return sendJson(req, res, 200, { jobs: [...plan.local, ...remote], total: plan.total, page: plan.page, perPage: size });
     } catch (error) {
+      if (error.code === 'ER_NO_SUCH_TABLE') {
+        try {
+          await loadMemoryStore();
+          const db = await readLocalDb();
+          if (!Array.isArray(memoryStore.jobs)) throw new Error('Imported jobs unavailable');
+          return sendJson(req, res, 200, importedJobPage(memoryStore.jobs, db.jobs || [], requestUrl.searchParams));
+        } catch (fallbackError) {
+          console.error(JSON.stringify({ event: 'admin_jobs_import_failed', code: fallbackError.code || fallbackError.name }));
+        }
+      }
       console.error(JSON.stringify({ event: 'admin_jobs_load_failed', code: error.code || error.name, message: String(error.message || '').slice(0, 300) }));
       return sendJson(req, res, 503, { error: 'Unable to load jobs. Please retry.' });
     }

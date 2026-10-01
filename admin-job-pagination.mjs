@@ -24,3 +24,20 @@ export function pagePlan(localJobs, remoteTotal, requestedPage, pageSize) {
   const local = localJobs.slice(offset, offset + pageSize);
   return { total, page, local, remoteOffset: Math.max(0, offset - localJobs.length), remoteLimit: pageSize - local.length };
 }
+
+export function importedJobPage(imported, local, params) {
+  const records = new Map(imported.map(job => [job.slug, job]));
+  for (const job of local) records.set(job.slug, { ...job, local: true });
+  const names = value => Array.isArray(value) ? value.map(item => typeof item === 'object' ? item.name : item) : value && typeof value === 'object' ? Object.values(value) : value ? [value] : [];
+  const jobs = [...records.values()].filter(job => {
+    if (params.get('status') === 'mine' && !job.local) return false;
+    const m = job.metas || {};
+    return localJobMatches({ ...job, title: job.title?.rendered || job.title || '',
+      company: job.company || m._job_employer_name || '',
+      categories: names(job.categories || m._job_category), types: names(job.types || m._job_type)
+    }, params);
+  }).sort((a, b) => String(b.date || b.createdAt || '').localeCompare(String(a.date || a.createdAt || '')) || Number(b.id || 0) - Number(a.id || 0));
+  const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
+  const plan = pagePlan(jobs, 0, Math.floor(Number(params.get('page')) || 1), size);
+  return { jobs: plan.local, total: jobs.length, page: plan.page, perPage: size };
+}

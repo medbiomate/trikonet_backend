@@ -1402,6 +1402,7 @@ const server = http.createServer(async (req, res) => {
       if (existingIndex >= 0) job.updatedDate = formattedDate;
       else job.publishedDate = formattedDate;
       job.createdBy=jobCreator(existingIndex>=0?db.jobs[existingIndex]:null,admin);
+      job.updatedBy={id:String(admin.userId),name:String(admin.name || 'Administrator'),at:nowIso};
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);

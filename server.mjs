@@ -1,3 +1,4 @@
+import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
@@ -634,6 +635,8 @@ async function sendJson(req, res, status, value) {
     const publicContent = /^\/api\/(?:local\/(?:jobs|employers)(?:[/?]|$)|wp\/(?:job_listing|employer|posts|top-employers)(?:\?|$)|employers\/|employer-jobs\/)/.test(req.url);
     value=await (publicContent ? mediaStore.publish(value) : mediaStore.normalize(value));
   } catch(error) { console.error('Media persistence unavailable:',error.message); }
+  const attributionRequest=new URL(req.url,'https://api.trikonet.com');
+  if(!attributionRequest.pathname.startsWith('/api/admin/') && !(attributionRequest.searchParams.get('admin')==='1' && await currentAdminSession(req)))value=withoutTeamAttribution(value);
   const origin = getCorsOrigin(req);
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -1329,7 +1332,7 @@ const server = http.createServer(async (req, res) => {
         }
         const id = existing?.id || record.id || body.draftId;
         const slug = existing?.slug || record.slug || `autosave-job-${id}`;
-        const draft = { ...record, id, slug, status: 'draft', local: true, updatedAt: now };
+        const draft = { ...record, createdBy:jobCreator(existing,admin), id, slug, status: 'draft', local: true, updatedAt: now };
         // Published jobs retain their public content until an explicit Save/Publish.
         const saved = existing && ['publish','published','active'].includes(existing.status)
           ? { ...existing, id, local:true, recoveryDraft:draft, updatedAt:now }
@@ -1370,6 +1373,8 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/local/jobs' && (req.method === 'POST' || req.method === 'PUT')) {
     try {
+      const admin=await currentAdminSession(req);
+      if(!admin)return sendJson(req,res,401,{error:'Sign in to save jobs.'});
       const job = await readJsonBody(req);
       if (!job.title?.trim() || !job.slug?.trim()) {
         return sendJson(req, res, 400, { error: 'Title and slug are required' });
@@ -1396,6 +1401,7 @@ const server = http.createServer(async (req, res) => {
       job.date = formattedDate;
       if (existingIndex >= 0) job.updatedDate = formattedDate;
       else job.publishedDate = formattedDate;
+      job.createdBy=jobCreator(existingIndex>=0?db.jobs[existingIndex]:null,admin);
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);

@@ -1206,6 +1206,43 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (['/api/admin/candidates', '/api/local/candidates'].includes(path) && req.method === 'GET') {
+    const admin = await currentAdminSession(req);
+    if (!admin || !['Administrator', 'Editor'].includes(admin.role)) return sendJson(req, res, 403, { error: 'Administrator access required' });
+    try {
+      const db = await readLocalDb();
+      let imported = [];
+      try {
+        const [rows] = await wpDb.query("SELECT payload FROM trikonet_imported_data WHERE dataset_key IN ('candidates','candidate')");
+        imported = rows.flatMap(row => { const records = JSON.parse(row.payload); return Array.isArray(records) ? records : []; });
+      } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
+      try {
+        imported.push(...await wordpressRecords('candidate', new URLSearchParams({ per_page: '100' }), { excludedSlugs: [] }));
+      } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
+      const users = (db.users || []).filter(user => ['candidate', 'subscriber', 'job seeker', 'jobseeker'].includes(String(user.role || '').toLowerCase()));
+      const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt })), ...(db.candidates || [])];
+      const merged = new Map();
+      for (const record of records) {
+        const m = record.metas || {};
+        const candidate = {
+          id: record.id, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
+          email: record.email || m._candidate_email || '', jobTitle: record.jobTitle || record.professionalTitle || m._candidate_title || '',
+          category: record.category || Object.values(m._candidate_category || {}).join(', '),
+          location: record.location || Object.values(m._candidate_location || {}).join(', '),
+          experience: record.experience || m._candidate_experience || '', qualification: record.qualification || '',
+          bio: record.bio || record.content?.rendered || '', photo: record.photo || m._candidate_photo || '',
+          status: record.status === 'pending' ? 'Pending' : record.status === 'inactive' || record.status === 'draft' ? 'Inactive' : 'Active',
+          featured: !!record.featured, createdAt: record.createdAt || record.date || ''
+        };
+        merged.set(String(candidate.id || candidate.email || candidate.slug), candidate);
+      }
+      return sendJson(req, res, 200, [...merged.values()]);
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'admin_candidates_load_failed', code: error.code || error.name }));
+      return sendJson(req, res, 503, { error: 'Unable to load candidate profiles.' });
+    }
+  }
+
   if (path.startsWith('/api/admin/seo-job-pages') || path.startsWith('/api/seo-job-pages') || path === '/api/job-category-links' || path === '/sitemap-seo-job-pages.xml') {
     await handleSeoRequest(req,res,path,requestUrl,{seoRepository,currentAdminSession,sendJson,readJsonBody});
     return;

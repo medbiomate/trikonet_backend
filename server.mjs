@@ -1,4 +1,4 @@
-import { findJobIndex, saveJobRecord } from './job-identity.mjs';
+import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
@@ -1393,7 +1393,7 @@ const server = http.createServer(async (req, res) => {
       job.date = formattedDate;
       if (existingIndex >= 0) job.updatedDate = formattedDate;
       else job.publishedDate = formattedDate;
-      const savedJob = saveJobRecord(db.jobs, job, () => crypto.randomUUID(), nowIso);
+      const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));

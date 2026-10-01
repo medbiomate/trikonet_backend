@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findJobIndex, saveJobRecord } from './job-identity.mjs';
+import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 test('a title or slug change updates the same stable ID',()=>{
  const jobs=[];
  const first=saveJobRecord(jobs,{title:'Nurse',slug:'nurse',status:'draft',id:'job-1'},()=> 'unused','2026-10-01');
@@ -22,4 +22,10 @@ test('slug collisions cannot overwrite a different job ID',()=>{
  const jobs=[{id:'a',slug:'first'},{id:'b',slug:'second'}];
  assert.throws(()=>saveJobRecord(jobs,{id:'a',slug:'second'},()=> 'unused','today'),/another job/);
  assert.equal(jobs.length,2);assert.equal(findJobIndex(jobs,{id:'b',originalSlug:'first'}),1);
+});
+
+test('published updates reset all publication fields to current India date',()=>{
+ const job=refreshPublicationDate({status:'publish',datePosted:'2020-01-01'},'2026-10-01T20:00:00Z');
+ for(const key of ['publishedDate','datePosted','postedDate','date'])assert.equal(job[key],'2026-10-02');
+ assert.equal(refreshPublicationDate({status:'draft',datePosted:'2020-01-01'},'2026-10-01').datePosted,'2020-01-01');
 });

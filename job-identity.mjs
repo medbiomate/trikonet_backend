@@ -19,3 +19,9 @@ export function saveJobRecord(jobs, record, createId, now) {
   if (index >= 0) jobs[index] = saved; else jobs.unshift(saved);
   return saved;
 }
+
+export function refreshPublicationDate(job, now) {
+  if (!['publish','published','active'].includes(String(job.status || '').toLowerCase())) return job;
+  const day = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
+  return {...job,publishedDate:day,datePosted:day,postedDate:day,date:day,updatedDate:day};
+}

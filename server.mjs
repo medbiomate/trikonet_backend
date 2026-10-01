@@ -1,3 +1,4 @@
+import { adminJobConditions, localJobMatches, pagePlan } from './admin-job-pagination.mjs';
 import http from 'node:http';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -228,7 +229,7 @@ async function employerLogoMap(ids) {
   );
 }
 
-async function wordpressRecords(type, params) {
+async function wordpressRecords(type, params, adminOptions = null) {
   const postType = {
     job_listing: 'job_listing',
     employer: 'employer',
@@ -242,7 +243,7 @@ async function wordpressRecords(type, params) {
 
   const limit = Math.min(Math.max(Number(params.get('per_page')) || 10, 1), postType === 'attachment' || postType === 'employer' ? 5000 : postType === 'job_listing' ? 1000 : 100);
   const page = Math.max(Number(params.get('page')) || 1, 1);
-  const offset = (page - 1) * limit;
+  const offset = adminOptions?.offset ?? (page - 1) * limit;
   const slug = params.get('slug');
 
   const where = ['post_type = ?'];
@@ -259,8 +260,10 @@ async function wordpressRecords(type, params) {
   const category = (params.get('category') || '').trim();
 
   if (query) {
-    where.push('post_title LIKE ?');
-    values.push(`%${query}%`);
+    if (adminOptions) {
+      where.push("(post_title LIKE ? OR EXISTS (SELECT 1 FROM wp_postmeta qm WHERE qm.post_id=wp_posts.ID AND qm.meta_key='_job_employer_name' AND qm.meta_value LIKE ?) OR EXISTS (SELECT 1 FROM wp_term_relationships qr JOIN wp_term_taxonomy qt ON qt.term_taxonomy_id=qr.term_taxonomy_id JOIN wp_terms qn ON qn.term_id=qt.term_id WHERE qr.object_id=wp_posts.ID AND qt.taxonomy='job_listing_category' AND qn.name LIKE ?))");
+      values.push(`%${query}%`, `%${query}%`, `%${query}%`);
+    } else { where.push('post_title LIKE ?'); values.push(`%${query}%`); }
   }
   if (postType === 'job_listing' && location && location !== 'Country or City') {
     where.push("EXISTS (SELECT 1 FROM wp_term_relationships fr JOIN wp_term_taxonomy ft ON ft.term_taxonomy_id=fr.term_taxonomy_id JOIN wp_terms fn ON fn.term_id=ft.term_id WHERE fr.object_id=wp_posts.ID AND ft.taxonomy='job_listing_location' AND fn.name=?)");
@@ -288,7 +291,8 @@ async function wordpressRecords(type, params) {
     where.push("EXISTS (SELECT 1 FROM wp_term_relationships fr JOIN wp_term_taxonomy ft ON ft.term_taxonomy_id=fr.term_taxonomy_id JOIN wp_terms fn ON fn.term_id=ft.term_id WHERE fr.object_id=wp_posts.ID AND ft.taxonomy='employer_category' AND fn.name=?)");
     values.push(category);
   }
-  if (type !== 'media') {
+  if (adminOptions) adminJobConditions(where, values, params, adminOptions.excludedSlugs);
+  else if (type !== 'media') {
     where.push("post_status = 'publish'");
   }
 
@@ -442,9 +446,10 @@ async function wordpressRecords(type, params) {
   return [...byId.values()];
 }
 
-async function wordpressCount(type, params) {
+async function wordpressCount(type, params, adminOptions = null) {
   const postType = type === 'employer' ? 'employer' : 'job_listing';
-  const where = ['post_type = ?', "post_status = 'publish'"];
+  const where = ['post_type = ?'];
+  if (!adminOptions) where.push("post_status = 'publish'");
   const values = [postType];
 
   const query = (params.get('q') || '').trim();
@@ -452,8 +457,10 @@ async function wordpressCount(type, params) {
   const category = (params.get('category') || '').trim();
 
   if (query) {
-    where.push('post_title LIKE ?');
-    values.push(`%${query}%`);
+    if (adminOptions) {
+      where.push("(post_title LIKE ? OR EXISTS (SELECT 1 FROM wp_postmeta qm WHERE qm.post_id=wp_posts.ID AND qm.meta_key='_job_employer_name' AND qm.meta_value LIKE ?) OR EXISTS (SELECT 1 FROM wp_term_relationships qr JOIN wp_term_taxonomy qt ON qt.term_taxonomy_id=qr.term_taxonomy_id JOIN wp_terms qn ON qn.term_id=qt.term_id WHERE qr.object_id=wp_posts.ID AND qt.taxonomy='job_listing_category' AND qn.name LIKE ?))");
+      values.push(`%${query}%`, `%${query}%`, `%${query}%`);
+    } else { where.push('post_title LIKE ?'); values.push(`%${query}%`); }
   }
   if (postType === 'job_listing' && location && location !== 'Country or City') {
     where.push("EXISTS (SELECT 1 FROM wp_term_relationships fr JOIN wp_term_taxonomy ft ON ft.term_taxonomy_id=fr.term_taxonomy_id JOIN wp_terms fn ON fn.term_id=ft.term_id WHERE fr.object_id=wp_posts.ID AND ft.taxonomy='job_listing_location' AND fn.name=?)");
@@ -477,6 +484,7 @@ async function wordpressCount(type, params) {
     values.push(category);
   }
 
+  if (adminOptions) adminJobConditions(where, values, params, adminOptions.excludedSlugs);
   const [rows] = await wpDb.query(`SELECT COUNT(*) total FROM wp_posts WHERE ${where.join(' AND ')}`, values);
   return Number(rows[0]?.total || 0);
 }
@@ -732,6 +740,24 @@ const server = http.createServer(async (req, res) => {
       storage,
       time: new Date().toISOString()
     });
+  }
+
+  if (path === '/api/admin/jobs' && req.method === 'GET') {
+    const admin = currentAdminSession(req);
+    if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
+    try {
+      const params = requestUrl.searchParams;
+      const status = params.get('status') || 'all';
+      if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
+      const db = await readLocalDb();
+      const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true }));
+      const options = { excludedSlugs: (db.jobs || []).map(job => job.slug).filter(Boolean) };
+      const remoteTotal = status === 'mine' ? 0 : await wordpressCount('job_listing', params, options);
+      const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
+      const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
+      const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
+      return sendJson(req, res, 200, { jobs: [...plan.local, ...remote], total: plan.total, page: plan.page, perPage: size });
+    } catch (error) { return sendJson(req, res, 503, { error: 'Unable to load jobs. Please retry.' }); }
   }
 
   // Uploads must be confirmed in durable storage before the editor calls them saved.

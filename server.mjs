@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import { newestFirst } from './record-order.mjs';
 import { createSeoRepository, isActiveJob } from './seo-job-pages.mjs';
 import { handleSeoRequest } from './seo-api.mjs';
+import { createAdminSessionStore } from './admin-session-store.mjs';
 
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
@@ -678,8 +679,11 @@ const passwordMatches = (password, user) => {
   return hash === password;
 };
 
-const adminSessions = new Map();
-const currentAdminSession = req => adminSessions.get(cookieValue(req, 'trikonet_admin_session')) || null;
+const adminSessions = createAdminSessionStore(wpDb);
+const currentAdminSession = async req => {
+  try { return await adminSessions.get(cookieValue(req, 'trikonet_admin_session')); }
+  catch { return null; } // Never grant access if session storage is unavailable.
+};
 
 function getSessionCookieHeader(req, token, maxAge = 604800) {
   const isHttps = req.headers['x-forwarded-proto'] === 'https' || Boolean(req.socket?.encrypted);
@@ -743,7 +747,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (path === '/api/admin/jobs' && req.method === 'GET') {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
     try {
       const params = requestUrl.searchParams;
@@ -762,7 +766,7 @@ const server = http.createServer(async (req, res) => {
 
   // Uploads must be confirmed in durable storage before the editor calls them saved.
   if(path === '/api/admin/media' && ['GET','POST'].includes(req.method)) {
-    const admin=currentAdminSession(req);
+    const admin=await currentAdminSession(req);
     if(!admin || admin.expiresAt <= Date.now())return sendJson(req,res,401,{error:'Sign in to manage media.'});
     try {
       await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_media_library (id CHAR(64) PRIMARY KEY, payload LONGTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
@@ -967,7 +971,7 @@ const server = http.createServer(async (req, res) => {
         role: roleLabel,
         expiresAt: Date.now() + (8 * 60 * 60 * 1000)
       };
-      adminSessions.set(token, admin);
+      await adminSessions.set(token, admin);
       res.setHeader('Set-Cookie', `trikonet_admin_session=${token}; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=28800`);
       return sendJson(req, res, 200, { admin });
     } catch (error) {
@@ -977,21 +981,21 @@ const server = http.createServer(async (req, res) => {
 
   // API: Admin Me
   if (path === '/api/admin/me' && req.method === 'GET') {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
     return sendJson(req, res, 200, { admin });
   }
 
   // API: Admin Logout
   if (path === '/api/admin/logout' && req.method === 'POST') {
-    adminSessions.delete(cookieValue(req, 'trikonet_admin_session'));
+    await adminSessions.delete(cookieValue(req, 'trikonet_admin_session'));
     res.setHeader('Set-Cookie', 'trikonet_admin_session=; HttpOnly; SameSite=None; Secure; Path=/; Max-Age=0');
     return sendJson(req, res, 200, { ok: true });
   }
 
   // API: Admin Users List
   if (path === '/api/admin/users' && req.method === 'GET') {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
       return sendJson(req, res, 403, { error: 'Administrator access required' });
     }
@@ -1014,7 +1018,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if ((path === '/api/admin/user-save' || path === '/api/admin/users') && req.method === 'POST') {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
       return sendJson(req, res, 403, { error: 'Administrator access required' });
     }
@@ -1087,7 +1091,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (path.startsWith('/api/admin/users/') && req.method === 'DELETE') {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
       return sendJson(req, res, 403, { error: 'Administrator access required' });
     }

@@ -6,7 +6,7 @@ export async function handleSeoRequest(req,res,path,requestUrl,{seoRepository,cu
   }
   // SEO pages use a separate durable table; only administrators can manage them.
   if (path.startsWith('/api/admin/seo-job-pages')) {
-    const admin = currentAdminSession(req);
+    const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req,res,401,{error:'Sign in to manage SEO pages.'});
     if (admin.role !== 'Administrator') return sendJson(req,res,403,{error:'Only administrators can manage SEO job pages.'});
     try {

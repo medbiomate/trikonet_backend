@@ -779,6 +779,8 @@ const server = http.createServer(async (req, res) => {
     } catch { return sendJson(req,res,503,{error:'Editing status unavailable.'}); }
   }
 
+  if (path.startsWith('/api/') || path.startsWith('/admin')) res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });

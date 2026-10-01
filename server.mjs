@@ -549,6 +549,8 @@ async function readLocalDb() {
 
 async function writeLocalDb(db) {
   db = await mediaStore.normalize(db);
+  db.jobs = await mediaStore.publish(db.jobs || [], 'job');
+  db.employers = await mediaStore.publish(db.employers || [], 'employer');
   const payload = JSON.stringify({ ...emptyDb, ...db });
   try {
     await ensurePersistentState();
@@ -625,7 +627,10 @@ function getCorsOrigin(req) {
 
 async function sendJson(req, res, status, value) {
   // Persist embedded images before returning stable public URLs. Originals remain intact.
-  try { value=await mediaStore.normalize(value); } catch(error) { console.error('Media persistence unavailable:',error.message); }
+  try {
+    const publicContent = /^\/api\/(?:local\/(?:jobs|employers)(?:[/?]|$)|wp\/(?:job_listing|employer|posts|top-employers)(?:\?|$)|employers\/|employer-jobs\/)/.test(req.url);
+    value=await (publicContent ? mediaStore.publish(value) : mediaStore.normalize(value));
+  } catch(error) { console.error('Media persistence unavailable:',error.message); }
   const origin = getCorsOrigin(req);
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -820,12 +825,15 @@ const server = http.createServer(async (req, res) => {
       await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_media_library (id CHAR(64) PRIMARY KEY, payload LONGTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
       if(req.method==='GET') {
         const [rows]=await wpDb.query('SELECT payload FROM trikonet_media_library ORDER BY created_at DESC');
-        return sendJson(req,res,200,rows.map(row=>JSON.parse(row.payload)));
+        const records=[];
+        for(const row of rows){const item=JSON.parse(row.payload);item.url=await mediaStore.publish(item.url,item.title);records.push(item);}
+        return sendJson(req,res,200,records);
       }
       const body=await readJsonBody(req,14_000_000);
       if(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/.test(String(body.url || '')))return sendJson(req,res,400,{error:'A PNG, JPEG, WebP, GIF or AVIF image is required.'});
-      const url=await mediaStore.normalize(body.url,body.title || 'image');
-      const match=url.match(/^https:\/\/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//);
+      const originUrl=await mediaStore.normalize(body.url,body.title || 'image');
+      const url=await mediaStore.publish(originUrl,body.title || 'image');
+      const match=originUrl.match(/^https:\/\/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//);
       if(!match)throw Error('Image could not be stored. Maximum size is 10 MB.');
       const saved={id:match[1],title:String(body.title || 'image').slice(0,191),url,dimensions:String(body.dimensions || ''),size:String(body.size || ''),type:'image',date:new Date().toISOString()};
       await wpDb.query('INSERT INTO trikonet_media_library (id,payload) VALUES (?,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)',[saved.id,JSON.stringify(saved)]);

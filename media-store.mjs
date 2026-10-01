@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { readFile } from 'node:fs/promises';
 
-export function createMediaStore(pool) {
+export function createMediaStore(pool, options = {}) {
   let ready;
   const ensure=()=>ready ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_media (id CHAR(64) PRIMARY KEY, filename VARCHAR(191) NOT NULL, mime VARCHAR(64) NOT NULL, bytes LONGBLOB NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`).catch(error=>{ready=null;throw error;});
   const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','image/avif':'avif'};
@@ -12,15 +12,49 @@ export function createMediaStore(pool) {
   const publicByChecksum=new Map();
   let publicUrlsReady;
   const r2Enabled=['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET','R2_PUBLIC_URL'].every(key=>process.env[key]);
-  const r2=r2Enabled?new S3Client({region:'auto',endpoint:`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},maxAttempts:2}):null;
+  const r2=options.client || (r2Enabled?new S3Client({region:'auto',endpoint:`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},maxAttempts:2}):null);
   let mappingReady;
   const ensureMapping=()=>mappingReady ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_public_media (attachment_id BIGINT PRIMARY KEY, object_key VARCHAR(255) NOT NULL, public_url VARCHAR(512) NOT NULL, checksum CHAR(64) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`).catch(error=>{mappingReady=null;throw error;});
+  let uploadsReady;
+  const ensureUploads=()=>uploadsReady ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_uploaded_public_media (checksum CHAR(64) PRIMARY KEY, public_url VARCHAR(512) NOT NULL) ENGINE=InnoDB`).catch(error=>{uploadsReady=null;throw error;});
+  async function publish(value,label='image') {
+    if (Array.isArray(value)) return Promise.all(value.map(item=>publish(item,label)));
+    if(value && typeof value==='object') {
+      const result={};
+      for(const [key,item] of Object.entries(value))result[key]=key==='logoBackup'?item:await publish(item,`${label}-${key}`);
+      return result;
+    }
+    const stored=await normalize(value,label);
+    const match=String(stored).match(/^https:\/\/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//);
+    if(!match)return stored;
+    if(publicByChecksum.has(match[1]))return publicByChecksum.get(match[1]);
+    if(!r2)throw Error('Public media storage is not configured');
+    await ensureUploads();
+    const [existing]=await pool.query('SELECT public_url FROM trikonet_uploaded_public_media WHERE checksum=?',[match[1]]);
+    if(existing[0]){publicByChecksum.set(match[1],existing[0].public_url);return existing[0].public_url;}
+    await ensure();
+    const [rows]=await pool.query('SELECT filename,mime,bytes FROM trikonet_media WHERE id=?',[match[1]]);
+    const row=rows[0];if(!row)throw Error('Stored upload unavailable');
+    const base=new URL(process.env.R2_PUBLIC_URL);
+    if(base.protocol!=='https:'||base.hostname!=='media.trikonet.com')throw Error('Invalid public media domain');
+    const key=`images/${row.filename}`;
+    const url=new URL(key,`${base.origin}/`).href;
+    await r2.send(new PutObjectCommand({Bucket:process.env.R2_BUCKET,Key:key,Body:row.bytes,ContentType:row.mime,CacheControl:'public, max-age=31536000, immutable'}),{abortSignal:AbortSignal.timeout(30000)});
+    const check=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(10000),redirect:'error'});
+    if(!check.ok)throw Error(`CDN verification failed: ${check.status}`);
+    await pool.query('INSERT INTO trikonet_uploaded_public_media (checksum,public_url) VALUES (?,?) ON DUPLICATE KEY UPDATE public_url=VALUES(public_url)',[match[1],url]);
+    publicByChecksum.set(match[1],url);
+    return url;
+  }
   async function loadPublicUrls(){
     if(!r2Enabled)return;
     return publicUrlsReady ||= (async()=>{
       await ensureMapping();
       const [rows]=await pool.query('SELECT attachment_id,public_url,checksum FROM trikonet_public_media');
       const valid=rows.filter(row=>String(row.public_url).startsWith('https://media.trikonet.com/'));
+      await ensureUploads();
+      const [uploads]=await pool.query('SELECT checksum,public_url FROM trikonet_uploaded_public_media');
+      for(const row of uploads)if(String(row.public_url).startsWith('https://media.trikonet.com/'))publicByChecksum.set(row.checksum,row.public_url);
       if(!valid.length)return;
       const check=await fetch(valid[0].public_url,{method:'HEAD',signal:AbortSignal.timeout(10000),redirect:'error'});
       if(!check.ok)throw Error(`Public media verification failed: ${check.status}`);
@@ -96,7 +130,7 @@ export function createMediaStore(pool) {
     }
     return value;
   }
-  return {normalize,attachment,async origin(value){
+  return {normalize,publish,attachment,async origin(value){
     if(String(value).startsWith('https://api.trikonet.com/media/images/'))return value;
     await ensureMapping();
     const legacy=String(value).match(/^\/uploads\/(?:employers|media)\/(\d+)\./);

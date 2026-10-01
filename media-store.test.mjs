@@ -25,3 +25,21 @@ test('verified public R2 copies replace origin URLs without exposing private upl
     assert.equal(await store.normalize(privateUrl),privateUrl);
   } finally {globalThis.fetch=originalFetch;keys.forEach((key,i)=>{if(saved[i]===undefined)delete process.env[key];else process.env[key]=saved[i];});}
 });
+
+test('public admin uploads are verified on the media domain and reused',async()=>{
+  const previous=process.env.R2_PUBLIC_URL, originalFetch=globalThis.fetch;
+  process.env.R2_PUBLIC_URL='https://media.trikonet.com';
+  const writes=[];
+  globalThis.fetch=async url=>{assert.match(url,/^https:\/\/media\.trikonet\.com\/images\//);return {ok:true};};
+  try {
+    const store=createMediaStore({query:async(sql,args)=>{
+      if(sql.startsWith('SELECT filename'))return [[{filename:'company-logo.png',mime:'image/png',bytes:Buffer.from('test')}]];
+      return [[]];
+    }},{client:{send:async command=>writes.push(command.input)}});
+    const source='data:image/png;base64,iVBORw0KGgo=';
+    assert.equal(await store.publish(source,'company'),'https://media.trikonet.com/images/company-logo.png');
+    assert.equal(await store.publish(source,'company'),'https://media.trikonet.com/images/company-logo.png');
+    assert.equal(writes.length,1);
+    assert.equal(writes[0].ContentType,'image/png');
+  } finally {globalThis.fetch=originalFetch;if(previous===undefined)delete process.env.R2_PUBLIC_URL;else process.env.R2_PUBLIC_URL=previous;}
+});

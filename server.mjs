@@ -1,3 +1,4 @@
+import { findJobIndex, saveJobRecord } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
@@ -1289,10 +1290,41 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       if (!['job','employer'].includes(body.type) || !/^[a-f0-9-]{36}$/.test(body.draftId || '')) return sendJson(req,res,400,{error:'Invalid draft.'});
       const record = body.record || {};
+      if (body.type === 'job' && !String(record.title || '').trim() && !String(record.description || '').trim()) return sendJson(req,res,200,{skipped:true});
       if (!String(record.title || '').trim() && body.type !== 'job') return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
       if (body.type === 'job' && !String(record.title || '').trim()) record.title = 'Untitled job';
       const db = await readLocalDb();
       const list = body.type === 'job' ? db.jobs : db.employers;
+      if (body.type === 'job') {
+        const now = new Date().toISOString();
+        const sourceSlug = String(body.sourceSlug || record.originalSlug || '');
+        const index = findJobIndex(list, { ...record, sourceSlug, originalSlug: sourceSlug });
+        let existing = index >= 0 ? list[index] : null;
+        if (!existing && sourceSlug && !sourceSlug.startsWith('autosave-')) {
+          let records;
+          const params = new URLSearchParams({slug:sourceSlug,per_page:'1'});
+          try { records = await wordpressRecords('job_listing', params, {excludedSlugs:[]}); }
+          catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); records = fallbackRecords('job_listing', params); }
+          const wp = records[0];
+          if (wp) {
+            const id = wp.id || record.id || body.draftId;
+            db.jobRecoveryById ||= {};
+            db.jobRecoveryById[String(id)] = { ...record, id, sourceSlug, updatedAt:now, owner:admin.userId };
+            await writeLocalDb(db);
+            return sendJson(req,res,200,{id,slug:sourceSlug,status:wp.status});
+          }
+        }
+        const id = existing?.id || record.id || body.draftId;
+        const slug = existing?.slug || record.slug || `autosave-job-${id}`;
+        const draft = { ...record, id, slug, status: 'draft', local: true, updatedAt: now };
+        // Published jobs retain their public content until an explicit Save/Publish.
+        const saved = existing && ['publish','published','active'].includes(existing.status)
+          ? { ...existing, id, local:true, recoveryDraft:draft, updatedAt:now }
+          : { ...existing, ...draft, createdAt:existing?.createdAt || now, autosaved:true, autosaveOwner:admin.userId };
+        if (index >= 0) list[index] = saved; else list.unshift(saved);
+        await writeLocalDb(db);
+        return sendJson(req,res,200,{id,slug,status:saved.status});
+      }
       const slug = `autosave-${body.type}-${body.draftId}`;
       const index = list.findIndex(item => item.slug === slug);
       const now = new Date().toISOString();
@@ -1347,21 +1379,15 @@ const server = http.createServer(async (req, res) => {
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await readLocalDb();
-      const index = db.jobs.findIndex(item => item.slug === job.originalSlug || item.slug === job.slug);
-      delete job.originalSlug;
-
-      if (index >= 0) {
-        job.updatedDate = formattedDate;
-        job.date = formattedDate;
-        db.jobs[index] = job;
-      } else {
-        job.publishedDate = formattedDate;
-        job.date = formattedDate;
-        db.jobs.unshift(job);
-      }
+      const existingIndex = findJobIndex(db.jobs, job);
+      job.date = formattedDate;
+      if (existingIndex >= 0) job.updatedDate = formattedDate;
+      else job.publishedDate = formattedDate;
+      const savedJob = saveJobRecord(db.jobs, job, () => crypto.randomUUID(), nowIso);
+      if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
-      return sendJson(req, res, 200, job);
+      return sendJson(req, res, 200, savedJob);
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
     }

@@ -747,6 +747,24 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  if (path === '/api/admin/job-presence' && ['GET','POST'].includes(req.method)) {
+    const admin = await currentAdminSession(req);
+    if (!admin) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
+    try {
+      await wpDb.query('CREATE TABLE IF NOT EXISTS trikonet_job_presence (slug VARCHAR(191) NOT NULL, user_id VARCHAR(191) NOT NULL, name VARCHAR(191) NOT NULL, expires_at BIGINT NOT NULL, PRIMARY KEY(slug,user_id)) ENGINE=InnoDB');
+      if (req.method === 'POST') {
+        const body = await readJsonBody(req);
+        const slug = String(body.slug || '');
+        if (!slug || slug.length > 191) return sendJson(req,res,400,{error:'Invalid job.'});
+        if (body.release) await wpDb.query('DELETE FROM trikonet_job_presence WHERE slug=? AND user_id=?',[slug,String(admin.userId)]);
+        else await wpDb.query('INSERT INTO trikonet_job_presence (slug,user_id,name,expires_at) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),expires_at=VALUES(expires_at)',[slug,String(admin.userId),String(admin.name || 'Administrator').slice(0,191),Date.now()+60000]);
+        return sendJson(req,res,200,{ok:true});
+      }
+      const [rows] = await wpDb.query('SELECT slug,name FROM trikonet_job_presence WHERE expires_at>?',[Date.now()]);
+      return sendJson(req,res,200,rows);
+    } catch { return sendJson(req,res,503,{error:'Editing status unavailable.'}); }
+  }
+
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
@@ -1258,7 +1276,8 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       if (!['job','employer'].includes(body.type) || !/^[a-f0-9-]{36}$/.test(body.draftId || '')) return sendJson(req,res,400,{error:'Invalid draft.'});
       const record = body.record || {};
-      if (!String(record.title || '').trim()) return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
+      if (!String(record.title || '').trim() && body.type !== 'job') return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
+      if (body.type === 'job' && !String(record.title || '').trim()) record.title = 'Untitled job';
       const db = await readLocalDb();
       const list = body.type === 'job' ? db.jobs : db.employers;
       const slug = `autosave-${body.type}-${body.draftId}`;

@@ -1186,12 +1186,12 @@ const server = http.createServer(async (req, res) => {
           user.memberActivity ||= {};
           for(const kind of ['saved_jobs','applied_jobs','followed_companies'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
         } else {
-          const fields=['name','email','phone','photo','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','licenseStatus','languages','salaryExpectation','availability','noticePeriod','hospitalType','locations','summary','skills','education','workExperience','socialLinks','website','linkedin','gender','dateOfBirth','address'];
+          const fields=['name','email','phone','photo','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','licenseStatus','languages','salaryExpectation','availability','noticePeriod','hospitalType','locations','summary','skills','education','workExperience','socialLinks','website','linkedin','gender','dateOfBirth','address','previousEmployers','visaStatus'];
           user.profile ||= {};
           for(const key of fields)if(Object.hasOwn(body,key))user.profile[key]=body[key];
           user.profile.updatedAt=new Date().toISOString();
         }
-        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,activity:user.memberActivity,saved:true});
+        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:user.profile?.completionPercentage,activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
     }
   }

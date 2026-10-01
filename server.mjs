@@ -131,7 +131,7 @@ function fallbackRecords(type, params) {
   else if (type === 'posts') list = memoryStore.posts || [];
   else return [];
 
-  let filtered = type === 'job_listing' ? list.filter(isPublicRecord) : list;
+  let filtered = list.filter(isPublicRecord);
   if(params.get('id'))filtered=filtered.filter(item=>Number(item.id)===Number(params.get('id')));
 
   if (slug) {
@@ -755,7 +755,7 @@ const server = http.createServer(async (req, res) => {
       await loadMemoryStore();
       const db = await readLocalDb();
       const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
-      const employer = (db.employers || []).find(item => item.slug === slug && isPublicRecord(item)) || (memoryStore.employers || []).find(item => item.slug === slug);
+      const employer = (db.employers || []).find(item => item.slug === slug && isPublicRecord(item)) || (memoryStore.employers || []).find(item => item.slug === slug && isPublicRecord(item));
       if (!employer) return sendJson(req,res,404,{error:'Employer not found'});
       return sendJson(req,res,200,employerJobPage(memoryStore.jobs || [],db.jobs || [],employer,requestUrl.searchParams.get('page')));
     } catch { return sendJson(req,res,503,{error:'Unable to load employer jobs.'}); }
@@ -1408,13 +1408,17 @@ const server = http.createServer(async (req, res) => {
   // API: Local Employers
   if (path === '/api/local/employers' && req.method === 'GET') {
     const db = await readLocalDb();
-    return sendJson(req, res, 200, db.employers);
+    const adminView = requestUrl.searchParams.get('admin') === '1';
+    if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
+    return sendJson(req, res, 200, adminView ? db.employers : db.employers.filter(isPublicRecord));
   }
 
   if (path.startsWith('/api/local/employers/') && req.method === 'GET') {
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
     const db = await readLocalDb();
-    const employer = db.employers.find(item => item.slug === slug);
+    const adminView = requestUrl.searchParams.get('admin') === '1';
+    if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
+    const employer = db.employers.find(item => item.slug === slug && (adminView || isPublicRecord(item)));
     return sendJson(req, res, employer ? 200 : 404, employer || { error: 'Employer not found' });
   }
 

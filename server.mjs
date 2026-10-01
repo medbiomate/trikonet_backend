@@ -761,7 +761,10 @@ const server = http.createServer(async (req, res) => {
       const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
       const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
       return sendJson(req, res, 200, { jobs: [...plan.local, ...remote], total: plan.total, page: plan.page, perPage: size });
-    } catch (error) { return sendJson(req, res, 503, { error: 'Unable to load jobs. Please retry.' }); }
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'admin_jobs_load_failed', code: error.code || error.name, message: String(error.message || '').slice(0, 300) }));
+      return sendJson(req, res, 503, { error: 'Unable to load jobs. Please retry.' });
+    }
   }
 
   // Uploads must be confirmed in durable storage before the editor calls them saved.

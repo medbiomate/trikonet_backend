@@ -1250,6 +1250,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Autosaved unfinished records are always drafts, never published overrides.
+  if (path === '/api/admin/autosave' && req.method === 'POST') {
+    const admin = await currentAdminSession(req);
+    if (!admin) return sendJson(req, res, 401, { error: 'Sign in to save drafts.' });
+    try {
+      const body = await readJsonBody(req);
+      if (!['job','employer'].includes(body.type) || !/^[a-f0-9-]{36}$/.test(body.draftId || '')) return sendJson(req,res,400,{error:'Invalid draft.'});
+      const record = body.record || {};
+      if (!String(record.title || '').trim()) return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
+      const db = await readLocalDb();
+      const list = body.type === 'job' ? db.jobs : db.employers;
+      const slug = `autosave-${body.type}-${body.draftId}`;
+      const index = list.findIndex(item => item.slug === slug);
+      const now = new Date().toISOString();
+      const saved = { ...record, slug, originalSlug: '', status: 'draft', local: true, autosaved: true,
+        autosaveOwner: admin.userId, sourceSlug: String(body.sourceSlug || ''), updatedAt: now,
+        createdAt: index >= 0 ? list[index].createdAt : now, date: now, publishedDate: now };
+      if (index >= 0 && String(list[index].autosaveOwner) !== String(admin.userId)) return sendJson(req,res,403,{error:'Draft access denied.'});
+      if (index >= 0) list[index] = saved; else list.unshift(saved);
+      await writeLocalDb(db);
+      return sendJson(req,res,200,{slug,status:'draft'});
+    } catch { return sendJson(req,res,503,{error:'Draft save failed.'}); }
+  }
+
   // API: Local Jobs
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const db = await readLocalDb();

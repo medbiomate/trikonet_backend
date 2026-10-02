@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 const cutoff = Date.parse('2026-10-01T18:30:00Z');
 export function emsJobPayload(job, creator) {
   if (!['publish','published','active'].includes(String(job.status).toLowerCase())) return null;
@@ -30,7 +31,7 @@ export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRE
       await ensure();
       await db.query(`INSERT INTO trikonet_ems_outbox (job_id,payload,revision) VALUES (?,?,?)
         ON DUPLICATE KEY UPDATE next_attempt_at=IF(revision<>VALUES(revision),0,next_attempt_at),payload=VALUES(payload),revision=VALUES(revision)`,
-        [payload.postId, JSON.stringify(payload), `created-at-v1:${payload.updatedAt}`]);
+        [payload.postId, JSON.stringify(payload), createHash('sha256').update(JSON.stringify(payload)).digest('hex')]);
       return true;
     },
     async flush() {

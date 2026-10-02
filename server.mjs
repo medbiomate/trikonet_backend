@@ -1,4 +1,5 @@
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
+import { createEmsSync } from './ems-sync.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
@@ -60,6 +61,7 @@ const dbConfig = process.env.TRIKONET_DB_HOST
     };
 
 const wpDb = mysql.createPool(dbConfig);
+const emsSync = createEmsSync(wpDb);
 const mediaStore = createMediaStore(wpDb);
 const jobViews = createJobViews(wpDb);
 
@@ -1473,11 +1475,19 @@ const server = http.createServer(async (req, res) => {
       if (existingIndex >= 0) job.updatedDate = formattedDate;
       else job.publishedDate = formattedDate;
       job.createdBy=jobCreator(existingIndex>=0?db.jobs[existingIndex]:null,admin);
+      const existingJob = existingIndex >= 0 ? db.jobs[existingIndex] : null;
+      if (job.createdBy && String(job.createdBy.id) === String(admin.userId)) job.createdBy.email = admin.email;
+      // Keep the first publication date stable when published jobs are edited.
+      job.emsFirstPublishedAt = existingJob?.emsFirstPublishedAt ||
+        (existingJob && ['publish','published','active'].includes(existingJob.status)
+          ? existingJob.createdAt : nowIso);
       job.updatedBy={id:String(admin.userId),name:String(admin.name || 'Administrator'),at:nowIso};
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
+      emsSync.queue(savedJob, savedJob.createdBy).then(() => emsSync.flush())
+        .catch(error => console.error('EMS sync queue failed:', error.message));
       return sendJson(req, res, 200, savedJob);
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
@@ -1685,3 +1695,21 @@ const seoRefreshTimer = setInterval(() => {
   seoRepository.list(true).catch(error => console.error('SEO page refresh failed:', error.message));
 }, 5 * 60 * 1000);
 seoRefreshTimer.unref();
+let emsScanRunning = false;
+async function refreshEmsUploads() {
+  if (emsScanRunning || !process.env.EMS_TRIKONET_SYNC_SECRET) return;
+  emsScanRunning = true;
+  try {
+    const state = await readLocalDb();
+    for (const job of state.jobs || []) {
+      if (!job.createdBy?.id) continue;
+      const user = (state.users || []).find(user => String(user.id) === String(job.createdBy.id));
+      await emsSync.queue(job, { ...job.createdBy, email: job.createdBy.email || user?.email });
+    }
+    await emsSync.flush();
+  } catch (error) { console.error('EMS upload sync failed:', error.message); }
+  finally { emsScanRunning = false; }
+}
+const emsSyncTimer = setInterval(refreshEmsUploads, 30000);
+emsSyncTimer.unref();
+void refreshEmsUploads();

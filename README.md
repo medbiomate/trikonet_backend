@@ -8,6 +8,28 @@ Backend API service and admin console for [Trikonet](https://trikonet.com), depl
 
 ## Features
 
+## EMS automatic job uploads
+
+Set `EMS_TRIKONET_SYNC_SECRET` in the backend environment to the Trikonet
+integration secret configured in EMS. Keep this server-only; do not place it in
+the frontend or commit its value. The existing EMS ingestion URL is
+`https://api.secondtales.com/api/wordpress/trikonet/uploads`; this is an HTTP
+endpoint and does not require WordPress.
+
+Jobs first published on or after October 2, 2026 (Asia/Kolkata) sync to their
+creator's EMS sheet using the creator's account email. Existing local jobs from
+that date onward are scanned automatically. Jobs without a known creator/email
+are skipped rather than attributed to an editor. Drafts and older published jobs
+are excluded. Each job's original publication date is retained for EMS on edits.
+
+The MySQL `trikonet_ems_outbox` table persists pending deliveries; failed sends
+retry with backoff. Publishing remains available during an EMS outage. Inspect
+`last_error`, `attempts`, and delivery revisions in that table to diagnose sync.
+Manual EMS sheets remain available. Automatic entries appear alongside manual
+rows; source URL assignments are not automatically matched to live URLs.
+
+Run `node --test ems-sync.test.mjs` to verify cutoff, payload and retry behavior.
+
 - **CORS Enabled**: Configured for `https://trikonet.com`, `https://www.trikonet.com`, and local development environments.
 - **REST API Endpoints**:
   - `GET /api/health` — Service health check.

@@ -11,7 +11,7 @@ export function emsJobPayload(job, creator) {
     companyName: String(job.company || job.companyName || ''),
     companyUrl: job.employerSlug ? `https://www.trikonet.com/employer/${encodeURIComponent(job.employerSlug)}/` : '',
     categories: (job.categories || []).map(value => typeof value === 'string' ? value : value.name).filter(Boolean),
-    location: String(job.location || ''), status: 'publish', uploadedAt: firstPublishedAt,
+    location: String(job.location || ''), status: 'publish', createdAt: new Date(job.createdAt || firstPublishedAt).toISOString(), uploadedAt: firstPublishedAt,
     updatedAt: job.updatedAt || firstPublishedAt
   };
 }
@@ -30,7 +30,7 @@ export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRE
       await ensure();
       await db.query(`INSERT INTO trikonet_ems_outbox (job_id,payload,revision) VALUES (?,?,?)
         ON DUPLICATE KEY UPDATE next_attempt_at=IF(revision<>VALUES(revision),0,next_attempt_at),payload=VALUES(payload),revision=VALUES(revision)`,
-        [payload.postId, JSON.stringify(payload), payload.updatedAt]);
+        [payload.postId, JSON.stringify(payload), `created-at-v1:${payload.updatedAt}`]);
       return true;
     },
     async flush() {

@@ -56,6 +56,8 @@ test('creatorless jobs use verified editor identity without rewriting creator or
  const actor=emsJobOperator(edited,[{id:'staff',email:'sajna@example.com'}]);
  assert.equal(actor.email,'sajna@example.com');
  assert.equal(emsJobPayload(edited,actor).uploaderEmail,'sajna@example.com');
+ assert.equal(emsJobPayload(edited,actor).activityType,'edited');
+ assert.equal(emsJobPayload({...edited,updatedBy:{...edited.updatedBy,at:'2026-10-02T06:00:00Z'}},actor).editedBy,'Sajna');
  assert.equal(edited.createdBy,null);
  assert.equal(emsJobPayload({...edited,emsFirstPublishedAt:'2026-09-01T00:00:00Z'},actor),null);
  assert.equal(emsJobOperator({...edited,createdBy:creator}).id,creator.id);

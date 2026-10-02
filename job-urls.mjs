@@ -5,7 +5,7 @@ export function slugPart(value) {
 export function generatedJobSlug(job, id) {
   if (!/^[1-9]\d*$/.test(String(id))) throw new Error('A permanent numeric job ID is required.');
   const location = Array.isArray(job.locations) ? job.locations[0] : job.location;
-  return [slugPart(job.title) || 'job', slugPart(location) || 'uae', slugPart(job.company || job.companyName || job.metas?._job_employer_name) || 'company', String(id)].join('-');
+  return [slugPart(job.title) || 'job', slugPart(location) || 'uae', slugPart(job.company || job.companyName || job.metas?._job_employer_name) || 'company'].join('-');
 }
 export function publicJobPath(job) { return job.publicPath || `/job/${encodeURIComponent(job.slug)}`; }
 export function applyJobUrl(job, existing, id, isAdmin) {
@@ -16,7 +16,7 @@ export function applyJobUrl(job, existing, id, isAdmin) {
     saved.publicPath = existing.publicPath || publicJobPath(existing);
     saved.slug = existing.slug;
     if (isAdmin && job.slug !== existing.slug) {
-      saved.slug = `${slugPart(job.slug).replace(new RegExp(`-${saved.urlJobId}$`), '') || 'job'}-${saved.urlJobId}`;
+      saved.slug = slugPart(job.slug) || 'job';
       saved.publicPath = `/jobs/${saved.slug}`;
     }
   } else {
@@ -25,4 +25,23 @@ export function applyJobUrl(job, existing, id, isAdmin) {
   }
   saved.urlAliases = [...new Set([...(existing?.urlAliases || []), ...(existing && existing.slug !== saved.slug ? [publicJobPath(existing)] : [])])];
   return saved;
+}
+
+export function uniqueJobSlug(base, records, currentId) {
+  const reserved = new Set(records.filter(job => String(job.id) !== String(currentId)).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path => path.split('/').pop())]));
+  let candidate = base, suffix = 0;
+  while (reserved.has(candidate)) candidate = `${base}-${++suffix}`;
+  return candidate;
+}
+export function shortenGeneratedJobUrls(records, imported = []) {
+  let changed = 0;
+  for (const job of records) {
+    if (!job.publicPath?.startsWith('/jobs/') || !/^1\d{9,}$/.test(String(job.urlJobId || '')) || !job.slug.endsWith(`-${job.urlJobId}`)) continue;
+    const previous = job.publicPath;
+    job.slug = uniqueJobSlug(job.slug.slice(0,-String(job.urlJobId).length-1),[...records,...imported],job.id);
+    job.publicPath = `/jobs/${job.slug}`;
+    job.urlAliases = [...new Set([...(job.urlAliases || []),previous])];
+    changed++;
+  }
+  return changed;
 }

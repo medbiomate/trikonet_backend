@@ -1,4 +1,4 @@
-import { applyJobUrl, publicJobPath } from './job-urls.mjs';
+import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { createEmsSync } from './ems-sync.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
@@ -1523,6 +1523,10 @@ const server = http.createServer(async (req, res) => {
       const identity = existingJob || { ...job, id:crypto.randomUUID() };
       job.id = identity.id;
       job = applyJobUrl(job, existingJob, await numericJobId(identity), admin.role === 'Administrator');
+      if (job.publicPath.startsWith('/jobs/') && (!existingJob || job.slug !== existingJob.slug)) {
+        job.slug = uniqueJobSlug(job.slug,[...db.jobs,...(memoryStore.jobs || [])],job.id);
+        job.publicPath = `/jobs/${job.slug}`;
+      }
       if (job.createdBy && String(job.createdBy.id) === String(admin.userId)) job.createdBy.email = admin.email;
       // Keep the first publication date stable when published jobs are edited.
       job.emsFirstPublishedAt = existingJob?.emsFirstPublishedAt ||
@@ -1744,6 +1748,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 await loadMemoryStore();
+const urlMigrationDb = await readLocalDb();
+if (shortenGeneratedJobUrls(urlMigrationDb.jobs || [],memoryStore.jobs || [])) await writeLocalDb(urlMigrationDb);
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);

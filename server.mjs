@@ -1523,6 +1523,8 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/api/local/employers' && (req.method === 'POST' || req.method === 'PUT')) {
     try {
+      const admin = await currentAdminSession(req);
+      if (!admin) return sendJson(req, res, 401, { error: 'Sign in to save employers.' });
       const employer = await readJsonBody(req);
       if (!employer.title?.trim() || !employer.slug?.trim()) {
         return sendJson(req, res, 400, { error: 'Employer name and slug are required' });
@@ -1534,12 +1536,23 @@ const server = http.createServer(async (req, res) => {
 
       const db = await readLocalDb();
       const index = db.employers.findIndex(item => item.slug === employer.originalSlug || item.slug === employer.slug);
+      const existing = index >= 0 ? db.employers[index] : null;
+      const nowIso = employer.updatedAt;
+      employer.id = existing?.id || crypto.randomUUID();
+      employer.createdAt = existing ? existing.createdAt : nowIso;
+      employer.createdBy = jobCreator(existing, admin);
+      if (employer.createdBy && String(employer.createdBy.id) === String(admin.userId)) employer.createdBy.email = admin.email;
+      employer.emsFirstPublishedAt = existing?.emsFirstPublishedAt ||
+        (existing && isPublicRecord(existing) ? existing.createdAt : nowIso);
+      employer.updatedBy = { id: String(admin.userId), name: String(admin.name || 'Administrator'), at: nowIso };
       delete employer.originalSlug;
 
       if (index >= 0) db.employers[index] = employer;
       else db.employers.unshift(employer);
 
       await writeLocalDb(db);
+      emsSync.queue(employer, employer.createdBy, 'company').then(() => emsSync.flush())
+        .catch(error => console.error('EMS employer sync queue failed:', error.message));
       return sendJson(req, res, 200, employer);
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
@@ -1705,6 +1718,11 @@ async function refreshEmsUploads() {
       if (!job.createdBy?.id) continue;
       const user = (state.users || []).find(user => String(user.id) === String(job.createdBy.id));
       await emsSync.queue(job, { ...job.createdBy, email: job.createdBy.email || user?.email });
+    }
+    for (const employer of state.employers || []) {
+      if (!employer.createdBy?.id) continue;
+      const user = (state.users || []).find(user => String(user.id) === String(employer.createdBy.id));
+      await emsSync.queue(employer, { ...employer.createdBy, email: employer.createdBy.email || user?.email }, 'company');
     }
     await emsSync.flush();
   } catch (error) { console.error('EMS upload sync failed:', error.message); }

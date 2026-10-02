@@ -17,6 +17,15 @@ export function emsJobPayload(job, creator) {
   };
 }
 
+export function emsEmployerPayload(employer, creator) {
+  if (employer.autosaved || String(employer.slug || '').startsWith('autosave-')) return null;
+  const payload = emsJobPayload({ ...employer, status: employer.status || 'publish', company: employer.title,
+    location: (employer.locations || []).join(', ') }, creator);
+  if (!payload) return null;
+  const url = `https://www.trikonet.com/employer/${encodeURIComponent(employer.slug)}/`;
+  return { ...payload, type: 'company', url, companyUrl: url };
+}
+
 export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRET, fetchImpl = fetch } = {}) {
   let ready, running = false;
   const ensure = () => ready ||= db.query(`CREATE TABLE IF NOT EXISTS trikonet_ems_outbox (
@@ -25,13 +34,13 @@ export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRE
     next_attempt_at BIGINT NOT NULL DEFAULT 0
   ) ENGINE=InnoDB`).catch(error => { ready = null; throw error; });
   return {
-    async queue(job, creator) {
-      const payload = emsJobPayload(job, creator);
+    async queue(job, creator, type = 'job') {
+      const payload = type === 'company' ? emsEmployerPayload(job, creator) : emsJobPayload(job, creator);
       if (!payload) return false;
       await ensure();
       await db.query(`INSERT INTO trikonet_ems_outbox (job_id,payload,revision) VALUES (?,?,?)
         ON DUPLICATE KEY UPDATE next_attempt_at=IF(revision<>VALUES(revision),0,next_attempt_at),payload=VALUES(payload),revision=VALUES(revision)`,
-        [payload.postId, JSON.stringify(payload), createHash('sha256').update(JSON.stringify(payload)).digest('hex')]);
+        [payload.type === 'company' ? `company:${payload.postId}` : payload.postId, JSON.stringify(payload), createHash('sha256').update(JSON.stringify(payload)).digest('hex')]);
       return true;
     },
     async flush() {

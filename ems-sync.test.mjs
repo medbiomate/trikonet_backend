@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emsJobPayload, createEmsSync } from './ems-sync.mjs';
+import { emsJobPayload, emsEmployerPayload, createEmsSync } from './ems-sync.mjs';
 const job = { id:'uuid-job', slug:'nurse', title:'Nurse', company:'Hospital', employerSlug:'hospital', categories:['Nursing'], status:'publish', createdAt:'2026-10-02T05:00:00Z', updatedAt:'2026-10-02T06:00:00Z' };
 const creator = { id:'user-uuid', email:'OPERATOR@example.com' };
 test('new coded jobs use stable IDs, matching email and live metadata', () => {
@@ -30,4 +30,23 @@ test('failed delivery remains pending; successful delivery marks the exact revis
   succeeds=true;
   await sync.flush();
   assert.ok(writes.some(write=>write.sql.includes('delivered_revision=?') && write.args[0]===job.updatedAt));
+});
+
+test('employers carry live URLs, original creation time and operator identity', () => {
+  const payload = emsEmployerPayload({...job, title:'Hospital', slug:'hospital', locations:['Dubai']}, creator);
+  assert.equal(payload.type, 'company');
+  assert.equal(payload.url, 'https://www.trikonet.com/employer/hospital/');
+  assert.equal(payload.companyName, 'Hospital');
+  assert.equal(Date.parse(payload.createdAt), Date.parse(job.createdAt));
+  assert.equal(payload.uploaderEmail, 'operator@example.com');
+  assert.equal(emsEmployerPayload({...job,status:'draft'}, creator), null);
+  assert.equal(emsEmployerPayload({...job,createdAt:'2026-10-01T00:00:00Z'}, creator), null);
+});
+test('employer and job outbox IDs cannot collide', async () => {
+  const writes=[];
+  const sync=createEmsSync({query:async(sql,args)=>{writes.push({sql,args});return [[]];}}, {secret:'test'});
+  await sync.queue(job,creator);
+  await sync.queue(job,creator,'company');
+  const ids=writes.filter(write=>write.sql.startsWith('INSERT')).map(write=>write.args[0]);
+  assert.deepEqual(ids,['uuid-job','company:uuid-job']);
 });

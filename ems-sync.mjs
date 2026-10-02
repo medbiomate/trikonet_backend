@@ -1,3 +1,4 @@
+import { publicJobPath } from './job-urls.mjs';
 import { createHash } from 'node:crypto';
 const cutoff = Date.parse('2026-10-01T18:30:00Z');
 export function emsJobPayload(job, creator) {
@@ -8,7 +9,7 @@ export function emsJobPayload(job, creator) {
   return {
     postId: String(job.id), type: 'job', uploaderId: String(creator.userId || creator.id),
     uploaderEmail: creator.email.trim().toLowerCase(), title: String(job.title || ''),
-    url: `https://www.trikonet.com/job/${encodeURIComponent(job.slug)}/`,
+    url: `https://www.trikonet.com${publicJobPath(job)}${job.publicPath ? "" : "/"}`,
     companyName: String(job.company || job.companyName || ''),
     companyUrl: job.employerSlug ? `https://www.trikonet.com/employer/${encodeURIComponent(job.employerSlug)}/` : '',
     categories: (job.categories || []).map(value => typeof value === 'string' ? value : value.name).filter(Boolean),

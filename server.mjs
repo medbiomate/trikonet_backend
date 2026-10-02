@@ -1,3 +1,4 @@
+import { applyJobUrl, publicJobPath } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { createEmsSync } from './ems-sync.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
@@ -62,6 +63,14 @@ const dbConfig = process.env.TRIKONET_DB_HOST
 
 const wpDb = mysql.createPool(dbConfig);
 const emsSync = createEmsSync(wpDb);
+async function numericJobId(job) {
+  if (job?.urlJobId) return job.urlJobId;
+  if (/^[1-9]\d*$/.test(String(job?.id || ''))) return String(job.id);
+  await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_job_url_ids (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, record_id VARCHAR(100) NOT NULL UNIQUE) ENGINE=InnoDB AUTO_INCREMENT=1000000000`);
+  await wpDb.query('INSERT IGNORE INTO trikonet_job_url_ids (record_id) VALUES (?)', [String(job.id)]);
+  const [rows] = await wpDb.query('SELECT id FROM trikonet_job_url_ids WHERE record_id=?', [String(job.id)]);
+  return String(rows[0].id);
+}
 const mediaStore = createMediaStore(wpDb);
 const jobViews = createJobViews(wpDb);
 
@@ -828,7 +837,7 @@ const server = http.createServer(async (req, res) => {
       if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
       const db = await readLocalDb();
       const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true }));
-      const options = { excludedSlugs: (db.jobs || []).map(job => job.slug).filter(Boolean) };
+      const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
       const remoteTotal = status === 'mine' ? 0 : await wordpressCount('job_listing', params, options);
       const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
       const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
@@ -1379,6 +1388,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       if (!['job','employer'].includes(body.type) || !/^[a-f0-9-]{36}$/.test(body.draftId || '')) return sendJson(req,res,400,{error:'Invalid draft.'});
       const record = body.record || {};
+      delete record.publicPath; delete record.urlJobId; delete record.urlAliases;
       if (body.type === 'job' && !String(record.title || '').trim() && !String(record.description || '').trim()) return sendJson(req,res,200,{skipped:true});
       if (!String(record.title || '').trim() && body.type !== 'job') return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
       if (body.type === 'job' && !String(record.title || '').trim()) record.title = 'Untitled job';
@@ -1428,6 +1438,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   // API: Local Jobs
+  if (path === '/api/job-url' && req.method === 'GET') {
+    const requested = requestUrl.searchParams.get('path') || '';
+    const match = requested.match(/^\/(job|jobs)\/([a-z0-9_-]+)\/?$/i);
+    if (!match) return sendJson(req,res,404,{error:'Job not found'});
+    const db = await readLocalDb();
+    const suffix = match[2].match(/-(\d+)$/)?.[1];
+    let job = db.jobs.find(item => publicJobPath(item) === requested.replace(/\/$/,'') || (item.urlAliases || []).includes(requested.replace(/\/$/,'')) || item.slug === match[2] || (match[1] === 'jobs' && suffix && String(item.urlJobId) === suffix));
+    if (!job) {
+      let records;
+      try { records = await wordpressRecords('job_listing',new URLSearchParams({slug:match[2],per_page:'1'}),{excludedSlugs:[]}); }
+      catch(error) { if(error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); records = fallbackRecords('job_listing',new URLSearchParams({slug:match[2]})); }
+      job = records[0];
+    }
+    if (!job || !isPublicRecord(job)) return sendJson(req,res,404,{error:'Job not found'});
+    return sendJson(req,res,200,{slug:job.slug,publicPath:publicJobPath(job),job});
+  }
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
@@ -1448,7 +1474,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const admin=await currentAdminSession(req);
       if(!admin)return sendJson(req,res,401,{error:'Sign in to save jobs.'});
-      const job = await readJsonBody(req);
+      let job = await readJsonBody(req);
       if (!job.title?.trim() || !job.slug?.trim()) {
         return sendJson(req, res, 400, { error: 'Title and slug are required' });
       }
@@ -1470,12 +1496,22 @@ const server = http.createServer(async (req, res) => {
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await readLocalDb();
-      const existingIndex = findJobIndex(db.jobs, job);
+      let existingIndex = findJobIndex(db.jobs, job);
+      if (existingIndex < 0 && (job.originalSlug || job.id)) {
+        let records;
+        const params = new URLSearchParams(job.originalSlug ? {slug:job.originalSlug,per_page:'1'} : {id:String(job.id),per_page:'1'});
+        try { records = await wordpressRecords('job_listing',params,{excludedSlugs:[]}); }
+        catch(error) { if(error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); records = fallbackRecords('job_listing',params); }
+        if (records[0]) { db.jobs.push(records[0]); existingIndex = db.jobs.length - 1; }
+      }
       job.date = formattedDate;
       if (existingIndex >= 0) job.updatedDate = formattedDate;
       else job.publishedDate = formattedDate;
       job.createdBy=jobCreator(existingIndex>=0?db.jobs[existingIndex]:null,admin);
       const existingJob = existingIndex >= 0 ? db.jobs[existingIndex] : null;
+      const identity = existingJob || { ...job, id:crypto.randomUUID() };
+      job.id = identity.id;
+      job = applyJobUrl(job, existingJob, await numericJobId(identity), admin.role === 'Administrator');
       if (job.createdBy && String(job.createdBy.id) === String(admin.userId)) job.createdBy.email = admin.email;
       // Keep the first publication date stable when published jobs are edited.
       job.emsFirstPublishedAt = existingJob?.emsFirstPublishedAt ||

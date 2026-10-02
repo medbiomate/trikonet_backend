@@ -1,6 +1,6 @@
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
-import { createEmsSync } from './ems-sync.mjs';
+import { createEmsSync, emsJobOperator } from './ems-sync.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
@@ -1532,12 +1532,12 @@ const server = http.createServer(async (req, res) => {
       job.emsFirstPublishedAt = existingJob?.emsFirstPublishedAt ||
         (existingJob && ['publish','published','active'].includes(existingJob.status)
           ? existingJob.createdAt : nowIso);
-      job.updatedBy={id:String(admin.userId),name:String(admin.name || 'Administrator'),at:nowIso};
+      job.updatedBy={id:String(admin.userId),name:String(admin.name || 'Administrator'),email:admin.email,at:nowIso};
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
-      emsSync.queue(savedJob, savedJob.createdBy).then(() => emsSync.flush())
+      emsSync.queue(savedJob, emsJobOperator(savedJob, db.users || [])).then(() => emsSync.flush())
         .catch(error => console.error('EMS sync queue failed:', error.message));
       return sendJson(req, res, 200, savedJob);
     } catch (error) {
@@ -1768,9 +1768,9 @@ async function refreshEmsUploads() {
   try {
     const state = await readLocalDb();
     for (const job of state.jobs || []) {
-      if (!job.createdBy?.id) continue;
-      const user = (state.users || []).find(user => String(user.id) === String(job.createdBy.id));
-      await emsSync.queue(job, { ...job.createdBy, email: job.createdBy.email || user?.email });
+      const operator = emsJobOperator(job, state.users || []);
+      if (!operator?.email) continue;
+      await emsSync.queue(job, operator);
     }
     for (const employer of state.employers || []) {
       if (!employer.createdBy?.id) continue;

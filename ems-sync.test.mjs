@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emsJobPayload, emsEmployerPayload, createEmsSync } from './ems-sync.mjs';
+import { emsJobPayload, emsEmployerPayload, createEmsSync, emsJobOperator } from './ems-sync.mjs';
 const job = { id:'uuid-job', slug:'nurse', title:'Nurse', company:'Hospital', employerSlug:'hospital', categories:['Nursing'], status:'publish', createdAt:'2026-10-02T05:00:00Z', updatedAt:'2026-10-02T06:00:00Z' };
 const creator = { id:'user-uuid', email:'OPERATOR@example.com' };
 test('new coded jobs use stable IDs, matching email and live metadata', () => {
@@ -49,4 +49,14 @@ test('employer and job outbox IDs cannot collide', async () => {
   await sync.queue(job,creator,'company');
   const ids=writes.filter(write=>write.sql.startsWith('INSERT')).map(write=>write.args[0]);
   assert.deepEqual(ids,['uuid-job','company:uuid-job']);
+});
+
+test('creatorless jobs use verified editor identity without rewriting creator or importing old jobs', () => {
+ const edited={...job,createdBy:null,updatedBy:{id:'staff',name:'Sajna'}};
+ const actor=emsJobOperator(edited,[{id:'staff',email:'sajna@example.com'}]);
+ assert.equal(actor.email,'sajna@example.com');
+ assert.equal(emsJobPayload(edited,actor).uploaderEmail,'sajna@example.com');
+ assert.equal(edited.createdBy,null);
+ assert.equal(emsJobPayload({...edited,emsFirstPublishedAt:'2026-09-01T00:00:00Z'},actor),null);
+ assert.equal(emsJobOperator({...edited,createdBy:creator}).id,creator.id);
 });

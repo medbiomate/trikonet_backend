@@ -2,6 +2,7 @@ import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
 import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
 import http from 'node:http';
+import { createJobViews } from './job-views.mjs';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +61,7 @@ const dbConfig = process.env.TRIKONET_DB_HOST
 
 const wpDb = mysql.createPool(dbConfig);
 const mediaStore = createMediaStore(wpDb);
+const jobViews = createJobViews(wpDb);
 
 // In-memory dataset cache for complete database resilience
 const memoryStore = {
@@ -792,6 +794,29 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/') || path.startsWith('/admin')) res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
 
+  if (path === '/api/job-view' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const slug = String(body.slug || '');
+      if (!/^[a-z0-9][a-z0-9-]{0,190}$/.test(slug)) return sendJson(req,res,400,{error:'Invalid job slug.'});
+      if (/bot|crawler|spider|headless/i.test(req.headers['user-agent'] || '') || await currentAdminSession(req)) return sendJson(req,res,200,{ok:true});
+      const db = await readLocalDb();
+      let job = (db.jobs || []).find(item => item.slug === slug);
+      if (!job) {
+        try { job = (await wordpressRecords('job_listing',new URLSearchParams({slug,per_page:'1'})))[0]; }
+        catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); job = (memoryStore.jobs || []).find(item => item.slug === slug); }
+      }
+      if (!job || !isPublicRecord(job)) return sendJson(req,res,404,{error:'Published job not found.'});
+      await jobViews.record(slug);
+      return sendJson(req,res,200,{ok:true});
+    } catch { return sendJson(req,res,503,{error:'View tracking temporarily unavailable.'}); }
+  }
+  if (path === '/api/admin/job-views' && req.method === 'GET') {
+    if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Administrator authentication required.'});
+    const slugs = (requestUrl.searchParams.get('slugs') || '').split(',').filter(slug => /^[a-z0-9][a-z0-9-]{0,190}$/.test(slug)).slice(0,100);
+    try { return sendJson(req,res,200,await jobViews.counts(slugs)); }
+    catch { return sendJson(req,res,503,{error:'View counts temporarily unavailable.'}); }
+  }
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });

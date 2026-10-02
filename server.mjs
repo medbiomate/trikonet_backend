@@ -832,24 +832,35 @@ const server = http.createServer(async (req, res) => {
     const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
     try {
-      const params = requestUrl.searchParams;
+      const params = new URLSearchParams(requestUrl.searchParams);
+      params.set('_owner_id', String(admin.userId));
+      params.set('_owner_email', admin.email || '');
       const status = params.get('status') || 'all';
       if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
       const db = await readLocalDb();
       const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true }));
       const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
+      const counts = Object.fromEntries(await Promise.all(['all','publish','draft','pending','expired','mine'].map(async tab => {
+        const countParams = new URLSearchParams({ status:tab, _owner_id:String(admin.userId), _owner_email:admin.email || '' });
+        const localCount = (db.jobs || []).filter(job => localJobMatches(job,countParams)).length;
+        return [tab,localCount + (tab === 'mine' ? 0 : await wordpressCount('job_listing',countParams,options))];
+      })));
       const remoteTotal = status === 'mine' ? 0 : await wordpressCount('job_listing', params, options);
       const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
       const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
       const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
-      return sendJson(req, res, 200, { jobs: [...plan.local, ...remote], total: plan.total, page: plan.page, perPage: size });
+      return sendJson(req, res, 200, { jobs: [...plan.local, ...remote], total: plan.total, page: plan.page, perPage: size, counts });
     } catch (error) {
       if (error.code === 'ER_NO_SUCH_TABLE') {
         try {
           await loadMemoryStore();
           const db = await readLocalDb();
           if (!Array.isArray(memoryStore.jobs)) throw new Error('Imported jobs unavailable');
-          return sendJson(req, res, 200, importedJobPage(memoryStore.jobs, db.jobs || [], requestUrl.searchParams));
+          const params = new URLSearchParams(requestUrl.searchParams);
+          params.set('_owner_id',String(admin.userId));
+          params.set('_owner_email',admin.email || '');
+          const counts = Object.fromEntries(['all','publish','draft','pending','expired','mine'].map(status => [status,importedJobPage(memoryStore.jobs,db.jobs || [],new URLSearchParams({status,_owner_id:String(admin.userId),_owner_email:admin.email || ''})).total]));
+          return sendJson(req, res, 200, {...importedJobPage(memoryStore.jobs, db.jobs || [], params), counts});
         } catch (fallbackError) {
           console.error(JSON.stringify({ event: 'admin_jobs_import_failed', code: fallbackError.code || fallbackError.name }));
         }

@@ -7,7 +7,13 @@ export function adminJobConditions(where, values, params, excludedSlugs = []) {
 
 export function localJobMatches(job, params) {
   const status = params.get('status') || 'all';
-  const normalized = job.status === 'active' || !job.status ? 'publish' : job.status;
+  const normalized = ['active', 'published', 'publish', ''].includes(job.status || '') ? 'publish' : job.status;
+  if (!['publish', 'draft', 'pending', 'expired'].includes(normalized)) return false;
+  if (status === 'mine') {
+    const ownerId = params.get('_owner_id');
+    const ownerEmail = params.get('_owner_email');
+    if (!((ownerId && String(job.createdBy?.id) === ownerId) || (ownerEmail && String(job.createdBy?.email || '').toLowerCase() === ownerEmail.toLowerCase()))) return false;
+  }
   if (status !== 'all' && status !== 'mine' && normalized !== status) return false;
   const q = (params.get('q') || '').trim().toLowerCase();
   if (q && !`${job.title || ''} ${job.company || ''} ${(job.categories || []).join(' ')}`.toLowerCase().includes(q)) return false;

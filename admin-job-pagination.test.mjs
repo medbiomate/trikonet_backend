@@ -18,11 +18,11 @@ test('migrated jobs paginate, filter and preserve local overrides without WordPr
   assert.equal(page.total, 45);
   assert.equal(page.jobs.length, 20);
   assert.equal(page.page, 2);
-  const override = { slug: 'job-1', title: 'Updated', status: 'draft' };
+  const override = { slug: 'job-1', title: 'Updated', status: 'draft', createdBy: {id:'alice'} };
   const draft = importedJobPage(imported, [override], new URLSearchParams({ status: 'draft' }));
   assert.equal(draft.total, 1);
   assert.equal(draft.jobs[0].local, true);
-  assert.equal(importedJobPage(imported, [override], new URLSearchParams({ status: 'mine' })).total, 1);
+  assert.equal(importedJobPage(imported, [override], new URLSearchParams({ status: 'mine', _owner_id:'alice' })).total, 1);
 });
 
 test('each page requests only its 20 rows', () => {
@@ -68,4 +68,11 @@ test('record query honors the admin offset without changing public pagination', 
   await context.wordpressRecords('job_listing', new URLSearchParams({ per_page: '20', page: '4' }));
   assert.deepEqual(Array.from(calls[1].values.slice(-2)), [20, 60]);
   assert.match(calls[1].sql, /post_status = 'publish'/);
+});
+
+test('Mine requires the actual creator and excludes trash from every tab', () => {
+ const job={status:'publish',createdBy:{id:'alice',email:'alice@example.com'}};
+ assert.equal(localJobMatches(job,new URLSearchParams({status:'mine',_owner_id:'bob'})),false);
+ assert.equal(localJobMatches(job,new URLSearchParams({status:'mine',_owner_id:'alice'})),true);
+ assert.equal(localJobMatches({...job,status:'trash'},new URLSearchParams({status:'all'})),false);
 });

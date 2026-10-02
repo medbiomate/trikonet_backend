@@ -12,7 +12,10 @@ test('new publication generates canonical path and freezes it during content edi
  assert.equal(publicJobPath(first),'/jobs/senior-accountant-finance-dubai-al-futtaim');
  const edited=applyJobUrl({...first,title:'Chief Accountant',company:'Other'},first,999,false);
  assert.equal(edited.publicPath,first.publicPath);assert.equal(edited.urlJobId,18345);
- assert.throws(()=>applyJobUrl({...first,slug:'new'},first,18345,false),/administrators/);
+ const protectedEdit=applyJobUrl({...first,slug:'new'},first,18345,false);
+ assert.equal(protectedEdit.slug,first.slug);
+ assert.equal(protectedEdit.publicPath,first.publicPath);
+ assert.equal(applyJobUrl({...first,slug:''},first,18345,false).slug,first.slug);
 });
 test('legacy URLs stay canonical until administrator changes URL; aliases go directly to current',()=>{
  const old={...job,id:18345};

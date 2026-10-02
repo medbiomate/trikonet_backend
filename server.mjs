@@ -1486,10 +1486,10 @@ const server = http.createServer(async (req, res) => {
       const admin=await currentAdminSession(req);
       if(!admin)return sendJson(req,res,401,{error:'Sign in to save jobs.'});
       let job = await readJsonBody(req);
-      if (!job.title?.trim() || !job.slug?.trim()) {
-        return sendJson(req, res, 400, { error: 'Title and slug are required' });
+      if (!job.title?.trim()) {
+        return sendJson(req, res, 400, { error: 'Job title is required' });
       }
-      job.slug = job.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      job.slug = String(job.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
       const nowIso = new Date().toISOString();
       job.createdAt = job.createdAt || nowIso;
       job.updatedAt = nowIso;

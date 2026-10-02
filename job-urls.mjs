@@ -11,7 +11,6 @@ export function publicJobPath(job) { return job.publicPath || `/job/${encodeURIC
 export function applyJobUrl(job, existing, id, isAdmin) {
   const saved = { ...job, urlJobId: existing?.urlJobId || id };
   const published = existing && !existing.autosaved && ['publish','published','active',''].includes(String(existing.status || '').toLowerCase());
-  if (published && !isAdmin && job.slug !== existing.slug) throw new Error('Only administrators can change a published job URL.');
   if (published) {
     saved.publicPath = existing.publicPath || publicJobPath(existing);
     saved.slug = existing.slug;

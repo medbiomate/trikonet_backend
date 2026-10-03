@@ -62,3 +62,20 @@ test('creatorless jobs use verified editor identity without rewriting creator or
  assert.equal(emsJobPayload({...edited,emsFirstPublishedAt:'2026-09-01T00:00:00Z'},actor),null);
  assert.equal(emsJobOperator({...edited,createdBy:creator}).id,creator.id);
 });
+
+test('existing creators do not hide their next-day editing activity', () => {
+ const edited={...job,createdBy:{id:'sajna',name:'Sajna'},updatedBy:{id:'hasna',name:'Hasna',at:'2026-10-03T04:50:22Z'}};
+ const payload=emsJobPayload(edited,creator);
+ assert.equal(payload.activityType,'edited');
+ assert.equal(Date.parse(payload.createdAt),Date.parse(job.createdAt));
+ assert.equal(payload.editedAt,'2026-10-03T04:50:22Z');
+ assert.equal(payload.editedBy,'Hasna');
+ assert.equal(payload.uploaderEmail,'operator@example.com');
+});
+test('first publication of yesterday draft is created activity on its publication day', () => {
+ const published={...job,createdBy:creator,emsFirstPublishedAt:'2026-10-03T04:23:02Z',updatedBy:{name:'Hasna',at:'2026-10-03T04:23:02Z'}};
+ const payload=emsJobPayload(published,creator);
+ assert.equal(payload.activityType,'created');
+ assert.equal(payload.uploadedAt,'2026-10-03T04:23:02Z');
+ assert.equal(Date.parse(payload.createdAt),Date.parse(job.createdAt));
+});

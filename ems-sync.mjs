@@ -20,7 +20,7 @@ export function emsJobPayload(job, creator) {
     companyUrl: job.employerSlug ? `https://www.trikonet.com/employer/${encodeURIComponent(job.employerSlug)}/` : '',
     categories: (job.categories || []).map(value => typeof value === 'string' ? value : value.name).filter(Boolean),
     location: String(job.location || ''), status: 'publish', createdAt: new Date(job.createdAt || firstPublishedAt).toISOString(), uploadedAt: firstPublishedAt,
-    activityType: job.createdBy ? 'created' : 'edited',
+    activityType: !job.createdBy || Date.parse(job.updatedBy?.at || '') > Date.parse(firstPublishedAt) ? 'edited' : 'created',
     ...(job.updatedBy?.name && job.updatedBy?.at ? { editedBy: job.updatedBy.name, editedAt: job.updatedBy.at } : {}),
     updatedAt: job.updatedAt || firstPublishedAt
   };

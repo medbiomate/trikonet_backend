@@ -1,3 +1,4 @@
+import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
@@ -1257,6 +1258,12 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req, res, 200, { ok: true });
   }
 
+  if(path==='/api/candidate/resume'){
+    const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your resume.'});const db=await readLocalDb();const user=db.users.find(item=>String(item.id)===String(session.userId));if(!user)return sendJson(req,res,401,{error:'Account not found.'});
+    if(req.method==='GET')return sendJson(req,res,200,{success:true,resume:user.uploadedResume||null});
+    if(req.method==='POST'){try{user.uploadedResume=candidateFile(await readJsonBody(req,14_000_000));await writeLocalDb(db);return sendJson(req,res,200,{success:true,resume:user.uploadedResume})}catch(error){return sendJson(req,res,400,{error:error.message})}}
+    if(req.method==='DELETE'){delete user.uploadedResume;await writeLocalDb(db);return sendJson(req,res,200,{success:true})}
+  }
   if(['/api/candidate/email/request','/api/candidate/email/verify'].includes(path)&&req.method==='POST'){
     try{const [status,data]=await emailChange(path.endsWith('/request')?'request':'verify',currentSession(req),await readJsonBody(req));return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Email verification is temporarily unavailable.'})}
   }

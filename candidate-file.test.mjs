@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {candidateFile} from './candidate-file.mjs';
+test('uploaded file size is derived from content and cannot carry a user ID',()=>{const result=candidateFile({name:'resume.txt',type:'text/plain',base64:Buffer.from('Resume').toString('base64'),size:900,userId:'other'},100);assert.equal(result.size,6);assert.equal(result.userId,undefined);assert.equal(result.updatedAt,100)});
+test('reject invalid file content and file types',()=>{assert.throws(()=>candidateFile({name:'file',type:'text/html',base64:'YWJj'}));assert.throws(()=>candidateFile({name:'file',type:'application/pdf',base64:'bad@@@'}))});

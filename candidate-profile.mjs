@@ -13,3 +13,10 @@ export function calculateCandidateCompletion(p) {
   const filled = value => Array.isArray(value) ? value.some(item => String(item).trim()) : Boolean(String(value || '').trim());
   return Math.round(values.filter(filled).length / values.length * 100);
 }
+
+export function grantProfileCompletionReward(user){
+ if(calculateCandidateCompletion({...user.profile,name:user.name,email:user.email})!==100)return false;
+ const wallet=user.resumeRewards ||= {points:0,challenges:[],transactions:[],downloads:[]};
+ if(wallet.profileCompletionRewardGranted)return false;
+ wallet.points+=10;wallet.profileCompletionRewardGranted=true;return true;
+}

@@ -1,3 +1,4 @@
+import {grantProfileCompletionReward} from './candidate-profile.mjs';
 import crypto from 'node:crypto';
 export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=Date.now}){
  let keys={},keysAt=0,queue=Promise.resolve();
@@ -10,6 +11,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    const w=wallet(user);
    // One-time account credit explicitly requested by the owner.
    if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;await writeLocalDb(db);}
+   if(grantProfileCompletionReward(user))await writeLocalDb(db);
    if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[]}];
    if(body.action==='reveal-email'){
     const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];

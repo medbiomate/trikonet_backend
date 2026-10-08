@@ -38,3 +38,9 @@ test('requested owner balance is initialized to 100 only once',async()=>{
  await service.account(session,'POST',{action:'download'});
  assert.equal((await service.account(session,'GET'))[1].points,95);
 });
+test('profile completion earns ten points only once',async()=>{
+ let db={users:[{id:'complete',name:'Candidate',email:'candidate@example.com',profile:{phone:'1',currentLocation:'Dubai',role:'Developer',experience:'2 years',qualification:'Degree',category:'IT',skills:'JavaScript',locations:['Dubai']}}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
+ assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
+ assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
+});

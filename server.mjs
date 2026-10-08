@@ -2,7 +2,7 @@ import {createAdmobRewards} from './admob-rewards.mjs';
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
-import {updateCandidateProfile,calculateCandidateCompletion} from './candidate-profile.mjs';
+import {updateCandidateProfile,calculateCandidateCompletion,grantProfileCompletionReward} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
@@ -1297,7 +1297,7 @@ const server = http.createServer(async (req, res) => {
         } else {
           applyAccountProfile(user,body,updateCandidateProfile);
         }
-        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
+        grantProfileCompletionReward(user);await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
     }
   }

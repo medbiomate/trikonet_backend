@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import {createAdmobRewards} from './admob-rewards.mjs';
 test('verified reward credits five once; download charges five and failure refunds once',async()=>{
  const {publicKey,privateKey}=crypto.generateKeyPairSync('ec',{namedCurve:'prime256v1'});
- let db={users:[{id:'stable-user',name:'Candidate'}]};
+ let db={users:[{id:'stable-user',name:'Candidate',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value},fetcher:async()=>({ok:true,json:async()=>({keys:[{keyId:1,pem:publicKey.export({type:'spki',format:'pem'})}]})})});
  const session={userId:'stable-user'};
  assert.equal((await service.account(session,'POST',{action:'download'}))[0],402);
@@ -22,7 +22,7 @@ test('verified reward credits five once; download charges five and failure refun
  assert.equal((await service.account(null,'GET'))[0],401);
 });
 test('first five email reveals are free, later reveals cost one once',async()=>{
- let db={users:[{id:'u',resumeRewards:{points:20,challenges:[],transactions:[],downloads:[]}}]};
+ let db={users:[{id:'u',resumeRewards:{points:20,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
  const session={userId:'u'};
  for(let i=0;i<5;i++)assert.equal((await service.account(session,'POST',{action:'reveal-email',email:`contact${i}@example.com`}))[0],200);
@@ -31,7 +31,7 @@ test('first five email reveals are free, later reveals cost one once',async()=>{
  assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'extra@example.com'}))[1].points,19);
 });
 test('requested owner balance is initialized to 100 only once',async()=>{
- let db={users:[{id:'owner',email:'saneensane007@gmail.com'}]};
+ let db={users:[{id:'owner',email:'saneensane007@gmail.com',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
  const session={userId:'owner'};
  assert.equal((await service.account(session,'GET'))[1].points,100);
@@ -39,8 +39,17 @@ test('requested owner balance is initialized to 100 only once',async()=>{
  assert.equal((await service.account(session,'GET'))[1].points,95);
 });
 test('profile completion earns ten points only once',async()=>{
- let db={users:[{id:'complete',name:'Candidate',email:'candidate@example.com',profile:{phone:'1',currentLocation:'Dubai',role:'Developer',experience:'2 years',qualification:'Degree',category:'IT',skills:'JavaScript',locations:['Dubai']}}]};
+ let db={users:[{id:'complete',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]},name:'Candidate',email:'candidate@example.com',profile:{phone:'1',currentLocation:'Dubai',role:'Developer',experience:'2 years',qualification:'Degree',category:'IT',skills:'JavaScript',locations:['Dubai']}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
  assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
  assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
+});
+
+test('welcome bonus earns ten points once per account',async()=>{
+ let db={users:[{id:'new-user',email:'new@example.com'}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
+ const session={userId:'new-user'};
+ assert.equal((await service.account(session,'GET'))[1].points,10);
+ await service.account(session,'POST',{action:'download'});
+ assert.equal((await service.account(session,'GET'))[1].points,5);
 });

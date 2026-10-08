@@ -11,6 +11,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    const w=wallet(user);
    // One-time account credit explicitly requested by the owner.
    if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;await writeLocalDb(db);}
+   if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
    if(grantProfileCompletionReward(user))await writeLocalDb(db);
    if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[]}];
    if(body.action==='reveal-email'){

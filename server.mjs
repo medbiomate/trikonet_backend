@@ -992,7 +992,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (['/api/auth/forgot-password','/api/auth/reset-password'].includes(path) && req.method === 'POST') {
+  if (['/api/auth/forgot-password','/api/auth/verify-reset-code','/api/auth/reset-password'].includes(path) && req.method === 'POST') {
     try { const body=await readJsonBody(req);const [status,payload]=await passwordReset(path,body,req.socket.remoteAddress||'unknown');return sendJson(req,res,status,payload); }
     catch { return sendJson(req,res,503,{error:'Password reset email is temporarily unavailable. Please try again later.'}); }
   }

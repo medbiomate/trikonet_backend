@@ -15,9 +15,15 @@ export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessi
   }
   const challenge=String(body.challenge||'');const item=challenges.get(challenge);
   if(!item||item.expires<=now()||item.email!==email||item.attempts>=5)return [400,{error:'This reset code has expired. Request a new code.'}];
+  if(item.verified&&path==='/api/auth/verify-reset-code')return [400,{error:'Request a new code.'}];
   item.attempts++;
   const hash=digest(challenge+String(body.otp||''));
-  if(!crypto.timingSafeEqual(Buffer.from(hash),Buffer.from(item.hash))||!item.userId)return [400,{error:'Invalid reset code. Check the code and try again.'}];
+  if((!item.verified&&!crypto.timingSafeEqual(Buffer.from(hash),Buffer.from(item.hash)))||!item.userId)return [400,{error:'Invalid reset code. Check the code and try again.'}];
+  if(path==='/api/auth/verify-reset-code'){
+   challenges.delete(challenge);const verifiedChallenge=crypto.randomBytes(32).toString('hex');
+   challenges.set(verifiedChallenge,{...item,verified:true,attempts:0});
+   return [200,{success:true,challenge:verifiedChallenge,message:'Code verified. Choose your new password.'}];
+  }
   const password=String(body.new_password||'');if(password.length<8||password.length>256)return [400,{error:'Use a password between 8 and 256 characters.'}];
   // Consume before awaiting storage to prevent concurrent replay.
   challenges.delete(challenge);const db=await readLocalDb();const user=db.users.find(user=>user.id===item.userId);if(!user)return [400,{error:'Unable to reset this account.'}];

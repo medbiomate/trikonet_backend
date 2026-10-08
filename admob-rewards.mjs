@@ -8,7 +8,14 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!session)return[401,{error:'Sign in to use resume points.'}];
    const db=await readLocalDb(),user=db.users.find(u=>String(u.id)===String(session.userId));if(!user)return[401,{error:'Account not found.'}];
    const w=wallet(user);
-   if(method==='GET')return[200,{points:w.points}];
+   if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[]}];
+   if(body.action==='reveal-email'){
+    const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];
+    w.emailReveals ||= [];if(w.emailReveals.includes(email))return[200,{points:w.points,emailReveals:w.emailReveals}];
+    if(w.emailReveals.length>=10)return[403,{error:'Your account has reached its 10-email lifetime limit.'}];
+    if(w.points<1)return[402,{error:'Watch an ad to earn points. Each email reveal costs 1 point.'}];
+    w.points-=1;w.emailReveals.push(email);await writeLocalDb(db);return[200,{points:w.points,emailReveals:w.emailReveals}];
+   }
    if(body.action==='prepare'){
     w.challenges=w.challenges.filter(c=>c.expires>now());
     if(w.challenges.length>=10)return[429,{error:'Please finish your current ad or try again later.'}];

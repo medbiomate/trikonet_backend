@@ -1,3 +1,4 @@
+import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
@@ -995,6 +996,18 @@ const server = http.createServer(async (req, res) => {
   if (['/api/auth/forgot-password','/api/auth/verify-reset-code','/api/auth/reset-password'].includes(path) && req.method === 'POST') {
     try { const body=await readJsonBody(req);const [status,payload]=await passwordReset(path,body,req.socket.remoteAddress||'unknown');return sendJson(req,res,status,payload); }
     catch { return sendJson(req,res,503,{error:'Password reset email is temporarily unavailable. Please try again later.'}); }
+  }
+
+  if(path==='/api/auth/google-config'&&req.method==='GET')return sendJson(req,res,200,{clientId:process.env.GOOGLE_CLIENT_ID||null});
+  if(path==='/api/auth/google'&&req.method==='POST'){
+    try {
+      const body=await readJsonBody(req);
+      const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
+      const user=await googleAccount(identity,{readLocalDb,writeLocalDb});
+      const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
+      res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
+      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email}});
+    }catch{return sendJson(req,res,401,{error:'Google sign-in could not be completed. Please try your email and password.'});}
   }
 
   // API: Auth Register

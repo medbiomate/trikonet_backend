@@ -1385,7 +1385,7 @@ const server = http.createServer(async (req, res) => {
     const user=(db.users || []).find(u=>String(u.id)===id && isCandidateAccount(u));
     const candidate=(db.candidates || []).find(c=>String(c.id)===id);
     if(!user && !candidate)return sendJson(req,res,404,{error:'Candidate not found'});
-    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:user?.name||candidate?.name,email:user?.email||candidate?.email,createdAt:user?.createdAt||candidate?.createdAt},account:{id:user?.id,username:user?.username || user?.name,email:user?.email,createdAt:user?.createdAt},submittedProfile:user?.profile || {},activity:user?.memberActivity || {},applications:(db.applications || []).filter(a=>String(a.userId)===id || (user?.email && a.email===user.email)),resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
+    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:user?.name||candidate?.name,email:user?.email||candidate?.email,createdAt:user?.createdAt||candidate?.createdAt},account:{...(admin.role==='Administrator'?{id:user?.id}:{}),username:user?.username || user?.name,email:user?.email,createdAt:user?.createdAt},submittedProfile:user?.profile || {},activity:user?.memberActivity || {},applications:(db.applications || []).filter(a=>String(a.userId)===id || (user?.email && a.email===user.email)),resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
   }
   if (['/api/admin/candidates', '/api/local/candidates'].includes(path) && req.method === 'GET') {
     const admin = await currentAdminSession(req);

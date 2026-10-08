@@ -21,12 +21,12 @@ test('verified reward credits five once; download charges five and failure refun
  assert.equal((await service.callback(url.replace('reward_amount=5','reward_amount=50')))[0],403);
  assert.equal((await service.account(null,'GET'))[0],401);
 });
-test('email reveals charge once and enforce ten total per account',async()=>{
+test('first ten email reveals are free, later reveals cost one once',async()=>{
  let db={users:[{id:'u',resumeRewards:{points:20,challenges:[],transactions:[],downloads:[]}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
  const session={userId:'u'};
  for(let i=0;i<10;i++)assert.equal((await service.account(session,'POST',{action:'reveal-email',email:`contact${i}@example.com`}))[0],200);
- assert.equal((await service.account(session,'GET'))[1].points,10);
- assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'contact0@example.com'}))[1].points,10);
- assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'extra@example.com'}))[0],403);
+ assert.equal((await service.account(session,'GET'))[1].points,20);
+ assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'contact0@example.com'}))[1].points,20);
+ assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'extra@example.com'}))[1].points,19);
 });

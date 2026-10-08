@@ -12,9 +12,9 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(body.action==='reveal-email'){
     const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];
     w.emailReveals ||= [];if(w.emailReveals.includes(email))return[200,{points:w.points,emailReveals:w.emailReveals}];
-    if(w.emailReveals.length>=10)return[403,{error:'Your account has reached its 10-email lifetime limit.'}];
-    if(w.points<1)return[402,{error:'Watch an ad to earn points. Each email reveal costs 1 point.'}];
-    w.points-=1;w.emailReveals.push(email);await writeLocalDb(db);return[200,{points:w.points,emailReveals:w.emailReveals}];
+    const cost=w.emailReveals.length<10?0:1;
+    if(w.points<cost)return[402,{error:'Watch an ad to earn points. Each email reveal costs 1 point.'}];
+    w.points-=cost;w.emailReveals.push(email);await writeLocalDb(db);return[200,{points:w.points,emailReveals:w.emailReveals}];
    }
    if(body.action==='prepare'){
     w.challenges=w.challenges.filter(c=>c.expires>now());

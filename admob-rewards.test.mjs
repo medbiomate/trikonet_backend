@@ -30,3 +30,11 @@ test('first ten email reveals are free, later reveals cost one once',async()=>{
  assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'contact0@example.com'}))[1].points,20);
  assert.equal((await service.account(session,'POST',{action:'reveal-email',email:'extra@example.com'}))[1].points,19);
 });
+test('requested owner balance is initialized to 100 only once',async()=>{
+ let db={users:[{id:'owner',email:'saneensane007@gmail.com'}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
+ const session={userId:'owner'};
+ assert.equal((await service.account(session,'GET'))[1].points,100);
+ await service.account(session,'POST',{action:'download'});
+ assert.equal((await service.account(session,'GET'))[1].points,95);
+});

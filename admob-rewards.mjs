@@ -8,6 +8,8 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!session)return[401,{error:'Sign in to use resume points.'}];
    const db=await readLocalDb(),user=db.users.find(u=>String(u.id)===String(session.userId));if(!user)return[401,{error:'Account not found.'}];
    const w=wallet(user);
+   // One-time account credit explicitly requested by the owner.
+   if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;await writeLocalDb(db);}
    if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[]}];
    if(body.action==='reveal-email'){
     const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];

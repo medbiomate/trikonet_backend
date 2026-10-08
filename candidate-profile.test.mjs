@@ -10,3 +10,12 @@ test('late autosaves cannot undo a newer edit; deliberate clears and website upd
  assert.equal(updateCandidateProfile(current,{skills:'SQL'},700).profileUpdatedAt,700);
  assert.equal(updateCandidateProfile(current,{userId:'other',password:'secret'},700).password,undefined);
 });
+
+test('completion counts core career details consistently and ignores optional fields', async()=>{
+ const {calculateCandidateCompletion}=await import('./candidate-profile.mjs');
+ const profile={name:'Candidate',email:'candidate@example.com',phone:'123',currentLocation:'Dubai',role:'SEO Specialist',experience:'3 years',category:'Digital Marketing',skills:'SEO',locations:[],qualification:''};
+ assert.equal(calculateCandidateCompletion(profile),80);
+ assert.equal(calculateCandidateCompletion({...profile,degree:'Bachelor',locations:['Dubai']}),100);
+ assert.equal(calculateCandidateCompletion({...profile,nationality:'UAE',salaryExpectation:'10000',photo:'photo'}),80);
+ assert.equal(calculateCandidateCompletion({...profile,role:'',currentDesignation:'SEO Specialist',skills:' ',locations:[' ']}),70);
+});

@@ -1,7 +1,7 @@
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
-import {updateCandidateProfile} from './candidate-profile.mjs';
+import {updateCandidateProfile,calculateCandidateCompletion} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
@@ -1276,7 +1276,7 @@ const server = http.createServer(async (req, res) => {
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});
     const db=await readLocalDb();const user=(db.users || []).find(u=>String(u.id)===String(session.userId));
     if(!user)return sendJson(req,res,404,{error:'Account not found'});
-    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},completionPercentage:Math.round(['name','email','phone','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','languages','salaryExpectation','availability','noticePeriod','locations','summary'].filter(key=>{const value=user.profile?.[key];return Array.isArray(value)?value.length:typeof value==='string'?value.trim():Boolean(value);}).length/20*100)}:user.memberActivity || {});
+    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email})}:user.memberActivity || {});
     if(['POST','PUT'].includes(req.method)) {
       try {
         const body=await readJsonBody(req);
@@ -1287,7 +1287,7 @@ const server = http.createServer(async (req, res) => {
         } else {
           applyAccountProfile(user,body,updateCandidateProfile);
         }
-        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:user.profile?.completionPercentage,activity:user.memberActivity,saved:true});
+        await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
     }
   }

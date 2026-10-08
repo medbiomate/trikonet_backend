@@ -6,3 +6,10 @@ export function updateCandidateProfile(existing={},body={},now=Date.now()){
  for(const key of fields)if(Object.hasOwn(body,key))next[key]=body[key];
  return {...next,profileUpdatedAt:incoming,updatedAt:new Date(now).toISOString()};
 }
+
+export function calculateCandidateCompletion(p) {
+  if (!p || typeof p !== 'object') return 0;
+  const values = [p.name, p.email, p.phone, p.currentLocation, p.role || p.currentDesignation, p.experience, p.qualification || p.degree, p.category, p.skills, p.locations];
+  const filled = value => Array.isArray(value) ? value.some(item => String(item).trim()) : Boolean(String(value || '').trim());
+  return Math.round(values.filter(filled).length / values.length * 100);
+}

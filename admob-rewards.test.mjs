@@ -9,7 +9,7 @@ test('verified reward credits five once; download charges five and failure refun
  const session={userId:'stable-user'};
  assert.equal((await service.account(session,'POST',{action:'download'}))[0],402);
  const [,prepared]=await service.account(session,'POST',{action:'prepare'});
- const data=new URLSearchParams({ad_unit:'ca-app-pub-4310822705633659/4074617507',custom_data:prepared.token,reward_amount:'5',transaction_id:'transaction-1'}).toString();
+ const data=new URLSearchParams({ad_unit:'4074617507',custom_data:prepared.token,reward_amount:'5',transaction_id:'transaction-1'}).toString();
  const signature=crypto.sign('sha256',Buffer.from(data),privateKey).toString('base64url');
  const url='/api/admob/reward?'+data+'&signature='+signature+'&key_id=1';
  assert.equal((await service.callback(url))[0],200);await service.callback(url);

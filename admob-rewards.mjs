@@ -29,10 +29,10 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    const data=query.slice(0,marker),p=new URLSearchParams(query);
    if(!keysAt||now()-keysAt>3600000){const response=await fetcher('https://www.gstatic.com/admob/reward/verifier-keys.json',{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('Verification keys unavailable');const result=await response.json();keys=Object.fromEntries(result.keys.map(k=>[String(k.keyId),k.pem]));keysAt=now();}
    const pem=keys[p.get('key_id')];if(!pem||!crypto.verify('sha256',Buffer.from(data),pem,Buffer.from(p.get('signature')||'','base64url')))return[403,{error:'Invalid signature.'}];
-   if(!['4074617507','ca-app-pub-4310822705633659/4074617507'].includes(p.get('ad_unit'))||Number(p.get('reward_amount'))!==5)return[400,{error:'Unexpected reward unit or amount.'}];
    return serial(async()=>{
     const db=await readLocalDb(),token=p.get('custom_data'),transaction=p.get('transaction_id');if(!transaction||!token)return[400,{error:'Missing reward details.'}];
     const user=db.users.find(u=>u.resumeRewards?.challenges?.some(c=>c.token===token));if(!user)return[200,{ok:true,ignored:true}];
+   if(!['4074617507','ca-app-pub-4310822705633659/4074617507'].includes(p.get('ad_unit'))||Number(p.get('reward_amount'))!==5)return[400,{error:'Unexpected reward unit or amount.'}];
     const w=wallet(user);if(w.transactions.includes(transaction))return[200,{ok:true}];
     const challenge=w.challenges.find(c=>c.token===token);if(challenge.expires<now())return[200,{ok:true,expired:true}];
     w.points+=5;w.transactions.push(transaction);w.challenges=w.challenges.filter(c=>c.token!==token);await writeLocalDb(db);return[200,{ok:true}];

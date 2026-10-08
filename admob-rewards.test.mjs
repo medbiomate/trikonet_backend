@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {createAdmobRewards} from './admob-rewards.mjs';
+test('verified reward credits five once; download charges five and failure refunds once',async()=>{
+ const {publicKey,privateKey}=crypto.generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ let db={users:[{id:'stable-user',name:'Candidate'}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value},fetcher:async()=>({ok:true,json:async()=>({keys:[{keyId:1,pem:publicKey.export({type:'spki',format:'pem'})}]})})});
+ const session={userId:'stable-user'};
+ assert.equal((await service.account(session,'POST',{action:'download'}))[0],402);
+ const [,prepared]=await service.account(session,'POST',{action:'prepare'});
+ const data=new URLSearchParams({ad_unit:'ca-app-pub-4310822705633659/4074617507',custom_data:prepared.token,reward_amount:'5',transaction_id:'transaction-1'}).toString();
+ const signature=crypto.sign('sha256',Buffer.from(data),privateKey).toString('base64url');
+ const url='/api/admob/reward?'+data+'&signature='+signature+'&key_id=1';
+ assert.equal((await service.callback(url))[0],200);await service.callback(url);
+ assert.equal((await service.account(session,'GET'))[1].points,5);
+ const [,download]=await service.account(session,'POST',{action:'download'});
+ assert.equal(download.points,0);
+ await service.account(session,'POST',{action:'refund',id:download.id});await service.account(session,'POST',{action:'refund',id:download.id});
+ assert.equal((await service.account(session,'GET'))[1].points,5);
+ assert.equal((await service.callback(url.replace('reward_amount=5','reward_amount=50')))[0],403);
+ assert.equal((await service.account(null,'GET'))[0],401);
+});

@@ -1,3 +1,4 @@
+import {createPasswordReset,sendPasswordResetEmail} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
@@ -20,6 +21,12 @@ import { isCandidateAccount } from './candidate-account.mjs';
 import { isPublicRecord } from './public-record.mjs';
 import { employerJobPage } from './employer-jobs.mjs';
 
+// Load local secrets without overriding hosting-provided environment variables.
+if (typeof process.loadEnvFile === 'function') {
+  try { process.loadEnvFile(fileURLToPath(new URL('.env', import.meta.url))); } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
 const baseDir = fileURLToPath(new URL('.', import.meta.url));
 const root = join(baseDir, 'public');
 const dataRoot = join(baseDir, 'data');
@@ -721,6 +728,8 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
   return `trikonet_session=${token}; HttpOnly; SameSite=${sameSite}${secure}; Path=/; Max-Age=${maxAge}`;
 }
 
+const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
+
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
@@ -981,6 +990,11 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return sendJson(req, res, 200, memoryStore.taxonomies || { types: [], categories: [], locations: [], tags: [], employerCategories: [], employerLocations: [] });
     }
+  }
+
+  if (['/api/auth/forgot-password','/api/auth/reset-password'].includes(path) && req.method === 'POST') {
+    try { const body=await readJsonBody(req);const [status,payload]=await passwordReset(path,body,req.socket.remoteAddress||'unknown');return sendJson(req,res,status,payload); }
+    catch { return sendJson(req,res,503,{error:'Password reset email is temporarily unavailable. Please try again later.'}); }
   }
 
   // API: Auth Register

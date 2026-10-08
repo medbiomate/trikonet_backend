@@ -579,10 +579,12 @@ async function readLocalDb() {
   catch { return structuredClone(emptyDb); }
 }
 
-async function writeLocalDb(db) {
+async function writeLocalDb(db, {skipMedia=false}={}) {
+  if(!skipMedia){
   db = await mediaStore.normalize(db);
   db.jobs = await mediaStore.publish(db.jobs || [], 'job');
   db.employers = await mediaStore.publish(db.employers || [], 'employer');
+  }
   const payload = JSON.stringify({ ...emptyDb, ...db });
   try {
     await ensurePersistentState();
@@ -737,7 +739,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
-const admobRewards=createAdmobRewards({readLocalDb,writeLocalDb});
+const admobRewards=createAdmobRewards({readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true})});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 

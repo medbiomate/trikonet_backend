@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail,now=Date.now}){
  const challenges=new Map();const limits=new Map();
  const digest=value=>crypto.createHash('sha256').update(value).digest('hex');
@@ -39,7 +40,7 @@ export function passwordResetEmailHtml(otp){
  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your verification code expires in 10 minutes.</div>
  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f4f2;"><tr><td align="center" style="padding:32px 16px;">
  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #eadfda;border-radius:20px;overflow:hidden;">
- <tr><td align="center" style="padding:32px 24px 24px;border-top:4px solid #bd1708;"><a href="https://www.trikonet.com/" style="text-decoration:none;"><img src="https://www.trikonet.com/assets/logo-black.png" width="170" alt="Trikonet" style="display:block;width:170px;max-width:100%;height:auto;border:0;"></a></td></tr>
+ <tr><td align="center" style="padding:32px 24px 24px;border-top:4px solid #bd1708;"><a href="https://www.trikonet.com/" style="text-decoration:none;"><img src="cid:trikonet-logo" width="170" alt="Trikonet" style="display:block;width:170px;max-width:100%;height:auto;border:0;"></a></td></tr>
  <tr><td style="padding:0 28px 28px;">
  <p style="margin:0 0 12px;color:#bd1708;font-size:12px;font-weight:bold;letter-spacing:1px;text-align:center;">ACCOUNT SECURITY</p>
  <h1 style="margin:0 0 16px;font-size:26px;line-height:1.3;text-align:center;color:#292525;">Reset your password</h1>
@@ -54,6 +55,6 @@ export function passwordResetEmailHtml(otp){
 }
 export async function sendPasswordResetEmail(email,otp){
  if(!process.env.RESEND_API_KEY||!process.env.PASSWORD_RESET_FROM)throw new Error('Password reset email delivery is not configured.');
- const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.PASSWORD_RESET_FROM,to:[email],subject:'Your Trikonet password reset code',html:passwordResetEmailHtml(otp),text:`Your Trikonet password reset code is ${otp}. It expires in 10 minutes. If you did not request this, ignore this email. Never share this code.`}),signal:AbortSignal.timeout(10000)});
+ const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.PASSWORD_RESET_FROM,to:[email],subject:'Your Trikonet password reset code',html:passwordResetEmailHtml(otp),attachments:[{filename:'trikonet-logo.png',content:(await readFile(new URL('./public/assets/logo-black.png',import.meta.url))).toString('base64'),content_id:'trikonet-logo',content_type:'image/png'}],text:`Your Trikonet password reset code is ${otp}. It expires in 10 minutes. If you did not request this, ignore this email. Never share this code.`}),signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw new Error('Unable to send the reset email. Please try again later.');
 }

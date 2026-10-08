@@ -1,3 +1,4 @@
+import {isCandidateAccount} from './candidate-account.mjs';
 import {OAuth2Client} from 'google-auth-library';
 import crypto from 'node:crypto';
 const verifier=new OAuth2Client();
@@ -9,7 +10,7 @@ export async function googleIdentity(credential,clientId){
  if(!identity?.sub||!identity.email||!identity.email_verified)throw new Error('Google email must be verified.');
  return identity;
 }
-export async function googleAccount(identity,{readLocalDb,writeLocalDb}){
+export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate'}){
  const db=await readLocalDb();const email=identity.email.toLowerCase();
  let user=db.users.find(item=>item.googleSubject===identity.sub);
  if(!user){
@@ -17,9 +18,10 @@ export async function googleAccount(identity,{readLocalDb,writeLocalDb}){
   // Only Google-managed addresses are safe to link by email alone.
   if(existing&&!(email.endsWith('@gmail.com')||identity.hd))throw new Error('Sign in with your password first to link this Google account.');
   if(existing&&existing.googleSubject&&existing.googleSubject!==identity.sub)throw new Error('Google account does not match.');
-  user=existing||{id:crypto.randomUUID(),name:identity.name||email.split('@')[0],email,role:'Candidate',createdAt:new Date().toISOString()};
+  if(existing&&(!isCandidateAccount(existing)||existing.status==='inactive'))throw new Error('Use your existing sign-in method for this account.');
+  user=existing||{id:crypto.randomUUID(),name:identity.name||email.split('@')[0],email,role:candidateRole,createdAt:new Date().toISOString()};
   user.googleSubject=identity.sub;if(!existing)db.users.push(user);await writeLocalDb(db);
  }
- if(user.role!=='Candidate')throw new Error('Use your existing sign-in method for this account.');
+ if(!isCandidateAccount(user)||user.status==='inactive')throw new Error('Use your existing sign-in method for this account.');
  return user;
 }

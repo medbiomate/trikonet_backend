@@ -1,3 +1,4 @@
+import { createCompanyReviews } from './company-reviews.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
@@ -729,6 +730,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
   return `trikonet_session=${token}; HttpOnly; SameSite=${sameSite}${secure}; Path=/; Max-Age=${maxAge}`;
 }
 
+const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
 const server = http.createServer(async (req, res) => {
@@ -991,6 +993,11 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return sendJson(req, res, 200, memoryStore.taxonomies || { types: [], categories: [], locations: [], tags: [], employerCategories: [], employerLocations: [] });
     }
+  }
+
+  if(path.startsWith('/api/company-reviews/')){
+    try{const companyId=path.slice('/api/company-reviews/'.length);const body=req.method==='POST'?await readJsonBody(req,10000):{};const [status,result]=await companyReviews(req.method,companyId,currentSession(req),body);return sendJson(req,res,status,result)}
+    catch{return sendJson(req,res,503,{error:'Reviews are temporarily unavailable. Please try again.'})}
   }
 
   if (['/api/auth/forgot-password','/api/auth/verify-reset-code','/api/auth/reset-password'].includes(path) && req.method === 'POST') {

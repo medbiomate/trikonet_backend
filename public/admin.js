@@ -3510,11 +3510,12 @@ export function renderAdmin() {
               <tr>
                 <td id="cb-candidates" class="manage-column column-cb check-column"><input id="cb-select-all-candidates" type="checkbox" aria-label="Select All"></td>
                 <th scope="col" class="manage-column column-candidate-name sortable desc" style="width:28%;"><span>Candidate</span></th>
-                <th scope="col" class="manage-column column-candidate-title" style="width:20%;"><span>Professional Title</span></th>
-                <th scope="col" class="manage-column column-candidate-category" style="width:14%;"><span>Category</span></th>
-                <th scope="col" class="manage-column column-candidate-location" style="width:13%;"><span>Location</span></th>
-                <th scope="col" class="manage-column column-candidate-exp" style="width:13%;"><span>Experience</span></th>
-                <th scope="col" class="manage-column column-candidate-status" style="width:12%;"><span>Status</span></th>
+                <th scope="col" class="manage-column column-candidate-title" style="width:17%;"><span>Professional Title</span></th>
+                <th scope="col" class="manage-column column-candidate-category" style="width:13%;"><span>Category</span></th>
+                <th scope="col" class="manage-column column-candidate-location" style="width:12%;"><span>Location</span></th>
+                <th scope="col" class="manage-column column-candidate-exp" style="width:12%;"><span>Experience</span></th>
+                <th scope="col" class="manage-column column-candidate-resumes" style="width:10%;"><span>Resumes created</span></th>
+                <th scope="col" class="manage-column column-candidate-status" style="width:11%;"><span>Status</span></th>
               </tr>
             </thead>
             <tbody id="admin-candidate-rows">
@@ -4012,7 +4013,7 @@ export async function initAdmin() {
     } else if (targetId === 'view-posts') {
       renderPostRows();
     } else if (targetId === 'view-media') {
-      renderMediaGrid();
+      loadMediaLibrary();
       if (viewName === 'media-new') {
         const uploader = document.getElementById('media-upload-container');
         if (uploader) uploader.style.display = 'block';
@@ -11586,89 +11587,14 @@ export async function initAdmin() {
   }
 
   // --- MEDIA LIBRARY MANAGEMENT ---
-  const defaultMedia = [
-    {
-      id: 1,
-      title: 'forward_hospitality_logo.jpg',
-      url: '/assets/forward_hospitality_logo.jpg',
-      dimensions: '400 × 400',
-      size: '24 KB',
-      type: 'image',
-      date: 'Sep 23, 2026'
-    },
-    {
-      id: 2,
-      title: 'trikonet-logo.png',
-      url: '/assets/trikonet-logo.png',
-      dimensions: '800 × 240',
-      size: '42 KB',
-      type: 'logo',
-      date: 'Sep 22, 2026'
-    },
-    {
-      id: 3,
-      title: 'logo-black.png',
-      url: '/assets/logo-black.png',
-      dimensions: '800 × 240',
-      size: '38 KB',
-      type: 'logo',
-      date: 'Sep 22, 2026'
-    },
-    {
-      id: 4,
-      title: 'logo-white.png',
-      url: '/assets/logo-white.png',
-      dimensions: '800 × 240',
-      size: '39 KB',
-      type: 'logo',
-      date: 'Sep 22, 2026'
-    },
-    {
-      id: 5,
-      title: 'article-1.jpg',
-      url: '/assets/article-1.jpg',
-      dimensions: '1200 × 800',
-      size: '145 KB',
-      type: 'image',
-      date: 'Sep 08, 2025'
-    },
-    {
-      id: 6,
-      title: 'article-2.jpg',
-      url: '/assets/article-2.jpg',
-      dimensions: '1200 × 800',
-      size: '132 KB',
-      type: 'image',
-      date: 'Sep 08, 2025'
-    },
-    {
-      id: 7,
-      title: 'article-3.jpg',
-      url: '/assets/article-3.jpg',
-      dimensions: '1200 × 800',
-      size: '158 KB',
-      type: 'image',
-      date: 'Sep 08, 2025'
-    },
-    {
-      id: 8,
-      title: 'favicon.svg',
-      url: '/favicon.svg',
-      dimensions: '512 × 512',
-      size: '4 KB',
-      type: 'logo',
-      date: 'Sep 22, 2026'
-    }
-  ];
-
-  let media = (() => {
-    try {
-      const stored = localStorage.getItem('trikonet_media_cms');
-      return stored ? JSON.parse(stored) : defaultMedia;
-    } catch {
-      return defaultMedia;
-    }
-  })();
+  let media = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem('trikonet_media_cms') || '[]');
+    // Keep pending uploads, but don't show the old demonstration assets.
+    media = Array.isArray(stored) ? stored.filter(item => String(item.url || '').startsWith('data:image/')) : [];
+  } catch {}
+  let mediaLoadError = '';
+  let mediaLoading = true;
 
   const pendingMediaSaves = new Set();
   function saveMedia() {
@@ -11692,13 +11618,31 @@ export async function initAdmin() {
     }
   }
 
-  fetch('/api/admin/media',{credentials:'include'}).then(async response=>{
-    if(!response.ok)return;
-    const saved=await response.json();
-    const urls=new Set(saved.map(item=>item.url));
-    media=[...saved,...media.filter(item=>!urls.has(item.url))];
-    renderMediaGrid();
-  }).catch(error=>console.error('Media library unavailable:',error.message));
+  async function loadMediaLibrary() {
+    mediaLoading = true;
+    mediaLoadError = '';
+    try {
+      const response = await fetch('/api/admin/media', {credentials:'include', cache:'no-store'});
+      if (!response.ok) throw Error('Unable to load media. Please sign in again or retry.');
+      const saved = await response.json();
+      if (!Array.isArray(saved)) throw Error('Invalid media library response.');
+      const urls = new Set(saved.map(item => item.url));
+      media = [...saved, ...media.filter(item => String(item.url || '').startsWith('data:image/') && !urls.has(item.url))];
+      media.sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+      const dateFilter = document.getElementById('filter-media-date');
+      if (dateFilter) {
+        const selected = dateFilter.value;
+        const months = [...new Set(media.map(item => {
+          const date = new Date(item.date);
+          return Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+        }).filter(Boolean))].sort().reverse();
+        dateFilter.innerHTML = '<option value="">All dates</option>' + months.map(month => `<option value="${month}">${new Date(`${month}-01T00:00:00`).toLocaleDateString('en-GB', {month:'long',year:'numeric'})}</option>`).join('');
+        dateFilter.value = months.includes(selected) ? selected : '';
+      }
+    } catch (error) { mediaLoadError = error.message; }
+    finally { mediaLoading = false; renderMediaGrid(); }
+  }
+  loadMediaLibrary();
 
   let mediaPage = 1;
   const mediaPageSize = 60;
@@ -11712,7 +11656,17 @@ export async function initAdmin() {
     const q = (searchInput?.value || '').toLowerCase().trim();
     const typeVal = document.getElementById('filter-media-type')?.value || 'all';
 
+    const dateVal = document.getElementById('filter-media-date')?.value || '';
+    if (mediaLoading || mediaLoadError) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;">${mediaLoading ? 'Loading media…' : `${escapeHtml(mediaLoadError)} <button type="button" data-media-retry>Retry</button>`}</div>`;
+      return;
+    }
     const filtered = media.filter(m => {
+      if (dateVal) {
+        const date = new Date(m.date);
+        const month = Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+        if (month !== dateVal) return false;
+      }
       if (typeVal === 'image' && m.type !== 'image') return false;
       if (typeVal === 'logo' && m.type !== 'logo') return false;
       if (q && !(m.title || '').toLowerCase().includes(q)) return false;
@@ -11730,7 +11684,7 @@ export async function initAdmin() {
     grid.innerHTML = visible.map(m => `
       <div class="modern-media-card" data-media-id="${m.id}">
         <div class="modern-media-thumb">
-          <img src="${m.url}" alt="${escapeHtml(m.title)}" loading="lazy">
+          <img src="${escapeHtml(m.url)}" alt="${escapeHtml(m.title)}" loading="lazy">
         </div>
         <div class="modern-media-info">
           <div class="modern-media-title" title="${escapeHtml(m.title)}">${escapeHtml(m.title)}</div>
@@ -11739,7 +11693,7 @@ export async function initAdmin() {
             <span>${m.size || ''}</span>
           </div>
           <div class="modern-media-actions">
-            <button type="button" class="modern-media-btn" data-copy-url="${m.url}">Copy URL</button>
+            <button type="button" class="modern-media-btn" data-copy-url="${escapeHtml(m.url)}">Copy URL</button>
             <button type="button" class="modern-media-btn danger" data-media-delete="${m.id}">Delete</button>
           </div>
         </div>
@@ -13437,6 +13391,7 @@ export async function initAdmin() {
   });
 
   document.getElementById('admin-media-search')?.addEventListener('input', () => { mediaPage = 1; renderMediaGrid(); });
+  document.getElementById('filter-media-date')?.addEventListener('change', () => { mediaPage = 1; renderMediaGrid(); });
   document.getElementById('filter-media-type')?.addEventListener('change', () => { mediaPage = 1; renderMediaGrid(); });
 
   // Global click delegation for Posts, Pages, and Media
@@ -13497,6 +13452,7 @@ export async function initAdmin() {
     }
 
     // Media actions
+    if (e.target.closest('[data-media-retry]')) { loadMediaLibrary(); return; }
     const mediaPageBtn = e.target.closest('[data-media-page]');
     if (mediaPageBtn && !mediaPageBtn.disabled) {
       e.preventDefault();
@@ -13772,7 +13728,7 @@ export async function initAdmin() {
     }).sort((a, b) => candidateCreatedTime(b) - candidateCreatedTime(a));
 
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:#94a3b8; font-size:13px;">No candidates found matching the criteria.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:#94a3b8; font-size:13px;">No candidates found matching the criteria.</td></tr>`;
       return;
     }
 
@@ -13831,6 +13787,9 @@ export async function initAdmin() {
           <td class="column-candidate-exp">
             <div style="font-size:12px; color:#334155; font-weight:500;">${escapeHtml(c.experience || '—')}</div>
             <div style="font-size:11px; color:#94a3b8;">${escapeHtml(c.qualification || '')}</div>
+          </td>
+          <td class="column-candidate-resumes">
+            <span class="modern-badge" style="background:#eff6ff; color:#1d4ed8; font-weight:600; font-size:12px; padding:3px 8px; border-radius:6px;">${Number.isInteger(c.resumeCount) && c.resumeCount >= 0 ? c.resumeCount : 0}</span>
           </td>
           <td class="column-candidate-status">
             ${statusBadge}

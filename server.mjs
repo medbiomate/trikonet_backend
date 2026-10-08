@@ -1,3 +1,4 @@
+import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { createEmsSync, emsJobOperator } from './ems-sync.mjs';
@@ -877,10 +878,7 @@ const server = http.createServer(async (req, res) => {
     try {
       await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_media_library (id CHAR(64) PRIMARY KEY, payload LONGTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
       if(req.method==='GET') {
-        const [rows]=await wpDb.query('SELECT payload FROM trikonet_media_library ORDER BY created_at DESC');
-        const records=[];
-        for(const row of rows){const item=JSON.parse(row.payload);item.url=await mediaStore.publish(item.url,item.title);records.push(item);}
-        return sendJson(req,res,200,records);
+        return sendJson(req,res,200,await listAdminMedia(wpDb));
       }
       const body=await readJsonBody(req,14_000_000);
       if(!/^data:image\/(png|jpeg|webp|gif|avif);base64,/.test(String(body.url || '')))return sendJson(req,res,400,{error:'A PNG, JPEG, WebP, GIF or AVIF image is required.'});
@@ -1364,10 +1362,17 @@ const server = http.createServer(async (req, res) => {
       } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
       const users = (db.users || []).filter(isCandidateAccount);
       const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt })), ...(db.candidates || [])];
+      const resumeCounts = new Map();
+      for (const resume of db.resumes || []) {
+        if (resume.userId == null) continue;
+        const userId = String(resume.userId);
+        resumeCounts.set(userId, (resumeCounts.get(userId) || 0) + 1);
+      }
       const merged = new Map();
       for (const record of records) {
         const m = record.metas || {};
         const candidate = {
+          resumeCount: resumeCounts.get(String(record.sourceAccountId || record.id)) || 0,
           id: record.id, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
           email: record.email || m._candidate_email || '', jobTitle: record.jobTitle || record.professionalTitle || m._candidate_title || '',
           category: record.category || Object.values(m._candidate_category || {}).join(', '),

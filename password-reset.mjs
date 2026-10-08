@@ -33,8 +33,27 @@ export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessi
   return [200,{success:true,message:'Your password has been updated. Sign in with your new password.'}];
  }
 }
+export function passwordResetEmailHtml(otp){
+ if(!/^[0-9]{6}$/.test(String(otp)))throw new Error('Invalid reset code format.');
+ return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset your Trikonet password</title></head><body style="margin:0;padding:0;background:#f7f4f2;font-family:Arial,Helvetica,sans-serif;color:#292525;">
+ <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your verification code expires in 10 minutes.</div>
+ <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f4f2;"><tr><td align="center" style="padding:32px 16px;">
+ <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #eadfda;border-radius:20px;overflow:hidden;">
+ <tr><td align="center" style="padding:32px 24px 24px;border-top:4px solid #bd1708;"><a href="https://www.trikonet.com/" style="text-decoration:none;"><img src="https://www.trikonet.com/assets/logo-black.png" width="170" alt="Trikonet" style="display:block;width:170px;max-width:100%;height:auto;border:0;"></a></td></tr>
+ <tr><td style="padding:0 28px 28px;">
+ <p style="margin:0 0 12px;color:#bd1708;font-size:12px;font-weight:bold;letter-spacing:1px;text-align:center;">ACCOUNT SECURITY</p>
+ <h1 style="margin:0 0 16px;font-size:26px;line-height:1.3;text-align:center;color:#292525;">Reset your password</h1>
+ <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#655650;text-align:center;">Enter this verification code in Trikonet to continue resetting your password.</p>
+ <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:22px 8px;background:#fff2ee;border:1px solid #f0d9d2;border-radius:12px;">
+ <span style="font-family:Arial,Helvetica,sans-serif;font-size:32px;line-height:1.4;font-weight:bold;letter-spacing:6px;color:#bd1708;">${otp}</span></td></tr></table>
+ <p style="margin:14px 0 24px;font-size:13px;line-height:1.6;text-align:center;color:#73645e;">This code expires in <strong>10 minutes</strong>.</p>
+ <p style="margin:0;padding-top:22px;border-top:1px solid #eee5e0;font-size:13px;line-height:1.7;color:#73645e;">If you didn’t request a password reset, you can ignore this email. Your password will remain unchanged. Never share this code with anyone.</p>
+ </td></tr></table>
+ <p style="margin:20px 0 0;font-size:12px;line-height:1.7;color:#85756e;text-align:center;">Trikonet · Your career, all in one place.<br><a href="https://www.trikonet.com/" style="color:#bd1708;text-decoration:underline;">Visit Trikonet</a></p>
+ </td></tr></table></body></html>`;
+}
 export async function sendPasswordResetEmail(email,otp){
  if(!process.env.RESEND_API_KEY||!process.env.PASSWORD_RESET_FROM)throw new Error('Password reset email delivery is not configured.');
- const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.PASSWORD_RESET_FROM,to:[email],subject:'Your Trikonet password reset code',text:`Your Trikonet password reset code is ${otp}. It expires in 10 minutes. If you did not request this, ignore this email. Never share this code.`}),signal:AbortSignal.timeout(10000)});
+ const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.PASSWORD_RESET_FROM,to:[email],subject:'Your Trikonet password reset code',html:passwordResetEmailHtml(otp),text:`Your Trikonet password reset code is ${otp}. It expires in 10 minutes. If you did not request this, ignore this email. Never share this code.`}),signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw new Error('Unable to send the reset email. Please try again later.');
 }

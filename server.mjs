@@ -1,3 +1,4 @@
+import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile} from './candidate-profile.mjs';
@@ -734,6 +735,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 }
 
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
+const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
@@ -1258,6 +1260,9 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req, res, 200, { ok: true });
   }
 
+  if(path==='/api/candidate/recommendations/refine'&&req.method==='POST'){
+    try{const [status,result]=await refineRecommendations(currentSession(req),await readJsonBody(req,100000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Recommendations are temporarily unavailable.'})}
+  }
   if(path==='/api/candidate/resume'){
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your resume.'});const db=await readLocalDb();const user=db.users.find(item=>String(item.id)===String(session.userId));if(!user)return sendJson(req,res,401,{error:'Account not found.'});
     if(req.method==='GET')return sendJson(req,res,200,{success:true,resume:user.uploadedResume||null});

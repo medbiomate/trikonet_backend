@@ -1,7 +1,8 @@
+import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
-import {createPasswordReset,sendPasswordResetEmail} from './password-reset.mjs';
+import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
@@ -732,6 +733,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 }
 
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
+const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
 const server = http.createServer(async (req, res) => {
@@ -1081,7 +1083,8 @@ const server = http.createServer(async (req, res) => {
   // API: Auth Me
   if (path === '/api/auth/me' && req.method === 'GET') {
     const session = currentSession(req);
-    return sendJson(req, res, session ? 200 : 401, session ? { user: session } : { error: 'Authentication required' });
+    const db=session?await readLocalDb():null;const user=db?.users.find(item=>String(item.id)===String(session.userId));
+    return sendJson(req,res,user?200:401,user?{user:accountView(user)}:{error:'Authentication required'});
   }
 
   // API: Auth Logout
@@ -1254,19 +1257,23 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req, res, 200, { ok: true });
   }
 
+  if(['/api/candidate/email/request','/api/candidate/email/verify'].includes(path)&&req.method==='POST'){
+    try{const [status,data]=await emailChange(path.endsWith('/request')?'request':'verify',currentSession(req),await readJsonBody(req));return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Email verification is temporarily unavailable.'})}
+  }
   if(['/api/candidate/profile','/api/candidate/activity'].includes(path)) {
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});
     const db=await readLocalDb();const user=(db.users || []).find(u=>String(u.id)===String(session.userId));
     if(!user)return sendJson(req,res,404,{error:'Account not found'});
-    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:user.profile || {name:user.name,email:user.email},completionPercentage:Math.round(['name','email','phone','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','languages','salaryExpectation','availability','noticePeriod','locations','summary'].filter(key=>{const value=user.profile?.[key];return Array.isArray(value)?value.length:typeof value==='string'?value.trim():Boolean(value);}).length/20*100)}:user.memberActivity || {});
+    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},completionPercentage:Math.round(['name','email','phone','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','languages','salaryExpectation','availability','noticePeriod','locations','summary'].filter(key=>{const value=user.profile?.[key];return Array.isArray(value)?value.length:typeof value==='string'?value.trim():Boolean(value);}).length/20*100)}:user.memberActivity || {});
     if(['POST','PUT'].includes(req.method)) {
       try {
         const body=await readJsonBody(req);
         if(path.endsWith('/activity')){
           user.memberActivity ||= {};
-          for(const kind of ['saved_jobs','applied_jobs','followed_companies'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
+          for(const kind of ['saved_jobs','applied_jobs','followed_companies','templates','recentSearches'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
+          if(body.behaviour&&typeof body.behaviour==='object')user.memberActivity.behaviour=body.behaviour;
         } else {
-          user.profile=updateCandidateProfile(user.profile || {},body);
+          applyAccountProfile(user,body,updateCandidateProfile);
         }
         await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:user.profile?.completionPercentage,activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
@@ -1366,6 +1373,7 @@ const server = http.createServer(async (req, res) => {
         const safe={id:record.id,name:record.name,slug:record.slug,email:record.email,phone:record.phone,jobTitle:record.jobTitle,category:record.category,location:record.location,experience:record.experience,qualification:record.qualification,bio:record.bio,status:record.status,featured:!!record.featured,createdAt:record.createdAt};
         const index=db.candidates.findIndex(c=>String(c.id)===String(record.id));
         if(index>=0)db.candidates[index]={...db.candidates[index],...safe};else db.candidates.push(safe);
+        const account=db.users.find(item=>String(item.id)===String(record.id));if(account)applyAccountProfile(account,{name:record.name,phone:record.phone},updateCandidateProfile);
       }
       await writeLocalDb(db);return sendJson(req,res,200,{saved:true});
     }catch(error){return sendJson(req,res,400,{error:error.message});}
@@ -1377,7 +1385,7 @@ const server = http.createServer(async (req, res) => {
     const user=(db.users || []).find(u=>String(u.id)===id && isCandidateAccount(u));
     const candidate=(db.candidates || []).find(c=>String(c.id)===id);
     if(!user && !candidate)return sendJson(req,res,404,{error:'Candidate not found'});
-    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:candidate?.name||user?.name,email:candidate?.email||user?.email,createdAt:user?.createdAt||candidate?.createdAt},account:{username:user?.username || user?.name,email:user?.email,createdAt:user?.createdAt},submittedProfile:user?.profile || {},activity:user?.memberActivity || {},applications:(db.applications || []).filter(a=>String(a.userId)===id || (user?.email && a.email===user.email)),resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
+    return sendJson(req,res,200,{profile:{...user?.profile,...candidate,id,name:user?.name||candidate?.name,email:user?.email||candidate?.email,createdAt:user?.createdAt||candidate?.createdAt},account:{id:user?.id,username:user?.username || user?.name,email:user?.email,createdAt:user?.createdAt},submittedProfile:user?.profile || {},activity:user?.memberActivity || {},applications:(db.applications || []).filter(a=>String(a.userId)===id || (user?.email && a.email===user.email)),resumes:(db.resumes || []).filter(r=>String(r.userId)===id)});
   }
   if (['/api/admin/candidates', '/api/local/candidates'].includes(path) && req.method === 'GET') {
     const admin = await currentAdminSession(req);

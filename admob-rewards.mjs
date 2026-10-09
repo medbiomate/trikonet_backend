@@ -17,7 +17,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
    if(grantProfileCompletionReward(user))await writeLocalDb(db);
    if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();await writeLocalDb(db);}
-   if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,atsHistory:[...(w.atsRequests||[])].reverse().slice(0,50),points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
+   if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,atsHistory:[...(w.atsRequests||[])].reverse().slice(0,50),points:w.points,emailReveals:w.emailReveals||[],contactReveals:w.contactReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
    if(body.action==='ats-check'){
     const requestId=String(body.requestId||'');if(!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))return[400,{error:'Invalid check request.'}];
     w.atsRequests ||= [];
@@ -37,6 +37,16 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
     if(!referrer)return[400,{error:'Referral code not found.'}];if(String(referrer.id)===String(user.id))return[400,{error:'You cannot use your own referral code.'}];
     const other=wallet(referrer);w.points+=20;other.points+=20;w.referredBy=String(referrer.id);w.referralClaimedAt=new Date(now()).toISOString();other.referralRewards ||= [];other.referralRewards.push({userId:String(user.id),at:w.referralClaimedAt,points:20});await writeLocalDb(db);
     return[200,{points:w.points,referralClaimed:true,referralCode:w.referralCode}];
+   }
+   if(body.action==='reveal-contact'){
+    const kind=String(body.kind||''),value=String(body.value||'').trim();
+    if(!['email','phone'].includes(kind)||value.length>200||(kind==='email'?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value):!/^[+\d][\d\s().-]{3,40}$/.test(value)))return[400,{error:'Invalid contact details.'}];
+    const key=kind+':'+(kind==='email'?value.toLowerCase():value.replace(/[^+\d]/g,''));
+    w.contactReveals ||= [];
+    if(w.contactReveals.includes(key))return[200,{points:w.points,contactReveals:w.contactReveals}];
+    if(w.points<1)return[402,{error:'You need 1 point to reveal this contact. Earn more points to continue.',points:w.points}];
+    w.points-=1;w.contactReveals.push(key);await writeLocalDb(db);
+    return[200,{points:w.points,contactReveals:w.contactReveals}];
    }
    if(body.action==='reveal-email'){
     const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];

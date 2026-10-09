@@ -62,3 +62,17 @@ test('referral credits both accounts twenty once and rejects self referral',asyn
  assert.equal((await service.account({userId:'a'},'GET'))[1].points,30);
  assert.equal((await service.account({userId:'b'},'POST',{action:'claim-referral',code:first.referralCode}))[0],409);
 });
+
+test('employer contacts cost one each, repeat and concurrent reveals charge only once',async()=>{
+ let db={users:[{id:'u',resumeRewards:{points:2,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}}),session={userId:'u'};
+ const phone={action:'reveal-contact',kind:'phone',value:'+971 55 123 4567'};
+ const results=await Promise.all([service.account(session,'POST',phone),service.account(session,'POST',phone)]);
+ assert.equal(results[0][1].points,1);assert.equal(results[1][1].points,1);
+ assert.equal((await service.account(session,'POST',{...phone,value:'+971551234567'}))[1].points,1);
+ assert.equal((await service.account(session,'POST',{action:'reveal-contact',kind:'email',value:'hr@example.com'}))[1].points,0);
+ assert.equal((await service.account(session,'POST',{...phone,value:'123456'}))[0],402);
+ assert.equal((await service.account(session,'GET'))[1].contactReveals.length,2);
+ assert.equal((await service.account(session,'POST',{...phone,value:'bad'}))[0],400);
+ assert.equal((await service.account(null,'POST',phone))[0],401);
+});

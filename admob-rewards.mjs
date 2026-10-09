@@ -17,7 +17,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
    if(grantProfileCompletionReward(user))await writeLocalDb(db);
    if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();await writeLocalDb(db);}
-   if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
+   if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,atsHistory:[...(w.atsRequests||[])].reverse().slice(0,50),points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
    if(body.action==='ats-check'){
     const requestId=String(body.requestId||'');if(!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))return[400,{error:'Invalid check request.'}];
     w.atsRequests ||= [];

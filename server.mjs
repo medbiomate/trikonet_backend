@@ -1268,7 +1268,7 @@ const server = http.createServer(async (req, res) => {
     try{const [status,result]=await admobRewards.callback(req.url);return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Reward verification unavailable.'})}
   }
   if(path==='/api/candidate/resume-points'&&['GET','POST'].includes(req.method)){
-    try{const [status,result]=await admobRewards.account(currentSession(req),req.method,req.method==='POST'?await readJsonBody(req,2000):{});return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Resume points are temporarily unavailable.'})}
+    try{const [status,result]=await admobRewards.account(currentSession(req),req.method,req.method==='POST'?await readJsonBody(req,7500000):{});return sendJson(req,res,status,result)}catch(error){console.error('Resume points request failed:',error.message);return sendJson(req,res,error.message==='Request too large'?413:503,{error:error.message==='Request too large'?'Resume upload is too large. Choose a PDF or DOCX up to 5 MB.':'Resume service is temporarily unavailable. No analysis charge was made.'})}
   }
   if(path==='/api/candidate/recommendations/refine'&&req.method==='POST'){
     try{const [status,result]=await refineRecommendations(currentSession(req),await readJsonBody(req,100000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Recommendations are temporarily unavailable.'})}

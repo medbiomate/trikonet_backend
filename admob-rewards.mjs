@@ -1,6 +1,9 @@
 import {grantProfileCompletionReward} from './candidate-profile.mjs';
 import crypto from 'node:crypto';
-export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=Date.now}){
+import {analyzeWithGemini} from './gemini-ats.mjs';
+import {extractResume} from './ats-upload.mjs';
+import {analyzeResume,resumeText} from './ats-check.mjs';
+export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=Date.now,atsAnalyzer=analyzeWithGemini}){
  let keys={},keysAt=0,queue=Promise.resolve();
  const serial=fn=>{const task=queue.then(fn,fn);queue=task.catch(()=>{});return task;};
  const wallet=user=>user.resumeRewards ||= {points:0,challenges:[],transactions:[],downloads:[]};
@@ -14,7 +17,19 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
    if(grantProfileCompletionReward(user))await writeLocalDb(db);
    if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();await writeLocalDb(db);}
-   if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
+   if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
+   if(body.action==='ats-check'){
+    const requestId=String(body.requestId||'');if(!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))return[400,{error:'Invalid check request.'}];
+    w.atsRequests ||= [];
+    const prior=w.atsRequests.find(item=>item.id===requestId);if(prior)return[200,{...prior,points:w.points,atsFreeAvailable:!w.atsFreeUsed}];
+    const cost=w.atsFreeUsed?20:0;if(w.points<cost)return[402,{error:'An ATS check needs 20 points. Earn more points to continue.',points:w.points}];
+    let text=String(body.text||'');
+    if(body.resumeId){const resume=db.resumes.find(item=>item.id===body.resumeId&&String(item.userId)===String(user.id));if(!resume)return[404,{error:'Saved resume not found.'}];text=resumeText(resume.state);}
+    let report;try{let document;if(body.file){const extracted=await extractResume(body.file);text=extracted.text;document=extracted.document;}report=analyzeResume(text,String(body.jobDescription||''));if(document)report.document=document;}catch(error){return[400,{error:error.message}];}
+    try{report={...report,...await atsAnalyzer(text,{fetcher})};}catch(error){return[503,{error:error.message}];}
+    const result={id:requestId,cost,report,at:now()};w.points-=cost;w.atsFreeUsed=true;w.atsLastCheck=result;w.atsRequests.push(result);await writeLocalDb(db);
+    return[200,{...result,points:w.points,atsFreeAvailable:false}];
+   }
    if(body.action==='claim-referral'){
     if(w.referredBy)return[409,{error:'You have already claimed a referral bonus.'}];
     const created=Date.parse(user.createdAt||'');if(!Number.isFinite(created)||created<now()-7*86400000)return[403,{error:'Referral codes can be claimed during your first 7 days.'}];

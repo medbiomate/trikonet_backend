@@ -1,0 +1,16 @@
+const strip=value=>String(value||'').replace(/<[^>]*>/g,' ').trim();
+export function resumeText(state){
+ const flatten=value=>typeof value==='string'?strip(value):Array.isArray(value)?value.map(flatten).filter(Boolean).join('\n'):value&&typeof value==='object'?Object.values(value).map(flatten).filter(Boolean).join('\n'):'';
+ return ['fullName','jobTitle','email','phone','location','website','linkedin','summary','experience','education','skills','certificates','projects','languages'].map(key=>{const text=flatten(state?.[key]);return text?`${key}\n${text}`:''}).filter(Boolean).join('\n');
+}
+export function analyzeResume(text,job=''){
+ text=strip(text);job=strip(job);
+ if(text.length<100||text.length>40000)throw Error('Provide resume text between 100 and 40,000 characters.');
+ if(job.length>20000)throw Error('Job description must be below 20,000 characters.');
+ const checks=[['Contact email',/[^\s@]+@[^\s@]+\.[^\s@]+/.test(text),'Add a readable contact email.'],['Experience section',/\b(experience|employment|work history)\b/i.test(text),'Use an Experience heading and describe your roles.'],['Education section',/\b(education|qualification|degree)\b/i.test(text),'Add an Education section with your qualifications.'],['Skills section',/\b(skills|competencies|expertise)\b/i.test(text),'Group relevant skills under a Skills heading.'],['Dates',/\b(?:19|20)\d{2}\b/.test(text),'Include consistent employment and education dates.'],['Measurable achievements',/\d+(?:\.\d+)?\s*%|\b\d+\s+(?:clients|customers|projects|patients|employees|sales)\b/i.test(text),'Add truthful numbers that show the impact of your work.'],['Concise length',text.split(/\s+/).length>=150&&text.split(/\s+/).length<=1000,'Aim for concise, relevant content; review very short or lengthy sections.']];
+ const stop=new Set('about after also and are as at be been being by can company could description for from have has in into is it job looking must of on or our role that the their this to we will with work you your years experience required responsibilities skills team'.split(' '));
+ const keywords=[...new Set((job.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g)||[]).filter(word=>!stop.has(word)))].slice(0,80);
+ const tokens=new Set(text.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g)||[]);
+ const matched=keywords.filter(word=>tokens.has(word)),missing=keywords.filter(word=>!tokens.has(word));
+ return {overallScore:Math.round(checks.filter(c=>c[1]).length/checks.length*100),summary:checks.filter(c=>!c[1]).length?`${checks.filter(c=>!c[1]).length} areas need attention. Review the suggestions below to improve resume completeness and readability.`:'Your resume meets the basic content checks. Review the document layout and tailor your experience to the role.',wordCount:text.split(/\s+/).length,structureScore:Math.round(checks.filter(c=>c[1]).length/checks.length*100),keywordScore:keywords.length?Math.round(matched.length/keywords.length*100):null,checks:checks.map(([label,passed,suggestion])=>({label,passed,suggestion})),matched,missing,limitations:'Text-based checks only. Document columns, fonts, headers, images and employer-specific parsing are not verified. Keyword overlap is not a semantic job-fit assessment.',disclaimer:'Scores are estimates, not guarantees of employer ATS performance.'};
+}

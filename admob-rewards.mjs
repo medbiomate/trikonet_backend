@@ -72,6 +72,16 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
     if(w.challenges.length>=10)return[429,{error:'Please finish your current ad or try again later.'}];
     const token=crypto.randomBytes(24).toString('hex');w.challenges.push({token,expires:now()+3600000});await writeLocalDb(db);return[200,{token,points:w.points}];
    }
+   if(body.action==='complete-reward'){
+    const challenge=w.challenges.find(c=>c.token===body.token);
+    if(!challenge||challenge.expires<now())return[400,{error:'Reward session expired. Please start a new ad.'}];
+    if(!challenge.claimedAt){
+     const recent=w.challenges.filter(c=>c.claimedAt&&c.claimedAt>now()-3600000);
+     if(recent.length>=10)return[429,{error:'Reward limit reached. Please try again later.'}];
+     challenge.claimedAt=now();w.points+=5;await writeLocalDb(db);
+    }
+    return[200,{points:w.points,rewardToken:challenge.token,rewarded:true}];
+   }
    if(body.action==='download'){
     if(w.points<5)return[402,{error:'A resume download needs 5 points.',points:w.points}];
     const id=crypto.randomUUID();w.points-=5;w.downloads.push({id,at:now(),refunded:false});await writeLocalDb(db);return[200,{id,points:w.points}];
@@ -94,7 +104,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(!['4074617507','ca-app-pub-4310822705633659/4074617507'].includes(p.get('ad_unit'))||Number(p.get('reward_amount'))!==5)return[400,{error:'Unexpected reward unit or amount.'}];
     const w=wallet(user);if(w.transactions.includes(transaction))return[200,{ok:true}];
     const challenge=w.challenges.find(c=>c.token===token);if(challenge.expires<now())return[200,{ok:true,expired:true}];
-    w.points+=5;w.transactions.push(transaction);w.challenges=w.challenges.filter(c=>c.token!==token);await writeLocalDb(db);return[200,{ok:true}];
+    if(!challenge.claimedAt){w.points+=5;challenge.claimedAt=now();}w.transactions.push(transaction);await writeLocalDb(db);return[200,{ok:true}];
    });
   }
  };

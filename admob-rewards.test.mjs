@@ -91,3 +91,20 @@ test('wallet and spending remain responsive while ATS analysis is pending',async
  }finally{finish()}
  assert.equal((await analysis)[1].points,20);
 });
+
+test('SDK completion credits once and signed SSV reconciles without duplicate credit',async()=>{
+ const {publicKey,privateKey}=crypto.generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ let db={users:[{id:'u',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value},fetcher:async()=>({ok:true,json:async()=>({keys:[{keyId:1,pem:publicKey.export({type:'spki',format:'pem'})}]})})});
+ const session={userId:'u'};
+ const [,prepared]=await service.account(session,'POST',{action:'prepare'});
+ const claim={action:'complete-reward',token:prepared.token};
+ const results=await Promise.all([service.account(session,'POST',claim),service.account(session,'POST',claim)]);
+ assert.equal(results[0][1].points,5);assert.equal(results[1][1].points,5);
+ const data=new URLSearchParams({ad_unit:'4074617507',custom_data:prepared.token,reward_amount:'5',transaction_id:'sdk-ssv'}).toString();
+ const signature=crypto.sign('sha256',Buffer.from(data),privateKey).toString('base64url');
+ assert.equal((await service.callback('/api/admob/reward?'+data+'&signature='+signature+'&key_id=1'))[0],200);
+ assert.equal((await service.account(session,'GET'))[1].points,5);
+ assert.equal((await service.account(session,'POST',{action:'complete-reward',token:'unknown'}))[0],400);
+ assert.equal((await service.account(null,'POST',claim))[0],401);
+});

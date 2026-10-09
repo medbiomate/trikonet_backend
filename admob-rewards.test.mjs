@@ -76,3 +76,18 @@ test('employer contacts cost one each, repeat and concurrent reveals charge only
  assert.equal((await service.account(session,'POST',{...phone,value:'bad'}))[0],400);
  assert.equal((await service.account(null,'POST',phone))[0],401);
 });
+
+test('wallet and spending remain responsive while ATS analysis is pending',async()=>{
+ let db={users:[{id:'u',resumeRewards:{points:25,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
+ let finish,start;const started=new Promise(resolve=>{start=resolve});
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value},atsAnalyzer:async()=>{start();await new Promise(resolve=>{finish=resolve});return {overallScore:75}}});
+ const session={userId:'u'};
+ const analysis=service.account(session,'POST',{action:'ats-check',requestId:'responsive-check-001',text:'Candidate resume with software development skills and several years of experience. Managed projects, delivered applications and improved customer workflows.'});
+ await started;
+ try{
+  const wallet=await Promise.race([service.account(session,'GET'),new Promise((_,reject)=>setTimeout(()=>reject(Error('Wallet blocked behind analysis')),200))]);
+  assert.equal(wallet[1].points,25);
+  assert.equal((await service.account(session,'POST',{action:'download'}))[1].points,20);
+ }finally{finish()}
+ assert.equal((await analysis)[1].points,20);
+});

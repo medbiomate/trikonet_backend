@@ -1279,8 +1279,8 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/candidate/resume'){
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your resume.'});const db=await readLocalDb();const user=db.users.find(item=>String(item.id)===String(session.userId));if(!user)return sendJson(req,res,401,{error:'Account not found.'});
     if(req.method==='GET')return sendJson(req,res,200,{success:true,resume:user.uploadedResume||null});
-    if(req.method==='POST'){try{user.uploadedResume=candidateFile(await readJsonBody(req,14_000_000));await writeLocalDb(db);return sendJson(req,res,200,{success:true,resume:user.uploadedResume})}catch(error){return sendJson(req,res,400,{error:error.message})}}
-    if(req.method==='DELETE'){delete user.uploadedResume;await writeLocalDb(db);return sendJson(req,res,200,{success:true})}
+    if(req.method==='POST'){try{user.uploadedResume=candidateFile(await readJsonBody(req,14_000_000));await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{success:true,resume:user.uploadedResume})}catch(error){return sendJson(req,res,400,{error:error.message})}}
+    if(req.method==='DELETE'){delete user.uploadedResume;await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{success:true})}
   }
   if(['/api/candidate/email/request','/api/candidate/email/verify'].includes(path)&&req.method==='POST'){
     try{const [status,data]=await emailChange(path.endsWith('/request')?'request':'verify',currentSession(req),await readJsonBody(req));return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Email verification is temporarily unavailable.'})}
@@ -1300,7 +1300,7 @@ const server = http.createServer(async (req, res) => {
         } else {
           applyAccountProfile(user,body,updateCandidateProfile);
         }
-        grantProfileCompletionReward(user);await writeLocalDb(db);return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
+        grantProfileCompletionReward(user);await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
     }
   }
@@ -1330,7 +1330,7 @@ const server = http.createServer(async (req, res) => {
       const existing = existingIndex >= 0 ? db.resumes[existingIndex] : null;
       const resume = { id, userId: session.userId, name: String(body.name || 'My professional résumé').slice(0, 120), template: String(body.template || 'classic').slice(0, 40), state, previewImage: dataUrlBytes(body.previewImage) <= MAX_PROFILE_PHOTO_BYTES ? String(body.previewImage || '') : '', createdAt: existing?.createdAt || now, updatedAt: now };
       if (existingIndex >= 0) db.resumes[existingIndex] = resume; else db.resumes.push(resume);
-      await writeLocalDb(db);
+      await writeLocalDb(db,{skipMedia:true});
       return sendJson(req, res, existingIndex >= 0 ? 200 : 201, { resume, limit: MAX_RESUMES_PER_USER });
     } catch (error) {
       return sendJson(req, res, error.message === 'Request too large' ? 413 : 400, { error: error.message || 'Unable to save résumé.' });
@@ -1345,7 +1345,7 @@ const server = http.createServer(async (req, res) => {
     const before = db.resumes.length;
     db.resumes = db.resumes.filter(item => !(item.id === id && item.userId === session.userId));
     if (db.resumes.length === before) return sendJson(req, res, 404, { error: 'Résumé not found.' });
-    await writeLocalDb(db);
+    await writeLocalDb(db,{skipMedia:true});
     return sendJson(req, res, 200, { ok: true });
   }
 
@@ -1379,7 +1379,7 @@ const server = http.createServer(async (req, res) => {
       };
       if (existing) db.emailCampaigns[db.emailCampaigns.indexOf(existing)] = campaign;
       else db.emailCampaigns.unshift(campaign);
-      await writeLocalDb(db);
+      await writeLocalDb(db,{skipMedia:true});
       return sendJson(req, res, 200, campaign);
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
@@ -1400,7 +1400,7 @@ const server = http.createServer(async (req, res) => {
         if(index>=0)db.candidates[index]={...db.candidates[index],...safe};else db.candidates.push(safe);
         const account=db.users.find(item=>String(item.id)===String(record.id));if(account)applyAccountProfile(account,{name:record.name,phone:record.phone},updateCandidateProfile);
       }
-      await writeLocalDb(db);return sendJson(req,res,200,{saved:true});
+      await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{saved:true});
     }catch(error){return sendJson(req,res,400,{error:error.message});}
   }
   if(path.startsWith('/api/admin/candidate-profile/') && req.method==='GET') {

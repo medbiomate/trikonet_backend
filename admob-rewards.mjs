@@ -8,25 +8,37 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
  const serial=fn=>{const task=queue.then(fn,fn);queue=task.catch(()=>{});return task;};
  const wallet=user=>user.resumeRewards ||= {points:0,challenges:[],transactions:[],downloads:[]};
  return {
-  account:(session,method,body={})=>serial(async()=>{
+  account:async(session,method,body={})=>{
+   // Slow document analysis must not block points reads or other users' rewards.
+   let preparedReport;
+   if(session&&method==='POST'&&body.action==='ats-check'){
+    const requestId=String(body.requestId||'');if(!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))return[400,{error:'Invalid check request.'}];
+    const db=await readLocalDb(),user=db.users.find(u=>String(u.id)===String(session.userId));if(!user)return[401,{error:'Account not found.'}];
+    if(!user.resumeRewards?.atsRequests?.some(item=>item.id===requestId)){
+     let text=String(body.text||'');
+     if(body.resumeId){const resume=db.resumes.find(item=>item.id===body.resumeId&&String(item.userId)===String(user.id));if(!resume)return[404,{error:'Saved resume not found.'}];text=resumeText(resume.state);}
+     try{let document;if(body.file){const extracted=await extractResume(body.file);text=extracted.text;document=extracted.document;}preparedReport=analyzeResume(text,String(body.jobDescription||''));if(document)preparedReport.document=document;}catch(error){return[400,{error:error.message}];}
+     try{preparedReport={...preparedReport,...await atsAnalyzer(text,{fetcher})};}catch(error){return[503,{error:error.message}];}
+    }
+   }
+   return serial(async()=>{
    if(!session)return[401,{error:'Sign in to use resume points.'}];
    const db=await readLocalDb(),user=db.users.find(u=>String(u.id)===String(session.userId));if(!user)return[401,{error:'Account not found.'}];
    const w=wallet(user);
+   let walletChanged=false;
    // One-time account credit explicitly requested by the owner.
-   if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;await writeLocalDb(db);}
-   if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
-   if(grantProfileCompletionReward(user))await writeLocalDb(db);
-   if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();await writeLocalDb(db);}
+   if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;walletChanged=true;}
+   if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;walletChanged=true;}
+   if(grantProfileCompletionReward(user))walletChanged=true;
+   if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();walletChanged=true;}
+   if(walletChanged)await writeLocalDb(db);
    if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,atsHistory:[...(w.atsRequests||[])].reverse().slice(0,50),points:w.points,emailReveals:w.emailReveals||[],contactReveals:w.contactReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
    if(body.action==='ats-check'){
     const requestId=String(body.requestId||'');if(!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))return[400,{error:'Invalid check request.'}];
     w.atsRequests ||= [];
     const prior=w.atsRequests.find(item=>item.id===requestId);if(prior)return[200,{...prior,points:w.points,atsFreeAvailable:!w.atsFreeUsed}];
     const cost=w.atsFreeUsed?20:0;if(w.points<cost)return[402,{error:'An ATS check needs 20 points. Earn more points to continue.',points:w.points}];
-    let text=String(body.text||'');
-    if(body.resumeId){const resume=db.resumes.find(item=>item.id===body.resumeId&&String(item.userId)===String(user.id));if(!resume)return[404,{error:'Saved resume not found.'}];text=resumeText(resume.state);}
-    let report;try{let document;if(body.file){const extracted=await extractResume(body.file);text=extracted.text;document=extracted.document;}report=analyzeResume(text,String(body.jobDescription||''));if(document)report.document=document;}catch(error){return[400,{error:error.message}];}
-    try{report={...report,...await atsAnalyzer(text,{fetcher})};}catch(error){return[503,{error:error.message}];}
+    const report=preparedReport;
     const result={id:requestId,cost,report,at:now()};w.points-=cost;w.atsFreeUsed=true;w.atsLastCheck=result;w.atsRequests.push(result);await writeLocalDb(db);
     return[200,{...result,points:w.points,atsFreeAvailable:false}];
    }
@@ -69,7 +81,8 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
     if(!item.refunded){item.refunded=true;w.points+=5;await writeLocalDb(db);}return[200,{points:w.points}];
    }
    return[400,{error:'Invalid reward action.'}];
-  }),
+  });
+  },
   callback:async(raw)=>{
    const query=raw.split('?')[1]||'',marker=query.indexOf('&signature=');if(marker<0)return[400,{error:'Missing signature.'}];
    const data=query.slice(0,marker),p=new URLSearchParams(query);

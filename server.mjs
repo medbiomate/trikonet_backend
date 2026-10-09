@@ -1,3 +1,4 @@
+import { summarizePost } from './post-summary.mjs';
 import {createAdmobRewards} from './admob-rewards.mjs';
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
@@ -480,7 +481,9 @@ async function wordpressRecords(type, params, adminOptions = null) {
     }
   }
 
-  return [...byId.values()];
+  const records = [...byId.values()];
+  return postType === 'post' && params.get('summary') === '1' && !slug && !adminOptions
+    ? records.map(summarizePost) : records;
 }
 
 async function wordpressCount(type, params, adminOptions = null) {

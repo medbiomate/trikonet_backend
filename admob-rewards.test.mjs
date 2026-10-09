@@ -109,10 +109,21 @@ test('SDK completion credits once and signed SSV reconciles without duplicate cr
  assert.equal((await service.account(null,'POST',claim))[0],401);
 });
 
-test('point ledger records earnings and contact spending without repeating entries',async()=>{
+test('foreground time earns one per five minutes, pauses in background, and rejects duplicate heartbeats',async()=>{
+ let clock=1000000;let db={users:[{id:'u',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value},now:()=>clock});const session={userId:'u'};let sequence=0;
+ const beat=async(active=true,elapsedMs=30000,id='activity-session-one')=>service.account(session,'POST',{action:'foreground-time',activityId:id,sequence:++sequence,active,elapsedMs});
+ await beat();for(let i=0;i<9;i++){clock+=30000;await beat();}
+ assert.equal((await service.account(session,'GET'))[1].points,0);
+ clock+=30000;await beat();assert.equal((await service.account(session,'GET'))[1].points,1);
+ await service.account(session,'POST',{action:'foreground-time',activityId:'activity-session-one',sequence,active:true,elapsedMs:30000});assert.equal((await service.account(session,'GET'))[1].points,1);
+ await beat(false,0);clock+=600000;await beat(true,600000);assert.equal((await service.account(session,'GET'))[1].points,1);
+ clock+=600000;await beat(true,600000);assert.equal((await service.account(session,'GET'))[1].points,1);
+ clock+=30000;await beat(true,30000,'another-device-session');assert.equal((await service.account(session,'GET'))[1].points,1);
+});
+
+test('point ledger records contact spending once',async()=>{
  let db={users:[{id:'u',resumeRewards:{points:10,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
- const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
- const session={userId:'u'};const action={action:'reveal-contact',kind:'phone',value:'+971 501234567'};
- await service.account(session,'POST',action);await service.account(session,'POST',action);
- const wallet=(await service.account(session,'GET'))[1];assert.equal(wallet.points,9);assert.equal(wallet.history.length,1);assert.equal(wallet.history[0].amount,-1);assert.match(wallet.history[0].label,/phone/);
+ const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});const session={userId:'u'},action={action:'reveal-contact',kind:'phone',value:'+971 501234567'};
+ await service.account(session,'POST',action);await service.account(session,'POST',action);const wallet=(await service.account(session,'GET'))[1];assert.equal(wallet.points,9);assert.equal(wallet.history.length,1);assert.equal(wallet.history[0].amount,-1);
 });

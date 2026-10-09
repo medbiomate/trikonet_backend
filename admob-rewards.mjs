@@ -73,6 +73,21 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
     if(w.challenges.length>=10)return[429,{error:'Please finish your current ad or try again later.'}];
     const token=crypto.randomBytes(24).toString('hex');w.challenges.push({token,expires:now()+3600000});await writeLocalDb(db);return[200,{token,points:w.points}];
    }
+   if(body.action==='foreground-time'){
+    const id=String(body.activityId||'');const sequence=Number(body.sequence);
+    if(!/^[a-zA-Z0-9-]{16,80}$/.test(id)||!Number.isSafeInteger(sequence)||sequence<1)return[400,{error:'Invalid activity session.'}];
+    const t=w.foregroundTime ||= {milliseconds:0,lastAt:0,activityId:'',sequence:0,active:false};
+    if(t.activityId===id&&sequence<=t.sequence)return[200,{points:w.points,foregroundMilliseconds:t.milliseconds}];
+    const elapsed=Math.max(0,now()-t.lastAt);
+    const claimed=Math.max(0,Math.min(35000,Number(body.elapsedMs)||0));
+    // Only consecutive foreground heartbeats count. Gaps and other devices cannot multiply time.
+    if(t.active&&t.activityId===id&&elapsed<=35000)t.milliseconds+=Math.min(elapsed,claimed);
+    t.lastAt=now();t.activityId=id;t.sequence=sequence;t.active=body.active===true;
+    const earned=Math.floor(t.milliseconds/300000);
+    if(earned){t.milliseconds%=300000;w.points+=earned;record(w,earned,'App time reward');}
+    await writeLocalDb(db);
+    return[200,{points:w.points,earned,foregroundMilliseconds:t.milliseconds}];
+   }
    if(body.action==='complete-reward'){
     const challenge=w.challenges.find(c=>c.token===body.token);
     if(!challenge||challenge.expires<now())return[400,{error:'Reward session expired. Please start a new ad.'}];

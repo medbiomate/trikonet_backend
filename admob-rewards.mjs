@@ -48,7 +48,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
     const created=Date.parse(user.createdAt||'');if(!Number.isFinite(created)||created<now()-7*86400000)return[403,{error:'Referral codes can be claimed during your first 7 days.'}];
     const code=String(body.code||'').trim().toUpperCase();const referrer=db.users.find(u=>u.resumeRewards?.referralCode===code);
     if(!referrer)return[400,{error:'Referral code not found.'}];if(String(referrer.id)===String(user.id))return[400,{error:'You cannot use your own referral code.'}];
-    const other=wallet(referrer);w.points+=20;other.points+=20;record(w,20,'Referral bonus');record(other,20,'Referral bonus');w.referredBy=String(referrer.id);w.referralClaimedAt=new Date(now()).toISOString();other.referralRewards ||= [];other.referralRewards.push({userId:String(user.id),at:w.referralClaimedAt,points:20});await writeLocalDb(db);
+    const other=wallet(referrer);w.points+=50;other.points+=50;record(w,50,'Referral bonus');record(other,50,'Referral bonus');w.referredBy=String(referrer.id);w.referralClaimedAt=new Date(now()).toISOString();other.referralRewards ||= [];other.referralRewards.push({userId:String(user.id),at:w.referralClaimedAt,points:50});await writeLocalDb(db);
     return[200,{points:w.points,referralClaimed:true,referralCode:w.referralCode}];
    }
    if(body.action==='reveal-contact'){

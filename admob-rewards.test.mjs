@@ -53,13 +53,13 @@ test('welcome bonus earns ten points once per account',async()=>{
  await service.account(session,'POST',{action:'download'});
  assert.equal((await service.account(session,'GET'))[1].points,5);
 });
-test('referral credits both accounts twenty once and rejects self referral',async()=>{
+test('referral credits both accounts fifty once and rejects self referral',async()=>{
  const createdAt=new Date().toISOString();let db={users:[{id:'a',createdAt},{id:'b',createdAt}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
  const first=(await service.account({userId:'a'},'GET'))[1];
  assert.equal((await service.account({userId:'a'},'POST',{action:'claim-referral',code:first.referralCode}))[0],400);
- assert.equal((await service.account({userId:'b'},'POST',{action:'claim-referral',code:first.referralCode}))[1].points,30);
- assert.equal((await service.account({userId:'a'},'GET'))[1].points,30);
+ assert.equal((await service.account({userId:'b'},'POST',{action:'claim-referral',code:first.referralCode}))[1].points,60);
+ assert.equal((await service.account({userId:'a'},'GET'))[1].points,60);
  assert.equal((await service.account({userId:'b'},'POST',{action:'claim-referral',code:first.referralCode}))[0],409);
 });
 

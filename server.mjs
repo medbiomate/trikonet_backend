@@ -6,6 +6,7 @@ import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile,calculateCandidateCompletion,grantProfileCompletionReward} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
+import {createCategorySpelling} from './category-spelling.mjs';
 import {createPointsStore} from './points-store.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
@@ -744,6 +745,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
+const categorySpelling=createCategorySpelling();
 const pointsStore=createPointsStore(wpDb,{readLocalDb});
 const admobRewards=createAdmobRewards(pointsStore);
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
@@ -1280,6 +1282,7 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/candidate/resume-points'&&['GET','POST'].includes(req.method)){
     try{const [status,result]=await admobRewards.account(currentSession(req),req.method,req.method==='POST'?await readJsonBody(req,7500000):{});return sendJson(req,res,status,result)}catch(error){console.error('Resume points request failed:',error.message);return sendJson(req,res,error.message==='Request too large'?413:503,{error:error.message==='Request too large'?'Resume upload is too large. Choose a PDF or DOCX up to 5 MB.':'Resume service is temporarily unavailable. No analysis charge was made.'})}
   }
+  if(path==='/api/candidate/category-spelling'&&req.method==='POST'){const [status,data]=await categorySpelling(currentSession(req),await readJsonBody(req,2000));return sendJson(req,res,status,data)}
   if(path==='/api/candidate/recommendations/refine'&&req.method==='POST'){
     try{const [status,result]=await refineRecommendations(currentSession(req),await readJsonBody(req,100000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Recommendations are temporarily unavailable.'})}
   }

@@ -1024,7 +1024,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body=await readJsonBody(req);
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
-      const user=await googleAccount(identity,{readLocalDb,writeLocalDb});
+      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true})});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
       await sessions.flush();
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));

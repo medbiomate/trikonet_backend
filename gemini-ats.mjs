@@ -10,7 +10,7 @@ export async function analyzeWithGemini(text,{fetcher=fetch,key=()=>process.env.
  if(!key())throw Error('Resume analysis is temporarily unavailable. No points were charged.');
  // Remove direct contact details before sending career content to the provider.
  const resume=text.replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g,'[email removed]').replace(/https?:\/\/\S+|www\.\S+/gi,'[link removed]').replace(/(?:\+?\d[\d ().-]{7,}\d)/g,'[contact number removed]');
- const model=process.env.GEMINI_ATS_MODEL||process.env.GEMINI_RECOMMENDATION_MODEL||'gemini-3.8-flash';
+ const model=process.env.GEMINI_ATS_MODEL||'gemini-3.1-flash-lite';
  try{
   let response;
   for(let attempt=0;attempt<2;attempt++){

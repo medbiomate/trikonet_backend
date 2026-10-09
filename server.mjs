@@ -1,3 +1,4 @@
+import {createPersistentSessions} from './persistent-sessions.mjs';
 import { summarizePost } from './post-summary.mjs';
 import {createAdmobRewards} from './admob-rewards.mjs';
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
@@ -688,7 +689,7 @@ async function sendJson(req, res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-const sessions = new Map();
+const sessions = await createPersistentSessions(wpDb);
 const MAX_RESUMES_PER_USER = 3;
 const MAX_PROFILE_PHOTO_BYTES = 100 * 1024;
 const cookieValue = (req, name) =>
@@ -1025,6 +1026,7 @@ const server = http.createServer(async (req, res) => {
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
       const user=await googleAccount(identity,{readLocalDb,writeLocalDb});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
+      await sessions.flush();
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
       return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email}});
     }catch{return sendJson(req,res,401,{error:'Google sign-in could not be completed. Please try your email and password.'});}
@@ -1062,6 +1064,7 @@ const server = http.createServer(async (req, res) => {
 
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
+      await sessions.flush();
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
       return sendJson(req, res, 201, { user: { id: user.id, name: user.name, email: user.email } });
     } catch (error) {
@@ -1083,6 +1086,7 @@ const server = http.createServer(async (req, res) => {
 
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
+      await sessions.flush();
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
       return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email } });
     } catch (error) {
@@ -1100,6 +1104,7 @@ const server = http.createServer(async (req, res) => {
   // API: Auth Logout
   if (path === '/api/auth/logout' && req.method === 'POST') {
     sessions.delete(cookieValue(req, 'trikonet_session'));
+    await sessions.flush();
     res.setHeader('Set-Cookie', getSessionCookieHeader(req, '', 0));
     return sendJson(req, res, 200, { ok: true });
   }

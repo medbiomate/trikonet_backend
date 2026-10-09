@@ -30,6 +30,7 @@ export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessi
   challenges.delete(challenge);const db=await readLocalDb();const user=db.users.find(user=>user.id===item.userId);if(!user)return [400,{error:'Unable to reset this account.'}];
   const credentials=passwordHash(password);user.passwordSalt=credentials.salt;user.passwordHash=credentials.hash;await writeLocalDb(db);
   for(const [token,session] of sessions)if(session.userId===user.id)sessions.delete(token);
+  if(sessions.flush)await sessions.flush();
   for(const [key,value] of challenges)if(value.userId===user.id)challenges.delete(key);
   return [200,{success:true,message:'Your password has been updated. Sign in with your new password.'}];
  }

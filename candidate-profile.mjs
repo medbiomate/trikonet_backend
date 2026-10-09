@@ -15,8 +15,19 @@ export function calculateCandidateCompletion(p) {
 }
 
 export function grantProfileCompletionReward(user){
- if(calculateCandidateCompletion({...user.profile,name:user.name,email:user.email})!==100)return false;
+ const completion=calculateCandidateCompletion({...user.profile,name:user.name,email:user.email});
  const wallet=user.resumeRewards ||= {points:0,challenges:[],transactions:[],downloads:[]};
- if(wallet.profileCompletionRewardGranted)return false;
- wallet.points+=10;wallet.profileCompletionRewardGranted=true;return true;
+ wallet.profileMilestones ||= [];
+ let changed=false;
+ for(const [threshold,amount] of [[50,20],[80,30],[100,50]]){
+  if(completion<threshold||wallet.profileMilestones.includes(threshold))continue;
+  // Apply the earlier ten-point completion bonus toward the new final reward.
+  const credit=threshold===100&&wallet.profileCompletionRewardGranted?amount-10:amount;
+  wallet.points=(Number(wallet.points)||0)+credit;
+  wallet.profileMilestones.push(threshold);
+  wallet.history ||= [];
+  wallet.history.push({id:`profile-${threshold}`,amount:credit,label:`Profile ${threshold}% completion reward`,at:Date.now()});
+  changed=true;
+ }
+ return changed;
 }

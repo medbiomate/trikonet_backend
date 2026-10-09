@@ -30,7 +30,7 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    // One-time account credit explicitly requested by the owner.
    if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;walletChanged=true;}
    if(!w.welcomeBonusGranted){w.points+=10;record(w,10,'Welcome bonus');w.welcomeBonusGranted=true;walletChanged=true;}
-   const beforeProfile=w.points;if(grantProfileCompletionReward(user)){record(w,w.points-beforeProfile,'Profile completion bonus');walletChanged=true;}
+   if(grantProfileCompletionReward(user))walletChanged=true;
    if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();walletChanged=true;}
    if(walletChanged)await writeLocalDb(db);
    if(method==='GET')return[200,{atsFreeAvailable:!w.atsFreeUsed,atsLastCheck:w.atsLastCheck||null,atsHistory:[...(w.atsRequests||[])].reverse().slice(0,50),points:w.points,history:[...(w.history||[])].reverse().slice(0,200),emailReveals:w.emailReveals||[],contactReveals:w.contactReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];

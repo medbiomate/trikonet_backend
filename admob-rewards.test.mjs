@@ -38,11 +38,11 @@ test('requested owner balance is initialized to 100 only once',async()=>{
  await service.account(session,'POST',{action:'download'});
  assert.equal((await service.account(session,'GET'))[1].points,95);
 });
-test('profile completion earns ten points only once',async()=>{
+test('profile completion earns all three milestones only once',async()=>{
  let db={users:[{id:'complete',resumeRewards:{points:0,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]},name:'Candidate',email:'candidate@example.com',profile:{phone:'1',currentLocation:'Dubai',role:'Developer',experience:'2 years',qualification:'Degree',category:'IT',skills:'JavaScript',locations:['Dubai']}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});
- assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
- assert.equal((await service.account({userId:'complete'},'GET'))[1].points,10);
+ assert.equal((await service.account({userId:'complete'},'GET'))[1].points,100);
+ assert.equal((await service.account({userId:'complete'},'GET'))[1].points,100);
 });
 
 test('welcome bonus earns ten points once per account',async()=>{
@@ -126,4 +126,18 @@ test('point ledger records contact spending once',async()=>{
  let db={users:[{id:'u',resumeRewards:{points:10,welcomeBonusGranted:true,challenges:[],transactions:[],downloads:[]}}]};
  const service=createAdmobRewards({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}});const session={userId:'u'},action={action:'reveal-contact',kind:'phone',value:'+971 501234567'};
  await service.account(session,'POST',action);await service.account(session,'POST',action);const wallet=(await service.account(session,'GET'))[1];assert.equal(wallet.points,9);assert.equal(wallet.history.length,1);assert.equal(wallet.history[0].amount,-1);
+});
+
+test('profile milestones persist through edits and migrate earlier completion credit',async()=>{
+ const {grantProfileCompletionReward}=await import('./candidate-profile.mjs');
+ const user={name:'Candidate',email:'test@example.com',profile:{phone:'1',currentLocation:'Dubai',role:'Developer'},resumeRewards:{points:0}};
+ assert.equal(grantProfileCompletionReward(user),true);assert.equal(user.resumeRewards.points,20);
+ Object.assign(user.profile,{experience:'2',qualification:'Degree',category:'IT'});
+ grantProfileCompletionReward(user);assert.equal(user.resumeRewards.points,50);
+ Object.assign(user.profile,{skills:'JS',locations:['Dubai']});
+ grantProfileCompletionReward(user);assert.equal(user.resumeRewards.points,100);
+ user.profile.skills='';grantProfileCompletionReward(user);user.profile.skills='JS';grantProfileCompletionReward(user);
+ assert.equal(user.resumeRewards.points,100);assert.equal(user.resumeRewards.history.length,3);
+ const legacy={...user,resumeRewards:{points:10,profileCompletionRewardGranted:true}};
+ grantProfileCompletionReward(legacy);assert.equal(legacy.resumeRewards.points,100);
 });

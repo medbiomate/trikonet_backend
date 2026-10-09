@@ -6,6 +6,7 @@ import {candidateFile} from './candidate-file.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile,calculateCandidateCompletion,grantProfileCompletionReward} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
+import {createPointsStore} from './points-store.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
@@ -743,7 +744,8 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
-const admobRewards=createAdmobRewards({readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true})});
+const pointsStore=createPointsStore(wpDb,{readLocalDb});
+const admobRewards=createAdmobRewards(pointsStore);
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 

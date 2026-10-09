@@ -13,7 +13,16 @@ export function createAdmobRewards({readLocalDb,writeLocalDb,fetcher=fetch,now=D
    if(String(user.email||'').toLowerCase()==='saneensane007@gmail.com'&&!w.ownerCredit100Granted){w.points=100;w.ownerCredit100Granted=true;await writeLocalDb(db);}
    if(!w.welcomeBonusGranted){w.points+=10;w.welcomeBonusGranted=true;await writeLocalDb(db);}
    if(grantProfileCompletionReward(user))await writeLocalDb(db);
-   if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[]}];
+   if(!w.referralCode){w.referralCode=crypto.randomBytes(6).toString('hex').toUpperCase();await writeLocalDb(db);}
+   if(method==='GET')return[200,{points:w.points,emailReveals:w.emailReveals||[],referralCode:w.referralCode,referralClaimed:Boolean(w.referredBy),referralEligible:!w.referredBy&&Date.parse(user.createdAt||'')>=now()-7*86400000}];
+   if(body.action==='claim-referral'){
+    if(w.referredBy)return[409,{error:'You have already claimed a referral bonus.'}];
+    const created=Date.parse(user.createdAt||'');if(!Number.isFinite(created)||created<now()-7*86400000)return[403,{error:'Referral codes can be claimed during your first 7 days.'}];
+    const code=String(body.code||'').trim().toUpperCase();const referrer=db.users.find(u=>u.resumeRewards?.referralCode===code);
+    if(!referrer)return[400,{error:'Referral code not found.'}];if(String(referrer.id)===String(user.id))return[400,{error:'You cannot use your own referral code.'}];
+    const other=wallet(referrer);w.points+=20;other.points+=20;w.referredBy=String(referrer.id);w.referralClaimedAt=new Date(now()).toISOString();other.referralRewards ||= [];other.referralRewards.push({userId:String(user.id),at:w.referralClaimedAt,points:20});await writeLocalDb(db);
+    return[200,{points:w.points,referralClaimed:true,referralCode:w.referralCode}];
+   }
    if(body.action==='reveal-email'){
     const email=String(body.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return[400,{error:'Invalid email.'}];
     w.emailReveals ||= [];if(w.emailReveals.includes(email))return[200,{points:w.points,emailReveals:w.emailReveals}];

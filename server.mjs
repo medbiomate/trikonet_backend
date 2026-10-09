@@ -1,3 +1,4 @@
+import {createJobEmailAlerts} from './job-email-alerts.mjs';
 import {createPersistentSessions} from './persistent-sessions.mjs';
 import { summarizePost } from './post-summary.mjs';
 import {createAdmobRewards} from './admob-rewards.mjs';
@@ -743,6 +744,14 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
   return `trikonet_session=${token}; HttpOnly; SameSite=${sameSite}${secure}; Path=/; Max-Age=${maxAge}`;
 }
 
+const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await readLocalDb()).users.filter(isCandidateAccount),loadJobs:async()=>{
+  const {jobs}=await loadSeoRecords();
+  const local=await readLocalDb();
+  const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
+  for(const job of jobs)merged.set(String(job.id||job.slug),job);
+  for(const job of local.jobs || [])merged.set(String(job.id||job.slug),job);
+  return [...merged.values()];
+}});
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
 const categorySpelling=createCategorySpelling();
@@ -1023,6 +1032,30 @@ const server = http.createServer(async (req, res) => {
     catch { return sendJson(req,res,503,{error:'Password reset email is temporarily unavailable. Please try again later.'}); }
   }
 
+  if(path==='/api/candidate/job-alerts' && ['GET','POST'].includes(req.method)) {
+    const session=currentSession(req);
+    if(!session)return sendJson(req,res,401,{error:'Sign in to manage email alerts.'});
+    try {
+      const user=(await readLocalDb()).users.find(user=>String(user.id)===String(session.userId));
+      if(!user||!isCandidateAccount(user))return sendJson(req,res,403,{error:'Email alerts are available to job seekers.'});
+      const body=req.method==='POST'?await readJsonBody(req,1000):{};
+      if(req.method==='POST'&&typeof body.enabled!=='boolean')return sendJson(req,res,400,{error:'Enabled must be true or false.'});
+      return sendJson(req,res,200,await jobEmailAlerts.preferences(user.id,body.enabled));
+    }catch(error){console.error('Email alert preferences failed:',error.message);return sendJson(req,res,503,{error:'Email alert settings are temporarily unavailable.'});}
+  }
+  if(path==='/api/job-alerts/unsubscribe' && ['GET','POST'].includes(req.method)) {
+    const token=requestUrl.searchParams.get('token');
+    if(!/^[a-f0-9]{64}$/.test(token||''))return sendJson(req,res,400,{error:'Invalid unsubscribe link.'});
+    if(req.method==='GET') {
+      res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; form-action 'self'; base-uri 'none'"});
+      return res.end(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Trikonet email alerts</title><h1>Unsubscribe from job emails</h1><p>Stop receiving new-job email alerts from Trikonet.</p><form method="post"><button type="submit">Unsubscribe</button></form></html>`);
+    }
+    try {
+      const removed=await jobEmailAlerts.unsubscribe(token);
+      res.writeHead(removed?200:404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
+      return res.end(removed?'<!doctype html><html lang="en"><title>Unsubscribed</title><h1>You have unsubscribed</h1><p>You can enable job emails again in your Trikonet profile.</p></html>':'Invalid unsubscribe link.');
+    }catch{return sendJson(req,res,503,{error:'Please try again shortly.'});}
+  }
   if(path==='/api/auth/google-config'&&req.method==='GET')return sendJson(req,res,200,{clientId:process.env.GOOGLE_CLIENT_ID||null});
   if(path==='/api/auth/google'&&req.method==='POST'){
     try {
@@ -1864,3 +1897,6 @@ async function refreshEmsUploads() {
 const emsSyncTimer = setInterval(refreshEmsUploads, 30000);
 emsSyncTimer.unref();
 void refreshEmsUploads();
+
+const jobEmailTimer=setInterval(()=>jobEmailAlerts.tick().catch(error=>console.error('Job email worker failed:',error.message)),60000);
+jobEmailTimer.unref();

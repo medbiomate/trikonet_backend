@@ -23,6 +23,7 @@ import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mysql from 'mysql2/promise';
+import { retryDisconnectedReads } from './database-read-retry.mjs';
 import { createMediaStore } from './media-store.mjs';
 import crypto from 'node:crypto';
 import { newestFirst } from './record-order.mjs';
@@ -81,7 +82,13 @@ const dbConfig = process.env.TRIKONET_DB_HOST
       dateStrings: true
     };
 
-const wpDb = mysql.createPool(dbConfig);
+const wpDb = retryDisconnectedReads(mysql.createPool({
+  ...dbConfig,
+  maxIdle: 2,
+  idleTimeout: 30_000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
+}));
 const emsSync = createEmsSync(wpDb);
 async function numericJobId(job) {
   if (job?.urlJobId) return job.urlJobId;

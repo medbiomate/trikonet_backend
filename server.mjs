@@ -824,6 +824,23 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  if (path === '/api/admin/employer-job-counts' && req.method === 'GET') {
+    if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Administrator authentication required.'});
+    try {
+      await loadMemoryStore();
+      const db = await readLocalDb();
+      const slugs = [...new Set((requestUrl.searchParams.get('slugs') || '').split(',').filter(Boolean))].slice(0,100);
+      const employers = new Map((memoryStore.employers || []).map(item => [item.slug,item]));
+      for (const employer of db.employers || []) employers.set(employer.slug,employer);
+      const counts = {};
+      for (const slug of slugs) {
+        const employer = employers.get(slug);
+        if (employer) counts[slug] = employerJobPage(memoryStore.jobs || [], db.jobs || [], employer).total;
+      }
+      return sendJson(req,res,200,counts);
+    } catch { return sendJson(req,res,503,{error:'Unable to load employer job counts.'}); }
+  }
+
   if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
     try {
       await loadMemoryStore();

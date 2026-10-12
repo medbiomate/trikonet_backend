@@ -1728,6 +1728,13 @@ const server = http.createServer(async (req, res) => {
       if (!employer.title?.trim() || !employer.slug?.trim()) {
         return sendJson(req, res, 400, { error: 'Employer name and slug are required' });
       }
+      const missing = [];
+      for (const field of ['categories','locations']) {
+        if (!Array.isArray(employer[field]) || !employer[field].some(value => typeof value === 'string' && value.trim())) missing.push(field === 'categories' ? 'category' : 'location');
+      }
+      if (!String(employer.description || '').replace(/<[^>]*>/g,'').replace(/&nbsp;|&#160;/gi,' ').trim()) missing.push('description');
+      if (typeof employer.logo !== 'string' || !employer.logo.trim()) missing.push('logo');
+      if (missing.length) return sendJson(req,res,400,{error:`Company ${missing.join(', ')} required before saving.`, fields:missing});
       employer.slug = employer.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       employer.updatedAt = new Date().toISOString();
       employer.createdAt = employer.createdAt || employer.updatedAt;

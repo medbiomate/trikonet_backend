@@ -1,3 +1,4 @@
+import { recordSignInPlatform } from './sign-in-platform.mjs';
 import { repairEmployerSnapshots, employerNameKey, isEmployerSnapshot } from './employer-repair.mjs';
 import {createJobEmailAlerts} from './job-email-alerts.mjs';
 import {createPersistentSessions} from './persistent-sessions.mjs';
@@ -1071,6 +1072,8 @@ const server = http.createServer(async (req, res) => {
       const body=await readJsonBody(req);
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
       const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true})});
+      const db=await readLocalDb();const savedUser=db.users.find(item=>String(item.id)===String(user.id));
+      if(savedUser){recordSignInPlatform(savedUser,req,body);await writeLocalDb(db,{skipMedia:true});}
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
       await sessions.flush();
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
@@ -1108,6 +1111,8 @@ const server = http.createServer(async (req, res) => {
       db.users.push(user);
       await writeLocalDb(db);
 
+      recordSignInPlatform(user,req,body);
+      await writeLocalDb(db,{skipMedia:true});
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
       await sessions.flush();
@@ -1130,6 +1135,8 @@ const server = http.createServer(async (req, res) => {
         return sendJson(req, res, 401, { error: 'Invalid email or password' });
       }
 
+      recordSignInPlatform(user,req,body);
+      await writeLocalDb(db,{skipMedia:true});
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
       await sessions.flush();
@@ -1478,7 +1485,7 @@ const server = http.createServer(async (req, res) => {
         imported.push(...await wordpressRecords('candidate', new URLSearchParams({ per_page: '100' }), { excludedSlugs: [] }));
       } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
       const users = (db.users || []).filter(isCandidateAccount);
-      const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt })), ...(db.candidates || [])];
+      const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt, signInPlatforms:user.signInPlatforms || [] })), ...(db.candidates || [])];
       const resumeCounts = new Map();
       for (const resume of db.resumes || []) {
         if (resume.userId == null) continue;
@@ -1489,6 +1496,7 @@ const server = http.createServer(async (req, res) => {
       for (const record of records) {
         const m = record.metas || {};
         const candidate = {
+          signInPlatforms: users.find(u=>String(u.id)===String(record.id))?.signInPlatforms || record.signInPlatforms || [],
           resumeCount: resumeCounts.get(String(record.sourceAccountId || record.id)) || 0,
           id: record.id, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
           email: record.email || m._candidate_email || '', jobTitle: record.jobTitle || record.professionalTitle || m._candidate_title || '',

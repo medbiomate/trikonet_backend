@@ -1485,7 +1485,7 @@ const server = http.createServer(async (req, res) => {
         imported.push(...await wordpressRecords('candidate', new URLSearchParams({ per_page: '100' }), { excludedSlugs: [] }));
       } catch (error) { if (error.code !== 'ER_NO_SUCH_TABLE') throw error; }
       const users = (db.users || []).filter(isCandidateAccount);
-      const records = [...imported, ...users.map(user => ({ ...user.profile, id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt, signInPlatforms:user.signInPlatforms || [] })), ...(db.candidates || [])];
+      const records = [...imported, ...users.map(user => ({ ...user.profile, photo: user.profile?.photo || user.avatar || '', id: user.id, name: user.name || user.username, email: user.email, createdAt: user.createdAt, signInPlatforms:user.signInPlatforms || [] })), ...(db.candidates || [])];
       const resumeCounts = new Map();
       for (const resume of db.resumes || []) {
         if (resume.userId == null) continue;
@@ -1503,7 +1503,7 @@ const server = http.createServer(async (req, res) => {
           category: record.category || Object.values(m._candidate_category || {}).join(', '),
           location: record.location || Object.values(m._candidate_location || {}).join(', '),
           experience: record.experience || m._candidate_experience || '', qualification: record.qualification || '',
-          bio: record.bio || record.content?.rendered || '', photo: record.photo || m._candidate_photo || '',
+          bio: record.bio || record.content?.rendered || '', photo: record.photo || record.avatar || record.profile?.photo || m._candidate_photo || '',
           status: record.status === 'pending' ? 'Pending' : record.status === 'inactive' || record.status === 'draft' ? 'Inactive' : 'Active',
           featured: !!record.featured, phone:record.phone || m._candidate_phone || '', createdAt: users.find(u=>String(u.id)===String(record.id))?.createdAt || record.createdAt || record.date || ''
         };

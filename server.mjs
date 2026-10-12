@@ -1,3 +1,6 @@
+import { gzip as gzipCallback } from 'node:zlib';
+import { promisify } from 'node:util';
+const gzipJson = promisify(gzipCallback);
 import { recordSignInPlatform } from './sign-in-platform.mjs';
 import { repairEmployerSnapshots, employerNameKey, isEmployerSnapshot } from './employer-repair.mjs';
 import {createJobEmailAlerts} from './job-email-alerts.mjs';
@@ -680,7 +683,7 @@ async function sendJson(req, res, status, value) {
   // Persist embedded images before returning stable public URLs. Originals remain intact.
   try {
     const publicContent = /^\/api\/(?:local\/(?:jobs|employers)(?:[/?]|$)|wp\/(?:job_listing|employer|posts|top-employers)(?:\?|$)|employers\/|employer-jobs\/)/.test(req.url);
-    value=await (publicContent ? mediaStore.publish(value) : mediaStore.normalize(value));
+    value=await (publicContent && req.method !== 'GET' ? mediaStore.publish(value) : mediaStore.normalize(value));
   } catch(error) { console.error('Media persistence unavailable:',error.message); }
   const attributionRequest=new URL(req.url,'https://api.trikonet.com');
   if(!attributionRequest.pathname.startsWith('/api/admin/') && !(attributionRequest.searchParams.get('admin')==='1' && await currentAdminSession(req)))value=withoutTeamAttribution(value);
@@ -698,8 +701,15 @@ async function sendJson(req, res, status, value) {
     headers['Access-Control-Allow-Origin'] = '*';
   }
 
+  let body = Buffer.from(JSON.stringify(value));
+  if (body.length > 1024 && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    body = await gzipJson(body);
+    headers['Content-Encoding'] = 'gzip';
+  }
+  headers['Vary'] = [headers['Vary'], 'Accept-Encoding'].filter(Boolean).join(', ');
+  headers['Content-Length'] = body.length;
   res.writeHead(status, headers);
-  res.end(JSON.stringify(value));
+  res.end(body);
 }
 
 const sessions = await createPersistentSessions(wpDb);
@@ -1616,7 +1626,11 @@ const server = http.createServer(async (req, res) => {
     const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
-    return sendJson(req, res, 200, adminView ? db.jobs : db.jobs.filter(isPublicRecord));
+    const jobs = (adminView ? db.jobs : db.jobs.filter(isPublicRecord)).map(job => {
+      const { recoveryDraft, logoBackup, ...listing } = job;
+      return listing;
+    });
+    return sendJson(req, res, 200, jobs);
   }
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'GET') {

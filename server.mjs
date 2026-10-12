@@ -1,3 +1,4 @@
+import { repairEmployerSnapshots, employerNameKey, isEmployerSnapshot } from './employer-repair.mjs';
 import {createJobEmailAlerts} from './job-email-alerts.mjs';
 import {createPersistentSessions} from './persistent-sessions.mjs';
 import { summarizePost } from './post-summary.mjs';
@@ -594,6 +595,7 @@ async function readLocalDb() {
 }
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
+  repairEmployerSnapshots(db);
   if(!skipMedia){
   db = await mediaStore.normalize(db);
   db.jobs = await mediaStore.publish(db.jobs || [], 'job');
@@ -1597,7 +1599,7 @@ const server = http.createServer(async (req, res) => {
     const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
-    const job = db.jobs.find(item => item.slug === slug && (adminView || isPublicRecord(item)));
+    const job = db.jobs.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
     return sendJson(req, res, job ? 200 : 404, job || { error: 'Job not found' });
   }
 
@@ -1680,6 +1682,7 @@ const server = http.createServer(async (req, res) => {
     const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
+    if (adminView && repairEmployerSnapshots(db)) await writeLocalDb(db,{skipMedia:true});
     return sendJson(req, res, 200, adminView ? db.employers : db.employers.filter(isPublicRecord));
   }
 
@@ -1688,7 +1691,7 @@ const server = http.createServer(async (req, res) => {
     const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const employer = db.employers.find(item => item.slug === slug && (adminView || isPublicRecord(item)));
+    const employer = db.employers.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
     return sendJson(req, res, employer ? 200 : 404, employer || { error: 'Employer not found' });
   }
 
@@ -1708,8 +1711,11 @@ const server = http.createServer(async (req, res) => {
       const db = await readLocalDb();
       const index = db.employers.findIndex(item => item.slug === employer.originalSlug || item.slug === employer.slug);
       const existing = index >= 0 ? db.employers[index] : null;
+      const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));
+      if (duplicate) return sendJson(req,res,409,{error:'A company with this name already exists. Select or edit the existing company.',existingSlug:duplicate.slug});
       const nowIso = employer.updatedAt;
       employer.id = existing?.id || crypto.randomUUID();
+      if (existing?.urlAliases) employer.urlAliases = [...new Set([...(existing.urlAliases || []),...(employer.urlAliases || [])])];
       employer.createdAt = existing ? existing.createdAt : nowIso;
       employer.createdBy = jobCreator(existing, admin);
       if (employer.createdBy && String(employer.createdBy.id) === String(admin.userId)) employer.createdBy.email = admin.email;

@@ -770,7 +770,17 @@ const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await 
   const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
   for(const job of jobs)merged.set(String(job.id||job.slug),job);
   for(const job of local.jobs || [])merged.set(String(job.id||job.slug),job);
-  return [...merged.values()];
+  const name=value=>String(value?.rendered??value??'').toLowerCase().trim();
+  const employers=[...(memoryStore.employers||[]),...(local.employers||[])];
+  const bySlug=new Map(employers.map(employer=>[employer.slug,employer]));
+  const byName=new Map(employers.map(employer=>[name(employer.title),employer]));
+  return [...merged.values()].map(job=>{
+    const m=job.metas||{};
+    const slug=job.employerSlug||String(job.employerUrl||m._job_employer_url||'').split('/').filter(Boolean).pop();
+    const employer=bySlug.get(slug)||byName.get(name(job.company||m._job_employer_name));
+    const em=employer?.metas||{};
+    return {...job,employerSlug:employer?.slug||slug,logo:job.logo||m._job_logo||employer?.logo||em._employer_logo||em._employer_featured_image_img||'',companyDetails:employer?.description||employer?.content?.rendered||''};
+  });
 }});
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});

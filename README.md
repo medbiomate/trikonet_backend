@@ -97,3 +97,11 @@ Copy `.env.example` to `.env` and customize:
 | `TRIKONET_DB_USER` | MySQL database username | `root` |
 | `TRIKONET_DB_PASSWORD`| MySQL database password | `""` |
 | `TRIKONET_DB_NAME` | MySQL database name | `trikonet_html_test` |
+
+### Scheduled job digests
+
+Opted-in candidates receive at most one grouped email per UAE slot: 08:00 morning, 12:00 noon and 16:00 afternoon (Asia/Dubai). Retries occur only during the corresponding hour; missed windows are not replayed. Persistent mailbox-and-slot keys prevent duplicates across restarts and accounts sharing an email. Pending legacy single-job messages are retired.
+
+Role matching requires all meaningful selected-role words in the job title, falling back to current designation when needed. Category or educational specialization alone never qualifies a role match. When no new matched jobs exist, send explicitly labeled general opportunities with a profile-completion link. Include only active jobs published within seven days and not previously included in that user's digests. Skip when none remain. Reading alert settings never opts someone in.
+
+Email includes Trikonet branding, employer logos where available, company/location/type details, company profile links and available descriptions, job links, a friendly greeting and profile/unsubscribe links. Uses existing Resend settings. Test with `node --test job-digest.test.mjs job-email-alerts.test.mjs`; provider calls are stubbed, so tests send no real mail.

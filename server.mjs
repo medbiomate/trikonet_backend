@@ -1,3 +1,4 @@
+import {createRegistrationVerification} from './registration-verification.mjs';
 import { gzip as gzipCallback } from 'node:zlib';
 import { promisify } from 'node:util';
 const gzipJson = promisify(gzipCallback);
@@ -794,6 +795,7 @@ const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalD
 const categorySpelling=createCategorySpelling();
 const pointsStore=createPointsStore(wpDb,{readLocalDb});
 const admobRewards=createAdmobRewards(pointsStore);
+const registrationVerification=createRegistrationVerification({sendEmail:(email,code)=>sendEmailChangeCode(email,code,'signup')});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
@@ -1128,6 +1130,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   // API: Auth Register
+  if(['/api/auth/request-email-otp','/api/auth/confirm-email-otp'].includes(path)&&req.method==='POST'){
+    try{const [status,data]=await registrationVerification.handle(path.includes('request-')?'request':'confirm',await readJsonBody(req),req.socket.remoteAddress);return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Unable to send verification email. Please try again.'})}
+  }
   if (path === '/api/auth/register' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
@@ -1144,6 +1149,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(req, res, 409, { error: 'An account with this email already exists' });
       }
 
+      if(body.clientPlatform==='app'&&!registrationVerification.consume(email,String(body.verification_token||'')))return sendJson(req,res,400,{error:'Verify your email before creating an account.'});
       const credentials = passwordHash(password);
       const user = {
         id: crypto.randomUUID(),

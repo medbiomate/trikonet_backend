@@ -16,6 +16,7 @@ import { createCompanyReviews } from './company-reviews.mjs';
 import {createCategorySpelling} from './category-spelling.mjs';
 import {createPointsStore} from './points-store.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
+import {findGoogleAccount,saveGoogleAccount} from './google-account-store.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
@@ -1120,7 +1121,7 @@ const server = http.createServer(async (req, res) => {
       const body=await readJsonBody(req);
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
       let accountSaved=Promise.resolve();
-      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body)});
+      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body),findExisting:subject=>findGoogleAccount(wpDb,subject),saveExisting:entry=>{accountSaved=saveGoogleAccount(wpDb,entry);return Promise.resolve()}});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
       await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));

@@ -10,7 +10,16 @@ export async function googleIdentity(credential,clientId){
  if(!identity?.sub||!identity.email||!identity.email_verified)throw new Error('Google email must be verified.');
  return identity;
 }
-export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate',onSignIn}){
+export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate',onSignIn,findExisting,saveExisting}){
+ if(findExisting){
+  const entry=await findExisting(identity.sub);
+  if(entry){
+   const user=entry.user;
+   if(!isCandidateAccount(user)||user.status==='inactive')throw new Error('Use your existing sign-in method for this account.');
+   if(onSignIn){onSignIn(user);await saveExisting(entry)}
+   return user;
+  }
+ }
  const db=await readLocalDb();const email=identity.email.toLowerCase();
  let changed=false;
  let user=db.users.find(item=>item.googleSubject===identity.sub);

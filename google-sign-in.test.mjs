@@ -27,3 +27,8 @@ test('a blocked Google account cannot record a successful sign-in',async()=>{
  const db={users:[{id:'one',email:'blocked@gmail.com',googleSubject:'blocked',role:'Employer'}]};
  await assert.rejects(()=>googleAccount({sub:'blocked',email:'blocked@gmail.com'},{readLocalDb:async()=>db,writeLocalDb:async()=>assert.fail(),onSignIn:()=>assert.fail()}));
 });
+test('returning Google account bypasses full catalogue reads and writes',async()=>{
+ const user={id:'fast',googleSubject:'fast-google',email:'fast@gmail.com',role:'Candidate',profile:{role:'Developer'}};let saved=0;
+ const result=await googleAccount({sub:'fast-google',email:user.email},{readLocalDb:async()=>assert.fail('No catalogue read'),writeLocalDb:async()=>assert.fail('No catalogue write'),findExisting:async()=>({user,index:2}),saveExisting:async entry=>{saved++;assert.equal(entry.user.id,'fast')},onSignIn:user=>{user.lastSignInPlatform='app'}});
+ assert.equal(result,user);assert.equal(saved,1);
+});

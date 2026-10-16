@@ -1161,13 +1161,12 @@ const server = http.createServer(async (req, res) => {
         createdAt: new Date().toISOString()
       };
       db.users.push(user);
-      await writeLocalDb(db);
 
       recordSignInPlatform(user,req,body);
-      await writeLocalDb(db,{skipMedia:true});
+      const accountSaved=writeLocalDb(db,{skipMedia:true});
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
-      await sessions.flush();
+      await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
       return sendJson(req, res, 201, { user: { id: user.id, name: user.name, email: user.email } });
     } catch (error) {
@@ -1188,10 +1187,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       recordSignInPlatform(user,req,body);
-      await writeLocalDb(db,{skipMedia:true});
+      const accountSaved=writeLocalDb(db,{skipMedia:true});
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
-      await sessions.flush();
+      await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
       return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email } });
     } catch (error) {

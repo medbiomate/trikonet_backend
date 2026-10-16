@@ -1119,13 +1119,12 @@ const server = http.createServer(async (req, res) => {
     try {
       const body=await readJsonBody(req);
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
-      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true})});
-      const db=await readLocalDb();const savedUser=db.users.find(item=>String(item.id)===String(user.id));
-      if(savedUser){recordSignInPlatform(savedUser,req,body);await writeLocalDb(db,{skipMedia:true});}
+      let accountSaved=Promise.resolve();
+      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body)});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
-      await sessions.flush();
+      await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
-      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email}});
+      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id}});
     }catch{return sendJson(req,res,401,{error:'Google sign-in could not be completed. Please try your email and password.'});}
   }
 

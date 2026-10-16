@@ -18,3 +18,12 @@ test('Google cannot attach itself to a privileged or inactive account',async()=>
   await assert.rejects(()=>googleAccount({sub:'other',email:user.email},{readLocalDb:async()=>db,writeLocalDb:async()=>assert.fail('Must not write blocked account')}));assert.equal(user.googleSubject,undefined);
  }
 });
+test('sign-in records metadata and links identity with one database read and write',async()=>{
+ let reads=0,writes=0;const db={users:[{id:'one',email:'once@gmail.com',role:'Candidate',profile:{role:'Accountant'}}]};
+ const user=await googleAccount({sub:'once',email:'once@gmail.com'},{readLocalDb:async()=>{reads++;return db},writeLocalDb:async()=>{writes++},onSignIn:user=>{user.lastSignInPlatform='app'}});
+ assert.equal(reads,1);assert.equal(writes,1);assert.equal(user.lastSignInPlatform,'app');assert.equal(user.profile.role,'Accountant');
+});
+test('a blocked Google account cannot record a successful sign-in',async()=>{
+ const db={users:[{id:'one',email:'blocked@gmail.com',googleSubject:'blocked',role:'Employer'}]};
+ await assert.rejects(()=>googleAccount({sub:'blocked',email:'blocked@gmail.com'},{readLocalDb:async()=>db,writeLocalDb:async()=>assert.fail(),onSignIn:()=>assert.fail()}));
+});

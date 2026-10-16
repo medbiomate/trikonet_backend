@@ -10,8 +10,9 @@ export async function googleIdentity(credential,clientId){
  if(!identity?.sub||!identity.email||!identity.email_verified)throw new Error('Google email must be verified.');
  return identity;
 }
-export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate'}){
+export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate',onSignIn}){
  const db=await readLocalDb();const email=identity.email.toLowerCase();
+ let changed=false;
  let user=db.users.find(item=>item.googleSubject===identity.sub);
  if(!user){
   const existing=db.users.find(item=>String(item.email).toLowerCase()===email);
@@ -20,8 +21,10 @@ export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidate
   if(existing&&existing.googleSubject&&existing.googleSubject!==identity.sub)throw new Error('Google account does not match.');
   if(existing&&(!isCandidateAccount(existing)||existing.status==='inactive'))throw new Error('Use your existing sign-in method for this account.');
   user=existing||{id:crypto.randomUUID(),name:identity.name||email.split('@')[0],email,role:candidateRole,createdAt:new Date().toISOString()};
-  user.googleSubject=identity.sub;if(!existing)db.users.push(user);await writeLocalDb(db);
+  user.googleSubject=identity.sub;if(!existing)db.users.push(user);changed=true;
  }
  if(!isCandidateAccount(user)||user.status==='inactive')throw new Error('Use your existing sign-in method for this account.');
+ if(onSignIn){onSignIn(user);changed=true}
+ if(changed)await writeLocalDb(db);
  return user;
 }

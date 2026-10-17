@@ -1,3 +1,4 @@
+import {createCatalogueReader} from './catalogue-reader.mjs';
 import {candidateProfileRequest} from './candidate-profile-store.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
 import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
@@ -594,15 +595,7 @@ async function ensurePersistentState() {
   return persistentStateReady;
 }
 
-// Catalogue reads never need account profiles, resumes or a writable snapshot.
-async function readCatalogueDb() {
-  await ensurePersistentState();
-  const [rows] = await wpDb.query(
-    "SELECT CAST(JSON_OBJECT('jobs', JSON_EXTRACT(payload, '$.jobs'), 'employers', JSON_EXTRACT(payload, '$.employers'), 'taxonomies', JSON_EXTRACT(payload, '$.taxonomies')) AS CHAR) AS payload FROM trikonet_app_state WHERE state_key='main' LIMIT 1"
-  );
-  const data = rows[0]?.payload ? JSON.parse(rows[0].payload) : {};
-  return {jobs:data.jobs || [], employers:data.employers || [], taxonomies:data.taxonomies || {}};
-}
+const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
 
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
@@ -1731,7 +1724,7 @@ const server = http.createServer(async (req, res) => {
     const requested = requestUrl.searchParams.get('path') || '';
     const match = requested.match(/^\/(job|jobs)\/([a-z0-9_-]+)\/?$/i);
     if (!match) return sendJson(req,res,404,{error:'Job not found'});
-    const db = await readLocalDb();
+    const db = await readCatalogueDb(['jobs']);
     const suffix = match[2].match(/-(\d+)$/)?.[1];
     let job = db.jobs.find(item => publicJobPath(item) === requested.replace(/\/$/,'') || (item.urlAliases || []).includes(requested.replace(/\/$/,'')) || item.slug === match[2] || (match[1] === 'jobs' && suffix && String(item.urlJobId) === suffix));
     if (!job) {
@@ -1744,7 +1737,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req,res,200,{slug:job.slug,publicPath:publicJobPath(job),job});
   }
   if (path === '/api/local/jobs' && req.method === 'GET') {
-    const db = await readLocalDb();
+    const db = await readCatalogueDb(['jobs']);
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
     const jobs = (adminView ? db.jobs : db.jobs.filter(isPublicRecord)).map(job => {
@@ -1757,7 +1750,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'GET') {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
-    const db = await readLocalDb();
+    const db = await readCatalogueDb(['jobs']);
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
     const job = db.jobs.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
@@ -1840,18 +1833,18 @@ const server = http.createServer(async (req, res) => {
 
   // API: Local Employers
   if (path === '/api/local/employers' && req.method === 'GET') {
-    const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
+    const db = adminView ? await readLocalDb() : await readCatalogueDb(['employers']);
     if (adminView && repairEmployerSnapshots(db)) await writeLocalDb(db,{skipMedia:true});
     return sendJson(req, res, 200, adminView ? db.employers : db.employers.filter(isPublicRecord));
   }
 
   if (path.startsWith('/api/local/employers/') && req.method === 'GET') {
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
-    const db = await readLocalDb();
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
+    const db = adminView ? await readLocalDb() : await readCatalogueDb(['employers']);
     const employer = db.employers.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
     return sendJson(req, res, employer ? 200 : 404, employer || { error: 'Employer not found' });
   }
@@ -1915,7 +1908,7 @@ const server = http.createServer(async (req, res) => {
 
   // API: Taxonomies
   if (path === '/api/local/taxonomies' && req.method === 'GET') {
-    const db = await readLocalDb();
+    const db = await readCatalogueDb(['taxonomies']);
     if (!db.taxonomies || !db.taxonomies.categories || db.taxonomies.categories.length < 50) {
       if (memoryStore.taxonomies) {
         db.taxonomies = {

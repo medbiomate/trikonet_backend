@@ -10,6 +10,7 @@ import { repairEmployerSnapshots, employerNameKey, isEmployerSnapshot } from './
 import {createJobEmailAlerts} from './job-email-alerts.mjs';
 import {createPersistentSessions} from './persistent-sessions.mjs';
 import { summarizePost } from './post-summary.mjs';
+import { summarizeJob } from './job-summary.mjs';
 import {createAdmobRewards} from './admob-rewards.mjs';
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
@@ -1718,7 +1719,8 @@ const server = http.createServer(async (req, res) => {
       const { recoveryDraft, logoBackup, ...listing } = job;
       return listing;
     });
-    return sendJson(req, res, 200, jobs);
+    const summary = !adminView && requestUrl.searchParams.get('summary') === '1';
+    return sendJson(req, res, 200, summary ? jobs.map(job => summarizeJob(job, { searchable: !!requestUrl.searchParams.get('q') })) : jobs);
   }
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'GET') {

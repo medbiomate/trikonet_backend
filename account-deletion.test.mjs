@@ -10,6 +10,7 @@ function fixture(){
   if(sql.startsWith('CREATE TABLE'))return [{}];
   if(sql.includes('trikonet_imported_data'))return [[]];
   if(sql.startsWith("INSERT INTO trikonet_account_deletions")){records.set(args[0],{user_id:args[0],status:'deleted',requested_at:args[1],delete_after:args[2]});return [{}];}
+  if(sql.startsWith('SELECT user_id FROM trikonet_account_deletions'))return [[...records.values()].filter(row=>row.status==='pending'&&row.delete_after<=args[0]).slice(0,1)];
   if(sql.startsWith('SELECT payload'))return [[{payload:JSON.stringify(state)}]];
   if(sql.startsWith('SELECT * FROM trikonet_account_deletions WHERE user_id'))return [[records.get(args[0])].filter(Boolean)];
   if(sql.startsWith("SELECT * FROM trikonet_account_deletions WHERE status"))return [[...records.values()].filter(row=>row.status==='pending'&&row.delete_after<=args[0])];

@@ -3510,6 +3510,7 @@ export function renderAdmin() {
               <tr>
                 <td id="cb-candidates" class="manage-column column-cb check-column"><input id="cb-select-all-candidates" type="checkbox" aria-label="Select All"></td>
                 <th scope="col" class="manage-column column-candidate-name sortable desc" style="width:28%;"><span>Candidate</span></th>
+                <th scope="col" class="manage-column column-candidate-id"><span>User ID</span></th>
                 <th scope="col" class="manage-column column-candidate-title" style="width:17%;"><span>Professional Title</span></th>
                 <th scope="col" class="manage-column column-candidate-category" style="width:13%;"><span>Category</span></th>
                 <th scope="col" class="manage-column column-candidate-location" style="width:12%;"><span>Location</span></th>
@@ -6121,7 +6122,7 @@ export async function initAdmin() {
       fetch('/api/wp/job_listing?per_page=30&_fields=id,slug,title,status,date,metas,content,excerpt').then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/local/employers').then(r => r.json()).catch(() => []),
       fetch('/api/wp/employer?per_page=3000&_fields=id,slug,title,status,metas,content').then(r => r.ok ? r.json() : []).catch(() => []),
-      fetch('/api/local/candidates').then(r => r.ok ? r.json() : []).catch(() => fetch('/api/admin/candidates').then(r => r.ok ? r.json() : []).catch(() => []))
+      fetch('/api/admin/candidates',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Candidate refresh failed');return r.json()}).catch(()=>[])
     ]);
 
     localJobs = local;
@@ -6157,7 +6158,7 @@ export async function initAdmin() {
       candidates.forEach(c => {
         const key = String(c.id || c.email);
         if (mergedMap.has(key)) {
-          mergedMap.set(key, { ...mergedMap.get(key), ...c });
+          mergedMap.set(key, { ...c, ...mergedMap.get(key) });
         } else {
           mergedMap.set(key, c);
         }
@@ -13626,7 +13627,7 @@ export async function initAdmin() {
     }
   ];
 
-  const candidateDataVersion = 'fresh-candidate-accounts-v1';
+  const candidateDataVersion = 'live-candidate-accounts-v2';
   let candidates = (() => {
     try {
       if (localStorage.getItem('trikonet_candidates_version') !== candidateDataVersion) {
@@ -13649,6 +13650,32 @@ export async function initAdmin() {
     } catch {}
     updateCandidateCountBadges();
   }
+
+  let candidateRefreshing=false;
+  async function refreshCandidateAccounts(){
+    if(candidateRefreshing)return;
+    candidateRefreshing=true;
+    const button=document.getElementById('candidate-refresh-live');
+    if(button){button.disabled=true;button.textContent='Refreshing…';}
+    try{
+      const response=await fetch('/api/admin/candidates',{cache:'no-store'});
+      if(!response.ok)throw new Error('Unable to refresh candidates');
+      const live=await response.json();if(!Array.isArray(live))throw new Error('Invalid candidate response');
+      candidates=live;saveCandidates();renderCandidateRows();
+      const status=document.getElementById('candidate-refresh-status');if(status)status.textContent='Updated just now · Newest first';
+    }catch{const status=document.getElementById('candidate-refresh-status');if(status)status.textContent='Could not refresh. Try again.';}
+    finally{candidateRefreshing=false;if(button){button.disabled=false;button.textContent='Refresh';}}
+  }
+  function candidateRefreshToolbar(){
+    const table=document.getElementById('admin-candidate-rows')?.closest('.modern-table-responsive');
+    if(!table||document.getElementById('candidate-live-toolbar'))return;
+    const toolbar=document.createElement('div');toolbar.id='candidate-live-toolbar';toolbar.className='candidate-live-toolbar';
+    toolbar.innerHTML='<span id="candidate-refresh-status" role="status">Newest profiles first</span><button type="button" id="candidate-refresh-live">Refresh</button>';
+    table.before(toolbar);toolbar.querySelector('button').addEventListener('click',()=>void refreshCandidateAccounts());
+  }
+  window.addEventListener('focus',()=>{if(location.hash.includes('candidate'))void refreshCandidateAccounts()});
+  window.addEventListener('hashchange',()=>{if(location.hash.includes('candidate'))void refreshCandidateAccounts()});
+  setInterval(()=>{if(document.visibilityState==='visible'&&location.hash.includes('candidate'))void refreshCandidateAccounts()},30000);
 
   function candidateCreatedTime(candidate) {
     const timestamp = Date.parse(candidate.createdAt || candidate.date || candidate.registered || '');
@@ -13713,6 +13740,7 @@ export async function initAdmin() {
     const tbody = document.getElementById('admin-candidate-rows');
     if (!tbody) return;
 
+    candidateRefreshToolbar();
     updateCandidateCountBadges();
 
     const searchInput = document.getElementById('admin-candidate-search');
@@ -13734,13 +13762,13 @@ export async function initAdmin() {
         const matchEmail = (c.email || '').toLowerCase().includes(q);
         const matchCat = (c.category || '').toLowerCase().includes(q);
         const matchLoc = (c.location || '').toLowerCase().includes(q);
-        if (!matchName && !matchTitle && !matchEmail && !matchCat && !matchLoc) return false;
+        if (!matchName && !matchTitle && !matchEmail && !matchCat && !matchLoc && !String(c.userId||c.id||'').toLowerCase().includes(q)) return false;
       }
       return true;
     }).sort((a, b) => candidateCreatedTime(b) - candidateCreatedTime(a));
 
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:#94a3b8; font-size:13px;">No candidates found matching the criteria.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:32px; color:#94a3b8; font-size:13px;">No candidates found matching the criteria.</td></tr>`;
       return;
     }
 
@@ -13772,7 +13800,7 @@ export async function initAdmin() {
               <div>
                 <strong><a href="#candidate-editor" class="row-title" data-candidate-edit="${c.id}">${escapeHtml(c.name)}</a></strong>
                 <div style="font-size:11px; color:#64748b; margin-top:2px;">
-                  ${escapeHtml(c.email || '—')}${c.phone ? ` · ${escapeHtml(c.phone)}` : ''}${c.userId ? `<br>User ID: ${escapeHtml(String(c.userId))}` : ''}<br>Joined: ${escapeHtml(candidateJoinedLabel(c))}
+                  ${escapeHtml(c.email || '—')}${c.phone ? ` · ${escapeHtml(c.phone)}` : ''}<br>Joined: ${escapeHtml(candidateJoinedLabel(c))}
                 </div>
                 <div class="row-actions modern-tax-row-actions candidate-row-actions">
                   <span><a href="#candidate-editor" data-candidate-edit="${c.id}">Edit</a> | </span>
@@ -13783,6 +13811,7 @@ export async function initAdmin() {
               </div>
             </div>
           </td>
+          <td class="column-candidate-id"><span class="candidate-id-badge" title="Account user ID">${escapeHtml(String(c.userId || c.id || '—'))}</span></td>
           <td class="column-candidate-title">
             <span style="font-weight:500; color:#0f172a; font-size:13px;">${escapeHtml(c.jobTitle || 'Candidate')}</span>
           </td>

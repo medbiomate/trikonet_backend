@@ -8210,3 +8210,12 @@ mark.wp-highlight {
 }
 .candidate-delete-button:hover { background: #fee2e2; }
 .candidate-delete-button:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }
+
+/* Live candidate account directory */
+.candidate-live-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 20px;background:#f8fafc;border-block:1px solid #e8edf4;color:#64748b;font-size:12px}
+.candidate-live-toolbar button{min-height:36px;border:1px solid #d7e0ed;background:white;color:#2563eb;border-radius:8px;padding:6px 14px;font:inherit;font-weight:600;cursor:pointer}
+.candidate-live-toolbar button:disabled{opacity:.6;cursor:wait}
+.candidates .column-candidate-id{width:150px;min-width:150px}
+.candidate-id-badge{display:inline-block;max-width:180px;overflow-wrap:anywhere;padding:6px 9px;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;border-radius:7px;font:12px/1.5 ui-monospace,SFMono-Regular,monospace}
+.candidates td.column-candidate-name{line-height:1.6}.candidates .candidate-row-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:8px}
+.candidates .pill-active{display:inline-flex;align-items:center;white-space:nowrap;border-radius:999px;padding:4px 10px}

@@ -1,3 +1,4 @@
+import {mergeStateChanges} from './state-changes.mjs';
 import {createAccountDeletion,removeAccountData} from './account-deletion.mjs';
 import {createRegistrationVerification} from './registration-verification.mjs';
 import { gzip as gzipCallback } from 'node:zlib';
@@ -589,6 +590,7 @@ async function ensurePersistentState() {
   return persistentStateReady;
 }
 
+const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
     await ensurePersistentState();
@@ -599,6 +601,7 @@ async function readLocalDb() {
       const [deletions]=await wpDb.query('SELECT * FROM trikonet_account_deletions');
       removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
       for(const user of db.users){const row=deletions.find(row=>String(row.user_id)===String(user.id));if(row)user.accountDeletionPending=true;else delete user.accountDeletionPending;}
+      stateSnapshots.set(db,structuredClone(db));
       return db;
     }
   } catch (error) {
@@ -609,6 +612,7 @@ async function readLocalDb() {
 }
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
+  const before=stateSnapshots.get(db);
   repairEmployerSnapshots(db);
   if(!skipMedia){
   db = await mediaStore.normalize(db);
@@ -620,7 +624,8 @@ async function writeLocalDb(db, {skipMedia=false}={}) {
   const connection=await wpDb.getConnection();
   try {
     await connection.beginTransaction();
-    await connection.query("SELECT state_key FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
+    const [current]=await connection.query("SELECT payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
+    if(before&&current[0])db=mergeStateChanges(JSON.parse(current[0].payload),before,db);
     const [deletions]=await connection.query('SELECT * FROM trikonet_account_deletions');
     removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
     await connection.query("UPDATE trikonet_app_state SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[JSON.stringify({...emptyDb,...db})]);

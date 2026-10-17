@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
+test('password lookup reads only users and normalizes stored email',async()=>{let sql;const entry=await findPasswordAccount({query:async q=>{sql=q;return [[{users:JSON.stringify([{id:1,email:'User@Example.com'}])}]]}},'user@example.com');assert.equal(entry.user.id,1);assert.match(sql,/JSON_EXTRACT\(payload,'\$\.users'\)/);assert.equal(entry.index,0)});
+test('login persistence updates platforms only and guards account ID',async()=>{let args;await savePasswordSignIn({query:async(...values)=>{args=values;return [{affectedRows:1}]}},{index:2,user:{id:7,signInPlatforms:['app'],profile:{role:'Do not overwrite'}}});assert.equal(args[1][0],'$.users[2].signInPlatforms');assert.equal(args[1][3],'7');assert.ok(!args[1].join('').includes('Do not overwrite'))});
+test('stale index fails without updating another account',async()=>{await assert.rejects(savePasswordSignIn({query:async()=>[{affectedRows:0}]},{index:0,user:{id:7}}),/Account changed/)});

@@ -1,3 +1,4 @@
+import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
 import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
 import {createJobReports} from './job-reports.mjs';
 import {mergeStateChanges} from './state-changes.mjs';
@@ -1235,20 +1236,23 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readJsonBody(req);
       const email = String(body.email || '').trim().toLowerCase();
-      const db = await readLocalDb();
-      const user = db.users.find(item => item.email === email);
+      await ensurePersistentState();
+      const entry=await findPasswordAccount(wpDb,email);
+      const user=entry?.user;
 
       if (!user || !passwordMatches(String(body.password || ''), user)) {
         return sendJson(req, res, 401, { error: 'Invalid email or password' });
       }
 
+      const deletion=await accountDeletion.status(user.id);
+      if(deletion.status==='deleted')return sendJson(req,res,401,{error:'Invalid email or password'});
       recordSignInPlatform(user,req,body);
-      const accountSaved=writeLocalDb(db,{skipMedia:true});
+      const accountSaved=savePasswordSignIn(wpDb,entry);
       const token = crypto.randomUUID();
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
       await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
-      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email },profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion:await accountDeletion.status(user.id) });
+      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email },profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion });
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
     }

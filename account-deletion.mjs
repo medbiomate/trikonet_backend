@@ -114,6 +114,11 @@ export function createAccountDeletion({pool,sessions,now=Date.now}) {
       }
   }
   async function sweep() {
+    // Skip loading and locking the complete state when cleanup has no work.
+    // The due rows are checked again inside the transaction.
+    await ensure();
+    const [due]=await pool.query("SELECT user_id FROM trikonet_account_deletions WHERE status='pending' AND delete_after<=? LIMIT 1",[now()]);
+    if(!due.length)return 0;
     const ids=await transaction(async connection=>{
       const db=await lockedState(connection);
       const [rows]=await connection.query("SELECT * FROM trikonet_account_deletions WHERE status='pending' AND delete_after<=? FOR UPDATE",[now()]);

@@ -22,3 +22,10 @@ test('search can still match text beyond the visible card excerpt', () => {
   assert.ok(card.excerpt.length <= 240);
   assert.doesNotMatch(card.searchText, /<p>/);
 });
+
+
+test('empty content objects fall back to the description without object labels', () => {
+  const card = summarizeJob({excerpt:{},content:{},description:'<p>Clinical responsibilities</p>'},{searchable:true});
+  assert.equal(card.excerpt,'Clinical responsibilities');
+  assert.equal(card.searchText,'Clinical responsibilities');
+});

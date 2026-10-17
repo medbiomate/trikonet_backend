@@ -1,3 +1,4 @@
+import {publicDirectory} from './public-directory.mjs';
 import {createCoordinatedTask} from './coordinated-task.mjs';
 import {createEmsStateReader} from './ems-state-reader.mjs';
 import {createCatalogueReader} from './catalogue-reader.mjs';
@@ -1737,6 +1738,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (!job || !isPublicRecord(job)) return sendJson(req,res,404,{error:'Job not found'});
     return sendJson(req,res,200,{slug:job.slug,publicPath:publicJobPath(job),job});
+  }
+  if (path === '/api/public/jobs' && req.method === 'GET') {
+    const db=await readCatalogueDb(['jobs']);
+    const jobs=await publicDirectory(db.jobs,requestUrl.searchParams,async(page,size,excluded)=>{
+      const params=new URLSearchParams(requestUrl.searchParams);
+      params.set('page',String(page));params.set('per_page',String(size));params.set('exclude_slugs',excluded.join(','));
+      return wordpressRecords('job_listing',params);
+    });
+    return sendJson(req,res,200,jobs);
   }
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const db = await readCatalogueDb(['jobs']);

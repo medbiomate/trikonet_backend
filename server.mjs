@@ -1,3 +1,4 @@
+import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
 import {createJobReports} from './job-reports.mjs';
 import {mergeStateChanges} from './state-changes.mjs';
 import {createAccountDeletion,removeAccountData} from './account-deletion.mjs';
@@ -1247,7 +1248,7 @@ const server = http.createServer(async (req, res) => {
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
       await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
-      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email },deletion:await accountDeletion.status(user.id) });
+      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email },profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion:await accountDeletion.status(user.id) });
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
     }
@@ -1573,7 +1574,7 @@ const server = http.createServer(async (req, res) => {
         const safe={id:record.id,name:record.name,slug:record.slug,email:record.email,phone:record.phone,jobTitle:record.jobTitle,category:record.category,location:record.location,experience:record.experience,qualification:record.qualification,bio:record.bio,status:record.status,featured:!!record.featured,createdAt:record.createdAt};
         const index=db.candidates.findIndex(c=>String(c.id)===String(record.id));
         if(index>=0)db.candidates[index]={...db.candidates[index],...safe};else db.candidates.push(safe);
-        const account=db.users.find(item=>String(item.id)===String(record.id));if(account)applyAccountProfile(account,{name:record.name,phone:record.phone},updateCandidateProfile);
+        const account=db.users.find(item=>String(item.id)===String(record.id));if(account)applyAccountProfile(account,candidateEditProfile(record),updateCandidateProfile);
       }
       await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{saved:true});
     }catch(error){return sendJson(req,res,400,{error:error.message});}
@@ -1609,12 +1610,13 @@ const server = http.createServer(async (req, res) => {
         resumeCounts.set(userId, (resumeCounts.get(userId) || 0) + 1);
       }
       const merged = new Map();
-      for (const record of records) {
+      for (const original of records) {
+        const record=adminCandidateProfile(original,users.find(user=>String(user.id)===String(original.sourceAccountId||original.id)));
         const m = record.metas || {};
         const candidate = {
           signInPlatforms: users.find(u=>String(u.id)===String(record.id))?.signInPlatforms || record.signInPlatforms || [],
           resumeCount: resumeCounts.get(String(record.sourceAccountId || record.id)) || 0,
-          id: record.id, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
+          id: record.id, userId:record.userId||null, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
           email: record.email || m._candidate_email || '', jobTitle: record.jobTitle || record.professionalTitle || m._candidate_title || '',
           category: record.category || Object.values(m._candidate_category || {}).join(', '),
           location: record.location || Object.values(m._candidate_location || {}).join(', '),

@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
+import {updateCandidateProfile} from './candidate-profile.mjs';
+test('admin rows use current account data instead of stale candidate copies',()=>{const row=adminCandidateProfile({id:7,jobTitle:'Old',location:'Old'}, {id:7,email:'a@example.com',name:'Name',profile:{role:'SEO Manager',currentLocation:'Dubai',skills:'SEO'}});assert.equal(row.userId,7);assert.equal(row.jobTitle,'SEO Manager');assert.equal(row.location,'Dubai');assert.equal(row.email,'a@example.com')});
+test('admin edits map to app profile without overwriting email or ID',()=>{const patch=candidateEditProfile({id:99,email:'wrong',jobTitle:'Accountant',location:'Abu Dhabi',bio:'Summary'});assert.deepEqual(patch,{role:'Accountant',currentLocation:'Abu Dhabi',summary:'Summary'})});
+test('completion is persisted and cannot be reset by later partial edits',()=>{const p=updateCandidateProfile({}, {setupCompletedAt:100,needsInitialSetup:false,profileUpdatedAt:100},100);assert.equal(p.setupCompletedAt,100);assert.equal(updateCandidateProfile(p,{needsInitialSetup:true,profileUpdatedAt:200},200).needsInitialSetup,false)});

@@ -13772,7 +13772,7 @@ export async function initAdmin() {
               <div>
                 <strong><a href="#candidate-editor" class="row-title" data-candidate-edit="${c.id}">${escapeHtml(c.name)}</a></strong>
                 <div style="font-size:11px; color:#64748b; margin-top:2px;">
-                  ${escapeHtml(c.email || '—')}${c.phone ? ` · ${escapeHtml(c.phone)}` : ''}<br>Joined: ${escapeHtml(candidateJoinedLabel(c))}
+                  ${escapeHtml(c.email || '—')}${c.phone ? ` · ${escapeHtml(c.phone)}` : ''}${c.userId ? `<br>User ID: ${escapeHtml(String(c.userId))}` : ''}<br>Joined: ${escapeHtml(candidateJoinedLabel(c))}
                 </div>
                 <div class="row-actions modern-tax-row-actions candidate-row-actions">
                   <span><a href="#candidate-editor" data-candidate-edit="${c.id}">Edit</a> | </span>

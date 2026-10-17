@@ -4,6 +4,9 @@ export function updateCandidateProfile(existing={},body={},now=Date.now()){
  if(incoming<Number(existing.profileUpdatedAt||0))return existing;
  const next={...existing};
  for(const key of fields)if(Object.hasOwn(body,key))next[key]=body[key];
+ const completed=Math.max(Number(existing.setupCompletedAt)||0,Number(body.setupCompletedAt)||0);
+ if(completed){next.setupCompletedAt=completed;next.needsInitialSetup=false;}
+ else if(typeof body.needsInitialSetup==='boolean')next.needsInitialSetup=body.needsInitialSetup;
  return {...next,profileUpdatedAt:incoming,updatedAt:new Date(now).toISOString()};
 }
 

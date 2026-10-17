@@ -595,6 +595,16 @@ async function ensurePersistentState() {
   return persistentStateReady;
 }
 
+// Catalogue reads never need account profiles, resumes or a writable snapshot.
+async function readCatalogueDb() {
+  await ensurePersistentState();
+  const [rows] = await wpDb.query(
+    "SELECT CAST(JSON_OBJECT('jobs', JSON_EXTRACT(payload, '$.jobs'), 'employers', JSON_EXTRACT(payload, '$.employers'), 'taxonomies', JSON_EXTRACT(payload, '$.taxonomies')) AS CHAR) AS payload FROM trikonet_app_state WHERE state_key='main' LIMIT 1"
+  );
+  const data = rows[0]?.payload ? JSON.parse(rows[0].payload) : {};
+  return {jobs:data.jobs || [], employers:data.employers || [], taxonomies:data.taxonomies || {}};
+}
+
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
@@ -653,18 +663,18 @@ async function loadSeoRecords() {
       if (taxonomies[field] && !taxonomies[field].some(item => item.id === t.id)) taxonomies[field].push({id:t.id,name:t.name,slug:t.slug});
     });
     metas.forEach(m => { const job=jobs.get(Number(m.post_id)); if (job) job.metas[m.meta_key]=m.meta_value; });
-    const local=await readLocalDb();
+    const local=await readCatalogueDb();
     for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
     return {jobs:[...jobs.values()],taxonomies};
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
-    const local=await readLocalDb();
+    const local=await readCatalogueDb();
     const taxonomies={categories:[...(memoryStore.taxonomies?.categories || [])],locations:[...(memoryStore.taxonomies?.locations || [])]};
     for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
     return {jobs:memoryStore.jobs || [],taxonomies};
   }
 }
-const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
+const seoRepository = createSeoRepository(wpDb,readCatalogueDb,loadSeoRecords);
 // Preserve the existing main category URL explicitly requested by the admin.
 // This migration is insert-only: never overwrite saved manual settings.
 const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
@@ -925,7 +935,7 @@ const server = http.createServer(async (req, res) => {
   if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
     try {
       await loadMemoryStore();
-      const db = await readLocalDb();
+      const db = await readCatalogueDb();
       const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
       const employer = (db.employers || []).find(item => item.slug === slug && isPublicRecord(item)) || (memoryStore.employers || []).find(item => item.slug === slug && isPublicRecord(item));
       if (!employer) return sendJson(req,res,404,{error:'Employer not found'});
@@ -959,7 +969,7 @@ const server = http.createServer(async (req, res) => {
       const slug = String(body.slug || '');
       if (!/^[a-z0-9][a-z0-9-]{0,190}$/.test(slug)) return sendJson(req,res,400,{error:'Invalid job slug.'});
       if (/bot|crawler|spider|headless/i.test(req.headers['user-agent'] || '') || await currentAdminSession(req)) return sendJson(req,res,200,{ok:true});
-      const db = await readLocalDb();
+      const db = await readCatalogueDb();
       let job = (db.jobs || []).find(item => item.slug === slug);
       if (!job) {
         try { job = (await wordpressRecords('job_listing',new URLSearchParams({slug,per_page:'1'})))[0]; }
@@ -1942,7 +1952,7 @@ const server = http.createServer(async (req, res) => {
 
   if(path==='/api/wp/top-employers' && req.method==='GET'){
     await loadMemoryStore();
-    const local=await readLocalDb();
+    const local=await readCatalogueDb();
     const jobs=new Map((memoryStore.jobs||[]).map(job=>[job.slug,job]));
     for(const job of local.jobs||[])jobs.set(job.slug,job);
     const counts=new Map();

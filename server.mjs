@@ -1631,7 +1631,7 @@ const server = http.createServer(async (req, res) => {
         const candidate = {
           signInPlatforms: users.find(u=>String(u.id)===String(record.id))?.signInPlatforms || record.signInPlatforms || [],
           resumeCount: resumeCounts.get(String(record.sourceAccountId || record.id)) || 0,
-          id: record.id, userId:record.userId||null, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
+          id: record.id, userId:record.userId||null, appProfile:record.appProfile||null, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',
           email: record.email || m._candidate_email || '', jobTitle: record.jobTitle || record.professionalTitle || m._candidate_title || '',
           category: record.category || Object.values(m._candidate_category || {}).join(', '),
           location: record.location || Object.values(m._candidate_location || {}).join(', '),

@@ -1,3 +1,4 @@
+import {createJobReports} from './job-reports.mjs';
 import {mergeStateChanges} from './state-changes.mjs';
 import {createAccountDeletion,removeAccountData} from './account-deletion.mjs';
 import {createRegistrationVerification} from './registration-verification.mjs';
@@ -804,6 +805,7 @@ const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await 
     return {...job,employerSlug:employer?.slug||slug,logo:job.logo||m._job_logo||employer?.logo||em._employer_logo||em._employer_featured_image_img||'',companyDetails:employer?.description||employer?.content?.rendered||''};
   });
 }});
+const jobReports=createJobReports({readLocalDb,writeLocalDb});
 const companyReviews=createCompanyReviews({readLocalDb,writeLocalDb});
 const refineRecommendations=createGeminiRecommendations({readLocalDb,writeLocalDb});
 const categorySpelling=createCategorySpelling();
@@ -1124,6 +1126,11 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return sendJson(req, res, 200, memoryStore.taxonomies || { types: [], categories: [], locations: [], tags: [], employerCategories: [], employerLocations: [] });
     }
+  }
+
+  if(path==='/api/candidate/job-reports'){
+    try{const body=req.method==='POST'?await readJsonBody(req,12000):{};const [status,result]=await jobReports(req.method,currentSession(req),body);return sendJson(req,res,status,result)}
+    catch{return sendJson(req,res,503,{error:'Unable to save your report. Please try again.'})}
   }
 
   if(path.startsWith('/api/company-reviews/')){

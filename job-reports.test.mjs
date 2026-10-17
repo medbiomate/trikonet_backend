@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {createJobReports} from './job-reports.mjs';
+const setup=()=>{let db={users:[{id:1,role:'Candidate'},{id:2,role:'Administrator'}]};return createJobReports({readLocalDb:async()=>structuredClone(db),writeLocalDb:async value=>{db=value}})};
+const body={jobId:123,reason:'broken-link',link:'https://trikonet.com/job/test',title:'Test'};
+test('reports persist, deduplicate, and are only readable by administrators',async()=>{const report=setup();assert.equal((await report('POST',null,body))[0],401);const saved=await report('POST',{userId:1},body);assert.equal(saved[0],201);assert.equal((await report('POST',{userId:1},body))[1].id,saved[1].id);assert.equal((await report('GET',{userId:1}))[0],403);assert.equal((await report('GET',{userId:2}))[1].reports.length,1)});
+test('rejects invalid reasons, unsafe URLs, and empty Other explanations',async()=>{const report=setup();for(const change of [{reason:'invented'},{link:'javascript:alert(1)'},{reason:'other'},{details:'x'.repeat(1001)}])assert.equal((await report('POST',{userId:1},{...body,...change}))[0],400)});

@@ -166,8 +166,7 @@ async function populateMemoryStore() {
     if(logo) {job.logo=logo;job.metas ||= {};job.metas._job_logo=logo;}
   }
 }
-// Load memory store asynchronously in background
-loadMemoryStore().catch(console.error);
+// Load imported datasets after listen() so large JSON parsing cannot delay binding.
 
 function fallbackRecords(type, params) {
   const limit = Math.min(Math.max(Number(params.get('per_page')) || 10, 1), 5000);
@@ -750,8 +749,10 @@ async function sendJson(req, res, status, value) {
 
 const sessions = await createPersistentSessions(wpDb);
 const accountDeletion=createAccountDeletion({pool:wpDb,sessions});
+function registerSeoDefaults() {
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
 seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
+}
 const MAX_RESUMES_PER_USER = 3;
 const MAX_PROFILE_PHOTO_BYTES = 100 * 1024;
 const cookieValue = (req, name) =>
@@ -831,8 +832,10 @@ const registrationVerification=createRegistrationVerification({sendEmail:(email,
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
+let startupReady;
 const server = http.createServer(async (req, res) => {
   try {
+  await startupReady;
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
   const legacyImage=path.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
@@ -2043,16 +2046,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-await loadMemoryStore();
-// Release the startup state and its merge baseline after migration completes.
-await (async () => {
+// Bind first; requests wait for initialization rather than reading partial data.
+startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
+  await loadMemoryStore();
   const db = await readLocalDb();
   if (shortenGeneratedJobUrls(db.jobs || [],memoryStore.jobs || [])) await writeLocalDb(db);
-})();
+});
+startupReady.then(registerSeoDefaults).catch(error=>console.error('Startup initialization failed:',error.message));
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);
-  mediaStore.migrate().then(result=>console.log('Media migration:',JSON.stringify(result))).catch(error=>console.error('Media migration failed:',error.message));
+  startupReady.then(()=>mediaStore.migrate()).then(result=>console.log('Media migration:',JSON.stringify(result))).catch(error=>console.error('Media migration failed:',error.message));
 });
 // Recheck eligibility and expiry even when no administrator has the Pages view open.
 const seoRefreshTimer = setInterval(() => {
@@ -2082,7 +2086,7 @@ async function refreshEmsUploads() {
 }
 const emsSyncTimer = setInterval(refreshEmsUploads, 30000);
 emsSyncTimer.unref();
-void refreshEmsUploads();
+startupReady.then(refreshEmsUploads).catch(error=>console.error('EMS startup failed:',error.message));
 
 const jobEmailTimer=setInterval(()=>jobEmailAlerts.tick().catch(error=>console.error('Job email worker failed:',error.message)),60000);
 jobEmailTimer.unref();

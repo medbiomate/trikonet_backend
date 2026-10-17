@@ -138,3 +138,24 @@ persistent-sessions.test.mjs points-store.test.mjs mobile-api.test.mjs`. Before
 App Review, test on a physical device using a disposable account: request deletion,
 confirm normal access is blocked, sign out/in and restore; verify profile and CV
 return. Do not delete the reviewer demo account while a review is in progress.
+
+## Hosting memory and periodic work
+
+Imported-data loading selects only public catalogue datasets. Startup checks URL
+migrations with a jobs projection before loading account state. Account reads
+reuse the original serialized merge baseline instead of making a second full
+JSON string. EMS reads jobs, employers and creator ID/email pairs, excluding
+private CVs, resumes and application records from those scans.
+
+EMS and periodic SEO refreshes use connection-scoped MySQL advisory locks and
+`trikonet_worker_runs` cooldowns so multiple hosting instances do not repeat the
+same scheduled scan. A crashed connection releases its lock; another instance
+can retry after the cooldown. This table contains scheduling metadata only.
+Requires MariaDB 10.6+ or MySQL 8+ (`JSON_TABLE`) and existing
+CREATE/SELECT/INSERT/UPDATE privileges. No account-data migration is performed.
+
+Run `MEMORY_TEST_SOCKET=/path/to/test.sock node --test memory-workers.test.mjs`
+against a local test server as root. This opt-in test creates and drops its own
+fixture database, verifies large private fields are excluded, and checks locks,
+staggered workers, cooldown expiry and retry after failure. Check runtime
+`resource_usage` logs to verify memory under live traffic after deployment.

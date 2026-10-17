@@ -1,3 +1,5 @@
+import {createCoordinatedTask} from './coordinated-task.mjs';
+import {createEmsStateReader} from './ems-state-reader.mjs';
 import {createCatalogueReader} from './catalogue-reader.mjs';
 import {candidateProfileRequest} from './candidate-profile-store.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
@@ -132,7 +134,7 @@ async function populateMemoryStore() {
   // Migration datasets live in MySQL so redeployments cannot revert imported data.
   // The packaged snapshots remain a fallback when the database is unavailable.
   try {
-    const [rows] = await wpDb.query('SELECT dataset_key, payload FROM trikonet_imported_data');
+    const [rows] = await wpDb.query('SELECT dataset_key, payload FROM trikonet_imported_data WHERE dataset_key IN (\'jobs\',\'employers\',\'posts\',\'taxonomies\')');
     for (const row of rows) {
       if (Object.hasOwn(memoryStore, row.dataset_key)) memoryStore[row.dataset_key] = JSON.parse(row.payload);
     }
@@ -609,7 +611,7 @@ async function readLocalDb() {
       removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
       for(const user of db.users){const row=deletions.find(row=>String(row.user_id)===String(user.id));if(row)user.accountDeletionPending=true;else delete user.accountDeletionPending;}
       // Keep the merge baseline serialized; read-only requests need no second object graph.
-      stateSnapshots.set(db,JSON.stringify(db));
+      stateSnapshots.set(db,rows[0].payload);
       return db;
     }
   } catch (error) {
@@ -799,7 +801,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 
 const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await readLocalDb()).users.filter(user=>isCandidateAccount(user)&&!user.accountDeletionPending),loadJobs:async()=>{
   const {jobs}=await loadSeoRecords();
-  const local=await readLocalDb();
+  const local=await readCatalogueDb(['jobs','employers']);
   const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
   for(const job of jobs)merged.set(String(job.id||job.slug),job);
   for(const job of local.jobs || [])merged.set(String(job.id||job.slug),job);
@@ -2042,8 +2044,11 @@ const server = http.createServer(async (req, res) => {
 // Bind first; requests wait for initialization rather than reading partial data.
 startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   await loadMemoryStore();
-  const db = await readLocalDb();
-  if (shortenGeneratedJobUrls(db.jobs || [],memoryStore.jobs || [])) await writeLocalDb(db);
+  const catalogue = await readCatalogueDb(['jobs']);
+  if (shortenGeneratedJobUrls(catalogue.jobs || [],memoryStore.jobs || [])) {
+    const db = await readLocalDb();
+    if (shortenGeneratedJobUrls(db.jobs || [],memoryStore.jobs || [])) await writeLocalDb(db);
+  }
 });
 startupReady.then(registerSeoDefaults).catch(error=>console.error('Startup initialization failed:',error.message));
 server.listen(port, host, () => {
@@ -2052,17 +2057,19 @@ server.listen(port, host, () => {
   startupReady.then(()=>mediaStore.migrate()).then(result=>console.log('Media migration:',JSON.stringify(result))).catch(error=>console.error('Media migration failed:',error.message));
 });
 // Recheck eligibility and expiry even when no administrator has the Pages view open.
-const seoRefreshTimer = setInterval(() => {
-  registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
-  seoRepository.list(true).catch(error => console.error('SEO page refresh failed:', error.message));
-}, 5 * 60 * 1000);
+const refreshSeo = createCoordinatedTask(wpDb, 'seo', 5 * 60 * 1000, async () => {
+  await registerAccountingDestination();
+  await seoRepository.list(true);
+});
+const seoRefreshTimer = setInterval(() => refreshSeo().catch(error => console.error('SEO page refresh failed:', error.message)), 5 * 60 * 1000);
 seoRefreshTimer.unref();
+const readEmsState = createEmsStateReader(wpDb, readCatalogueDb, () => accountDeletion.ensure());
 let emsScanRunning = false;
 async function refreshEmsUploads() {
   if (emsScanRunning || !process.env.EMS_TRIKONET_SYNC_SECRET) return;
   emsScanRunning = true;
   try {
-    const state = await readLocalDb();
+    const state = await readEmsState();
     for (const job of state.jobs || []) {
       const operator = emsJobOperator(job, state.users || []);
       if (!operator?.email) continue;
@@ -2077,9 +2084,10 @@ async function refreshEmsUploads() {
   } catch (error) { console.error('EMS upload sync failed:', error.message); }
   finally { emsScanRunning = false; }
 }
-const emsSyncTimer = setInterval(refreshEmsUploads, 30000);
+const coordinatedEms = createCoordinatedTask(wpDb, 'ems', 30000, refreshEmsUploads);
+const emsSyncTimer = setInterval(() => coordinatedEms().catch(error => console.error('EMS scheduler failed:', error.message)), 30000);
 emsSyncTimer.unref();
-startupReady.then(refreshEmsUploads).catch(error=>console.error('EMS startup failed:',error.message));
+startupReady.then(coordinatedEms).catch(error=>console.error('EMS startup failed:',error.message));
 
 const jobEmailTimer=setInterval(()=>jobEmailAlerts.tick().catch(error=>console.error('Job email worker failed:',error.message)),60000);
 jobEmailTimer.unref();

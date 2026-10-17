@@ -13657,6 +13657,18 @@ export async function initAdmin() {
     return numericId > 1_000_000_000_000 ? numericId : 0;
   }
 
+  function candidateJoinedLabel(candidate, now = Date.now()) {
+    const timestamp = candidateCreatedTime(candidate);
+    if (!timestamp) return 'Not recorded';
+    const date = new Date(timestamp);
+    const elapsed = Math.max(0, now - timestamp);
+    const units = [[31536000000, 'year'], [2592000000, 'month'], [86400000, 'day'], [3600000, 'hour'], [60000, 'minute']];
+    const unit = units.find(([duration]) => elapsed >= duration);
+    const count = unit ? Math.floor(elapsed / unit[0]) : 0;
+    const relative = unit ? `${count} ${unit[1]}${count === 1 ? '' : 's'} ago` : 'Just joined';
+    return `${date.toLocaleDateString('en-GB')} at ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · ${relative}`;
+  }
+
   function updateCandidateCountBadges() {
     const sidebarCount = document.getElementById('admin-candidates-count');
     if (sidebarCount) sidebarCount.textContent = String(candidates.length);
@@ -13760,12 +13772,12 @@ export async function initAdmin() {
               <div>
                 <strong><a href="#candidate-editor" class="row-title" data-candidate-edit="${c.id}">${escapeHtml(c.name)}</a></strong>
                 <div style="font-size:11px; color:#64748b; margin-top:2px;">
-                  ${escapeHtml(c.email || '—')} ${c.phone ? `· ${escapeHtml(c.phone)}` : ''}
+                  ${escapeHtml(c.email || '—')}${c.phone ? ` · ${escapeHtml(c.phone)}` : ''}<br>Joined: ${escapeHtml(candidateJoinedLabel(c))}
                 </div>
-                <div class="row-actions modern-tax-row-actions">
+                <div class="row-actions modern-tax-row-actions candidate-row-actions">
                   <span><a href="#candidate-editor" data-candidate-edit="${c.id}">Edit</a> | </span>
                   <span><a href="#" data-candidate-toggle-feature="${c.id}">${c.featured ? 'Unfeature' : 'Feature'}</a> | </span>
-                  <span class="trash"><a href="#" data-candidate-delete="${c.id}">Trash</a> | </span>
+                  <span class="trash"><button type="button" class="candidate-delete-button" data-candidate-delete="${c.id}" aria-label="Delete ${escapeHtml(c.name || 'candidate')}">Delete</button></span>
                   <span><a href="/candidate/${c.slug}" target="_blank" rel="noopener">View ↗</a></span>
                 </div>
               </div>

@@ -8187,3 +8187,26 @@ mark.wp-highlight {
 }
 
 
+
+/* Keep candidate management actions visible on mouse, keyboard, and touch. */
+#admin-candidate-rows .candidate-row-actions {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.candidate-delete-button {
+  border: 1px solid #fecaca;
+  border-radius: 5px;
+  background: #fff1f2;
+  color: #b91c1c;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.candidate-delete-button:hover { background: #fee2e2; }
+.candidate-delete-button:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; }

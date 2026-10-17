@@ -1,3 +1,4 @@
+import {candidateProfileRequest} from './candidate-profile-store.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
 import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
 import {createJobReports} from './job-reports.mjs';
@@ -1454,6 +1455,16 @@ const server = http.createServer(async (req, res) => {
   }
   if(['/api/candidate/email/request','/api/candidate/email/verify'].includes(path)&&req.method==='POST'){
     try{const [status,data]=await emailChange(path.endsWith('/request')?'request':'verify',currentSession(req),await readJsonBody(req));return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Email verification is temporarily unavailable.'})}
+  }
+  if(path==='/api/candidate/profile'){
+    const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});
+    try{
+      const deletion=await accountDeletion.status(session.userId);
+      if(deletion.status!=='active')return sendJson(req,res,403,{error:'Restore your account before editing your profile.',code:'account_deletion_pending',deletion});
+      const body=['POST','PUT'].includes(req.method)?await readJsonBody(req):{};
+      await ensurePersistentState();const [status,result]=await candidateProfileRequest(wpDb,req.method,session.userId,body);
+      return sendJson(req,res,status,result);
+    }catch(error){return sendJson(req,res,503,{error:'Could not save your profile. Please try again.'});}
   }
   if(['/api/candidate/profile','/api/candidate/activity'].includes(path)) {
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});

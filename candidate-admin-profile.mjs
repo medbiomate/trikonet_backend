@@ -1,7 +1,7 @@
 export function adminCandidateProfile(record,user){
  if(!user)return record;
  const p=user.profile||{};
- return {...record,...p,id:user.id,userId:user.id,name:user.name||p.name||record.name,email:user.email,
+ return {...record,...p,id:user.id,userId:user.id,name:p.name||user.name||record.name,email:user.email,
  jobTitle:p.role??p.currentDesignation??record.jobTitle,
  location:p.currentLocation??(Array.isArray(p.locations)?p.locations.join(', '):undefined)??record.location,
  bio:p.summary??record.bio,photo:p.photo||user.avatar||record.photo||'',createdAt:user.createdAt||record.createdAt};

@@ -5,7 +5,8 @@ export function createCompanyReviews({readLocalDb,writeLocalDb}){
   if(!/^[a-zA-Z0-9_-]{1,160}$/.test(companyId))return[400,{error:'Invalid company.'}];
   const publicReview=r=>({id:r.id,rating:r.rating,text:r.text,name:r.name,createdAt:r.createdAt,updatedAt:r.updatedAt,mine:Boolean(session&&String(r.userId)===String(session.userId))});
   if(method==='GET'){
-   const db=await readLocalDb();const all=(db.companyReviews||[]).filter(r=>r.companyId===companyId).sort((a,b)=>b.updatedAt-a.updatedAt);
+   const db=await readLocalDb();const pending=new Set(db.users.filter(user=>user.accountDeletionPending).map(user=>String(user.id)));
+   const all=(db.companyReviews||[]).filter(r=>r.companyId===companyId&&!pending.has(String(r.userId))).sort((a,b)=>b.updatedAt-a.updatedAt);
    return[200,{reviews:all.slice(0,100).map(publicReview),count:all.length,average:all.length?all.reduce((sum,r)=>sum+r.rating,0)/all.length:0}];
   }
   if(method!=='POST')return[405,{error:'Method not allowed.'}];
@@ -15,6 +16,7 @@ export function createCompanyReviews({readLocalDb,writeLocalDb}){
   const task=writes.then(async()=>{
    const db=await readLocalDb();const user=(db.users||[]).find(u=>String(u.id)===String(session.userId));
    if(!user)return[401,{error:'Sign in again to write a review.'}];
+   if(user.accountDeletionPending)return[403,{error:'Restore your account before posting reviews.'}];
    db.companyReviews||=[];const existing=db.companyReviews.find(r=>r.companyId===companyId&&String(r.userId)===String(user.id));
    const review={id:existing?.id||randomUUID(),companyId,userId:user.id,name:String(user.name||'Trikonet member').trim().split(/\s+/)[0].slice(0,60),rating,text,createdAt:existing?.createdAt||Date.now(),updatedAt:Date.now()};
    if(existing)Object.assign(existing,review);else db.companyReviews.push(review);

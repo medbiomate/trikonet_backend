@@ -10,7 +10,7 @@ export function createPointsStore(sql,{readLocalDb}){
   },
   async writeLocalDb(db){
    await ensure();
-   for(const user of db.users){if(user.resumeRewards&&snapshots.get(db)?.get(String(user.id))!==JSON.stringify(user.resumeRewards))await sql.query('INSERT INTO trikonet_point_wallets (user_id,payload) VALUES (?,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)',[String(user.id),JSON.stringify(user.resumeRewards)]);}
+   for(const user of db.users){if(user.resumeRewards&&snapshots.get(db)?.get(String(user.id))!==JSON.stringify(user.resumeRewards))await sql.query('INSERT INTO trikonet_point_wallets (user_id,payload) SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM trikonet_account_deletions WHERE user_id=?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)',[String(user.id),JSON.stringify(user.resumeRewards),String(user.id)]);}
   }
  };
 }

@@ -1,0 +1,106 @@
+import {isCandidateAccount} from './candidate-account.mjs';
+export const RECOVERY_MS = 30 * 24 * 60 * 60 * 1000;
+export function deletionView(row, now = Date.now()) {
+  if (!row) return {status:'active'};
+  if (row.status === 'deleted' || Number(row.delete_after) <= now) return {status:'deleted'};
+  return {status:'pending',requestedAt:new Date(Number(row.requested_at)).toISOString(),deleteAfter:new Date(Number(row.delete_after)).toISOString()};
+}
+// Tombstones contain only an opaque account ID, preventing stale catalogue writes
+// from restoring erased accounts. No email, profile or credentials are retained.
+export function removeAccountData(db, ids) {
+  const removed = new Set([...ids].map(String));
+  const owned = item => ['userId','user_id','candidateId','candidate_id','accountId'].some(key => removed.has(String(item?.[key])));
+  db.users = (db.users || []).filter(user => !removed.has(String(user.id)));
+  for (const key of ['resumes','applications','savedJobs','companyReviews','jobReports','employerClaims','emailCampaigns']) {
+    if (Array.isArray(db[key])) db[key] = db[key].filter(item => !owned(item));
+  }
+  if (Array.isArray(db.candidates)) db.candidates = db.candidates.filter(item => !removed.has(String(item.id)) && !owned(item));
+  return db;
+}
+export function unreferencedPrivateMedia(before,after){
+  const hashes=value=>new Set([...JSON.stringify(value).matchAll(/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//g)].map(match=>match[1]));
+  const remaining=hashes(after);return [...hashes(before)].filter(id=>!remaining.has(id));
+}
+export function createAccountDeletion({pool,sessions,now=Date.now}) {
+  let ready;
+  const ensure = () => ready ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_account_deletions (
+    user_id VARCHAR(191) PRIMARY KEY, status VARCHAR(16) NOT NULL,
+    requested_at BIGINT NOT NULL, delete_after BIGINT NOT NULL,
+    INDEX due_deletions (status,delete_after)
+  ) ENGINE=InnoDB`).catch(error=>{ready=undefined;throw error});
+  async function status(userId) {
+    await ensure();
+    const [rows]=await pool.query('SELECT * FROM trikonet_account_deletions WHERE user_id=?',[String(userId)]);
+    return deletionView(rows[0],now());
+  }
+  async function revoke(userId) {
+    for (const [token,session] of sessions) if(String(session.userId)===String(userId))sessions.delete(token);
+    await sessions.flush();
+  }
+  async function optionalDelete(connection,table,userId) {
+    try { await connection.query(`DELETE FROM ${table} WHERE user_id=?`,[String(userId)]); }
+    catch(error) { if(error.code!=='ER_NO_SUCH_TABLE')throw error; }
+  }
+  async function transaction(fn) {
+    await ensure();const connection=await pool.getConnection();
+    try {await connection.beginTransaction();const result=await fn(connection);await connection.commit();return result;}
+    catch(error){await connection.rollback();throw error;}finally{connection.release();}
+  }
+  // All state writers lock this row before checking tombstones (see server.mjs).
+  async function lockedState(connection) {
+    const [rows]=await connection.query("SELECT payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
+    if(!rows[0])throw new Error('Account storage unavailable. Please try again.');
+    return JSON.parse(rows[0].payload);
+  }
+  async function request(userId, confirmation) {
+    if(confirmation!=='DELETE')return [400,{error:'Confirm that you want to delete your account.'}];
+    const result=await transaction(async connection=>{
+      const db=await lockedState(connection);
+      const user=db.users.find(user=>String(user.id)===String(userId));
+      if(!user||!isCandidateAccount(user))return [403,{error:'This option is available for job-seeker accounts.'}];
+      const time=now();
+      await connection.query("INSERT IGNORE INTO trikonet_account_deletions (user_id,status,requested_at,delete_after) VALUES (?,'pending',?,?)",[String(userId),time,time+RECOVERY_MS]);
+      const [rows]=await connection.query('SELECT * FROM trikonet_account_deletions WHERE user_id=? FOR UPDATE',[String(userId)]);
+      return [200,{success:true,deletion:deletionView(rows[0],now())}];
+    });
+    if(result[0]===200)await revoke(userId);
+    return result;
+  }
+  async function recover(userId) {
+    return transaction(async connection=>{
+      const db=await lockedState(connection);
+      const [rows]=await connection.query('SELECT * FROM trikonet_account_deletions WHERE user_id=? FOR UPDATE',[String(userId)]);
+      const deletion=deletionView(rows[0],now());
+      if(deletion.status==='deleted'||!db.users.some(user=>String(user.id)===String(userId)))return [410,{error:'The recovery period has ended. This account cannot be restored.'}];
+      await connection.query('DELETE FROM trikonet_account_deletions WHERE user_id=?',[String(userId)]);
+      return [200,{success:true,deletion:{status:'active'}}];
+    });
+  }
+  async function sweep() {
+    const ids=await transaction(async connection=>{
+      const db=await lockedState(connection);
+      const [rows]=await connection.query("SELECT * FROM trikonet_account_deletions WHERE status='pending' AND delete_after<=? FOR UPDATE",[now()]);
+      const ids=rows.map(row=>String(row.user_id));if(!ids.length)return [];
+      const before=structuredClone(db);
+      removeAccountData(db,ids);
+      for(const hash of unreferencedPrivateMedia(before,db)){
+        let shared=false;
+        for(const table of ['trikonet_public_media','trikonet_uploaded_public_media']){
+          try{const [rows]=await connection.query(`SELECT checksum FROM ${table} WHERE checksum=?`,[hash]);if(rows.length)shared=true;}
+          catch(error){if(error.code!=='ER_NO_SUCH_TABLE')throw error;}
+        }
+        if(!shared)try{await connection.query('DELETE FROM trikonet_media WHERE id=?',[hash]);}catch(error){if(error.code!=='ER_NO_SUCH_TABLE')throw error;}
+      }
+      await connection.query("UPDATE trikonet_app_state SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[JSON.stringify(db)]);
+      for(const id of ids){
+        for(const table of ['trikonet_point_wallets','trikonet_alert_subscribers','trikonet_alert_outbox','trikonet_digest_jobs'])await optionalDelete(connection,table,id);
+        await connection.query("DELETE FROM trikonet_candidate_sessions WHERE JSON_UNQUOTE(JSON_EXTRACT(payload,'$.userId'))=?",[id]);
+        await connection.query("UPDATE trikonet_account_deletions SET status='deleted' WHERE user_id=?",[id]);
+      }
+      return ids;
+    });
+    for(const id of ids)await revoke(id);
+    return ids.length;
+  }
+  return {ensure,status,request,recover,sweep};
+}

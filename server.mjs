@@ -1,3 +1,4 @@
+import {createAccountDeletion,removeAccountData} from './account-deletion.mjs';
 import {createRegistrationVerification} from './registration-verification.mjs';
 import { gzip as gzipCallback } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -592,9 +593,16 @@ async function readLocalDb() {
   try {
     await ensurePersistentState();
     const [rows] = await wpDb.query("SELECT payload FROM trikonet_app_state WHERE state_key='main' LIMIT 1");
-    if (rows[0]?.payload) return { ...emptyDb, ...JSON.parse(rows[0].payload) };
+    if (rows[0]?.payload) {
+      const db={...emptyDb,...JSON.parse(rows[0].payload)};
+      await accountDeletion.ensure();
+      const [deletions]=await wpDb.query('SELECT * FROM trikonet_account_deletions');
+      removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
+      for(const user of db.users){const row=deletions.find(row=>String(row.user_id)===String(user.id));if(row)user.accountDeletionPending=true;else delete user.accountDeletionPending;}
+      return db;
+    }
   } catch (error) {
-    console.error('Persistent state read failed; using deployment JSON fallback:', error.message);
+    throw new Error('Account storage is temporarily unavailable.',{cause:error});
   }
   try { return { ...emptyDb, ...JSON.parse(await readFile(localDbPath, 'utf8')) }; }
   catch { return structuredClone(emptyDb); }
@@ -607,19 +615,17 @@ async function writeLocalDb(db, {skipMedia=false}={}) {
   db.jobs = await mediaStore.publish(db.jobs || [], 'job');
   db.employers = await mediaStore.publish(db.employers || [], 'employer');
   }
-  const payload = JSON.stringify({ ...emptyDb, ...db });
+  await ensurePersistentState();
+  await accountDeletion.ensure();
+  const connection=await wpDb.getConnection();
   try {
-    await ensurePersistentState();
-    await wpDb.query(
-      "INSERT INTO trikonet_app_state (state_key, payload) VALUES ('main', ?) ON DUPLICATE KEY UPDATE payload=VALUES(payload), updated_at=CURRENT_TIMESTAMP",
-      [payload]
-    );
-    return;
-  } catch (error) {
-    console.error('Persistent state write failed; using deployment JSON fallback:', error.message);
-  }
-  await mkdir(dataRoot, { recursive: true });
-  await writeFile(localDbPath, JSON.stringify(db, null, 2));
+    await connection.beginTransaction();
+    await connection.query("SELECT state_key FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
+    const [deletions]=await connection.query('SELECT * FROM trikonet_account_deletions');
+    removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
+    await connection.query("UPDATE trikonet_app_state SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[JSON.stringify({...emptyDb,...db})]);
+    await connection.commit();
+  } catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }
 
 async function loadSeoRecords() {
@@ -652,8 +658,6 @@ const seoRepository = createSeoRepository(wpDb,readLocalDb,loadSeoRecords);
 // Preserve the existing main category URL explicitly requested by the admin.
 // This migration is insert-only: never overwrite saved manual settings.
 const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
-registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
-seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
 
 async function readJsonBody(req, maxBytes = 2_000_000) {
   let body = '';
@@ -674,6 +678,7 @@ function getCorsOrigin(req) {
     origin === 'https://trikonet.com' ||
     origin === 'https://www.trikonet.com' ||
     origin === 'https://api.trikonet.com' ||
+    origin === 'capacitor://localhost' || origin === 'https://localhost' ||
     /^https:\/\/([a-z0-9-]+\.)?trikonet\.com$/.test(origin) ||
     /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
     Boolean(process.env.CORS_ORIGIN && process.env.CORS_ORIGIN.split(',').map(s => s.trim()).includes(origin));
@@ -722,6 +727,9 @@ async function sendJson(req, res, status, value) {
 }
 
 const sessions = await createPersistentSessions(wpDb);
+const accountDeletion=createAccountDeletion({pool:wpDb,sessions});
+registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
+seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
 const MAX_RESUMES_PER_USER = 3;
 const MAX_PROFILE_PHOTO_BYTES = 100 * 1024;
 const cookieValue = (req, name) =>
@@ -773,7 +781,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
   return `trikonet_session=${token}; HttpOnly; SameSite=${sameSite}${secure}; Path=/; Max-Age=${maxAge}`;
 }
 
-const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await readLocalDb()).users.filter(isCandidateAccount),loadJobs:async()=>{
+const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await readLocalDb()).users.filter(user=>isCandidateAccount(user)&&!user.accountDeletionPending),loadJobs:async()=>{
   const {jobs}=await loadSeoRecords();
   const local=await readLocalDb();
   const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
@@ -801,6 +809,7 @@ const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmai
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
 const server = http.createServer(async (req, res) => {
+  try {
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
   const legacyImage=path.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
@@ -869,6 +878,37 @@ const server = http.createServer(async (req, res) => {
       }
       return sendJson(req,res,200,counts);
     } catch { return sendJson(req,res,503,{error:'Unable to load employer job counts.'}); }
+  }
+
+  const bearer=String(req.headers.authorization||'').replace(/^Bearer /,'');
+  const accountSession=currentSession(req)||(bearer?sessions.get(bearer):null);
+  if(path==='/api/auth/account-deletion'){
+    if(req.method==='POST'&&((req.headers.origin&&!getCorsOrigin(req))||!String(req.headers['content-type']||'').includes('application/json')))return sendJson(req,res,403,{error:'Invalid account request origin or format.'});
+    if(!accountSession)return sendJson(req,res,401,{error:'Sign in to manage your account.'});
+    try{
+      if(req.method==='GET')return sendJson(req,res,200,{deletion:await accountDeletion.status(accountSession.userId)});
+      if(req.method==='POST'){
+        const body=await readJsonBody(req,2000);
+        if(body.action==='recover'){
+          const [status,payload]=await accountDeletion.recover(accountSession.userId);
+          return sendJson(req,res,status,payload);
+        }
+        if(body.action!=='request')return sendJson(req,res,400,{error:'Choose a valid account action.'});
+        const [status,payload]=await accountDeletion.request(accountSession.userId,body.confirmation);
+        if(status===200){
+          const token=crypto.randomUUID();sessions.set(token,{...accountSession});await sessions.flush();
+          res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
+        }
+        return sendJson(req,res,status,payload);
+      }
+      return sendJson(req,res,405,{error:'Method not allowed.'});
+    }catch{return sendJson(req,res,503,{error:'Unable to update your account. Please try again.'});}
+  }
+  if(accountSession && /^\/api\/(candidate|resumes|company-reviews|email-campaigns|mobile)(\/|$)/.test(path)){
+    try{
+      const deletion=await accountDeletion.status(accountSession.userId);
+      if(deletion.status!=='active')return sendJson(req,res,403,{error:'Your account is scheduled for deletion.',code:'account_deletion_pending',deletion});
+    }catch{return sendJson(req,res,503,{error:'Account storage is temporarily unavailable.'});}
   }
 
   if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
@@ -1122,10 +1162,12 @@ const server = http.createServer(async (req, res) => {
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
       let accountSaved=Promise.resolve();
       const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body),findExisting:subject=>findGoogleAccount(wpDb,subject),saveExisting:entry=>{accountSaved=saveGoogleAccount(wpDb,entry);return Promise.resolve()}});
+      await accountSaved;
+      if((await accountDeletion.status(user.id)).status==='deleted')return sendJson(req,res,401,{error:'This account is no longer available.'});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
       await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
-      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id}});
+      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion:await accountDeletion.status(user.id)});
     }catch{return sendJson(req,res,401,{error:'Google sign-in could not be completed. Please try your email and password.'});}
   }
 
@@ -1192,7 +1234,7 @@ const server = http.createServer(async (req, res) => {
       sessions.set(token, { userId: user.id, email: user.email, name: user.name });
       await Promise.all([accountSaved,sessions.flush()]);
       res.setHeader('Set-Cookie', getSessionCookieHeader(req, token));
-      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email } });
+      return sendJson(req, res, 200, { user: { id: user.id, name: user.name, email: user.email },deletion:await accountDeletion.status(user.id) });
     } catch (error) {
       return sendJson(req, res, 400, { error: error.message });
     }
@@ -1202,7 +1244,7 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/auth/me' && req.method === 'GET') {
     const session = currentSession(req);
     const db=session?await readLocalDb():null;const user=db?.users.find(item=>String(item.id)===String(session.userId));
-    return sendJson(req,res,user?200:401,user?{user:accountView(user)}:{error:'Authentication required'});
+    return sendJson(req,res,user?200:401,user?{user:accountView(user),deletion:await accountDeletion.status(user.id)}:{error:'Authentication required'});
   }
 
   // API: Auth Logout
@@ -1941,6 +1983,11 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404);
     res.end('Not found');
   }
+  } catch(error) {
+    console.error('API request failed:',error.message);
+    if(!res.headersSent)return sendJson(req,res,503,{error:'Trikonet is temporarily unavailable. Please try again.'});
+    res.end();
+  }
 });
 
 await loadMemoryStore();
@@ -1983,3 +2030,8 @@ void refreshEmsUploads();
 
 const jobEmailTimer=setInterval(()=>jobEmailAlerts.tick().catch(error=>console.error('Job email worker failed:',error.message)),60000);
 jobEmailTimer.unref();
+// Expiry runs independently of login or the app being open; overdue accounts
+// cannot authenticate even if the worker is temporarily unavailable.
+const deletionTimer=setInterval(()=>accountDeletion.sweep().catch(error=>console.error('Account deletion worker failed:',error.message)),60000);
+deletionTimer.unref();
+void accountDeletion.sweep().catch(error=>console.error('Account deletion worker failed:',error.message));

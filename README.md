@@ -105,3 +105,36 @@ Opted-in candidates receive at most one grouped email per UAE slot: 08:00 mornin
 Role matching requires all meaningful selected-role words in the job title, falling back to current designation when needed. Category or educational specialization alone never qualifies a role match. When no new matched jobs exist, send explicitly labeled general opportunities with a profile-completion link. Include only active jobs published within seven days and not previously included in that user's digests. Skip when none remain. Reading alert settings never opts someone in.
 
 Email includes Trikonet branding, employer logos where available, company/location/type details, company profile links and available descriptions, job links, a friendly greeting and profile/unsubscribe links. Uses existing Resend settings. Test with `node --test job-digest.test.mjs job-email-alerts.test.mjs`; provider calls are stubbed, so tests send no real mail.
+
+## Account deletion and 30-day recovery
+
+The iOS account menu opens an in-app confirmation rather than linking to support.
+`GET /api/auth/account-deletion` returns the authenticated account's status.
+`POST` with `{ "action": "request", "confirmation": "DELETE" }` schedules deletion
+for 30 × 24 hours later and revokes all existing sessions. The current device gets
+a replacement cookie so it can display the deadline and offer recovery. New
+password/Google sign-ins return the deletion status; signing in does not cancel
+it. `POST` with `{ "action": "recover" }` explicitly cancels deletion before the
+deadline. All actions use the session identity, never a client-supplied user ID.
+
+Pending accounts cannot use candidate, résumé, review, or campaign APIs. Job
+emails and public reviews are suppressed during recovery. At the deadline,
+authentication/data reads exclude the account even before the background worker
+runs. The worker runs on startup and every minute, transactionally removing the
+account, associated records, wallet, email queue/subscription, sessions and
+unshared private media. An opaque ID tombstone prevents stale catalogue writes
+from restoring erased accounts. Existing backups and copies already sent to
+employers are governed by their respective retention policies.
+
+Deploy the backend before distributing the updated iOS build. The database user
+needs CREATE/SELECT/INSERT/UPDATE/DELETE privileges for the existing tables and
+new `trikonet_account_deletions` table (created automatically). Keep the backend
+process running for scheduled cleanup. This change does not modify or deploy
+production data by itself. Account-storage failures fail closed rather than
+using a stale deployment JSON copy for authentication.
+
+Validate with `node --test account-deletion.test.mjs company-reviews.test.mjs
+persistent-sessions.test.mjs points-store.test.mjs mobile-api.test.mjs`. Before
+App Review, test on a physical device using a disposable account: request deletion,
+confirm normal access is blocked, sign out/in and restore; verify profile and CV
+return. Do not delete the reviewer demo account while a review is in progress.

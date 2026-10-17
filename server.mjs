@@ -616,7 +616,8 @@ async function readLocalDb() {
       const [deletions]=await wpDb.query('SELECT * FROM trikonet_account_deletions');
       removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
       for(const user of db.users){const row=deletions.find(row=>String(row.user_id)===String(user.id));if(row)user.accountDeletionPending=true;else delete user.accountDeletionPending;}
-      stateSnapshots.set(db,structuredClone(db));
+      // Keep the merge baseline serialized; read-only requests need no second object graph.
+      stateSnapshots.set(db,JSON.stringify(db));
       return db;
     }
   } catch (error) {
@@ -627,7 +628,8 @@ async function readLocalDb() {
 }
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
-  const before=stateSnapshots.get(db);
+  const snapshot=stateSnapshots.get(db);
+  const before=snapshot ? JSON.parse(snapshot) : undefined;
   repairEmployerSnapshots(db);
   if(!skipMedia){
   db = await mediaStore.normalize(db);
@@ -2042,8 +2044,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 await loadMemoryStore();
-const urlMigrationDb = await readLocalDb();
-if (shortenGeneratedJobUrls(urlMigrationDb.jobs || [],memoryStore.jobs || [])) await writeLocalDb(urlMigrationDb);
+// Release the startup state and its merge baseline after migration completes.
+await (async () => {
+  const db = await readLocalDb();
+  if (shortenGeneratedJobUrls(db.jobs || [],memoryStore.jobs || [])) await writeLocalDb(db);
+})();
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);
@@ -2086,3 +2091,12 @@ jobEmailTimer.unref();
 const deletionTimer=setInterval(()=>accountDeletion.sweep().catch(error=>console.error('Account deletion worker failed:',error.message)),60000);
 deletionTimer.unref();
 void accountDeletion.sweep().catch(error=>console.error('Account deletion worker failed:',error.message));
+
+// Log process-level memory without account data or request contents.
+function logResourceUsage() {
+  const {rss,heapUsed,heapTotal,external}=process.memoryUsage();
+  const mib=bytes=>Math.round(bytes/1048576);
+  console.log(JSON.stringify({event:'resource_usage',pid:process.pid,uptimeSeconds:Math.round(process.uptime()),rssMiB:mib(rss),heapUsedMiB:mib(heapUsed),heapTotalMiB:mib(heapTotal),externalMiB:mib(external)}));
+}
+logResourceUsage();
+setInterval(logResourceUsage,60000).unref();

@@ -178,12 +178,13 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     },
     createMain: body => queue(async () => {
       if (!body.category || !body.slug) throw new Error('Choose a category and a main page URL.');
+      const list = await rows();
+      const existing = list.find(p => p.pageType === 'main_category' && key(p.category) === key(body.category));
+      // Startup registration must not rebuild the catalogue for existing pages.
+      if (existing && body.onlyIfMissing) return existing;
       const { taxonomies } = await loadRecords();
       const category = taxonomies.categories?.find(c => key(c.name) === key(body.category));
       if (!category) throw new Error('Choose an existing job category.');
-      const list = await rows();
-      const existing = list.find(p => p.pageType === 'main_category' && key(p.category) === key(category.name));
-      if (existing && body.onlyIfMissing) return existing;
       const slug = slugify(body.slug);
       if (list.some(p => p.slug === slug && p.id !== existing?.id)) throw new Error('This URL already exists.');
       const now = new Date().toISOString();

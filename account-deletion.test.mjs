@@ -8,6 +8,8 @@ function fixture(){
  const sessions=new Map([['a1',{userId:'alice'}],['a2',{userId:'alice'}],['b',{userId:'bob'}]]);sessions.flush=async()=>{};
  async function query(sql,args=[]){
   if(sql.startsWith('CREATE TABLE'))return [{}];
+  if(sql.includes('trikonet_imported_data'))return [[]];
+  if(sql.startsWith("INSERT INTO trikonet_account_deletions")){records.set(args[0],{user_id:args[0],status:'deleted',requested_at:args[1],delete_after:args[2]});return [{}];}
   if(sql.startsWith('SELECT payload'))return [[{payload:JSON.stringify(state)}]];
   if(sql.startsWith('SELECT * FROM trikonet_account_deletions WHERE user_id'))return [[records.get(args[0])].filter(Boolean)];
   if(sql.startsWith("SELECT * FROM trikonet_account_deletions WHERE status"))return [[...records.values()].filter(row=>row.status==='pending'&&row.delete_after<=args[0])];
@@ -55,3 +57,19 @@ test('private image cleanup retains images still referenced by another account',
  const after=removeAccountData(structuredClone(before),['alice']);
  assert.deepEqual(unreferencedPrivateMedia(before,after),['a'.repeat(64)]);
 });
+
+test('admin permanent deletion immediately removes account and all owned history on both session tokens',async()=>{
+ const f=fixture();const [status,result]=await f.api.permanent(['alice'],'DELETE');assert.equal(status,200);assert.deepEqual(result.deleted,['alice']);
+ assert.deepEqual(f.state().users.map(u=>u.id),['bob','admin']);assert.equal(f.state().resumes.length,1);assert.equal(f.state().applications.length,0);assert.deepEqual([...f.sessions.keys()],['b']);assert.equal((await f.api.status('alice')).status,'deleted');assert.equal((await f.api.recover('alice'))[0],410);
+});
+test('admin deletion validates confirmation and rejects staff or missing IDs atomically',async()=>{
+ const f=fixture();assert.equal((await f.api.permanent(['alice'],'yes'))[0],400);assert.equal((await f.api.permanent(['alice','admin'],'DELETE'))[0],403);assert.equal((await f.api.permanent(['alice','missing'],'DELETE'))[0],404);assert.deepEqual(f.state(),f.original);assert.equal(f.records().size,0);assert.equal(f.sessions.size,3);
+});
+test('failed permanent deletion rolls back profile and tombstone and keeps sessions valid',async()=>{
+ const f=fixture();f.fail();await assert.rejects(f.api.permanent(['alice'],'DELETE'),/Storage failure/);assert.deepEqual(f.state(),f.original);assert.equal(f.records().size,0);assert.equal(f.sessions.size,3);
+});
+test('legacy email-owned applications and source-account profile copies are erased',()=>{
+ const state={users:[{id:'a',email:'a@example.test'},{id:'b',email:'b@example.test'}],applications:[{email:'A@example.test'},{email:'b@example.test'}],candidates:[{id:'imported',sourceAccountId:'a'},{id:'other'}]};removeAccountData(state,['a']);assert.equal(state.applications.length,1);assert.equal(state.candidates[0].id,'other');assert.equal(state.users[0].id,'b');
+});
+
+test('repeating a completed admin deletion is safe and idempotent',async()=>{const f=fixture();assert.equal((await f.api.permanent(['alice'],'DELETE'))[0],200);assert.equal((await f.api.permanent(['alice'],'DELETE'))[0],200);assert.equal(f.state().users.length,2)});

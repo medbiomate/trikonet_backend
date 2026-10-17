@@ -1550,6 +1550,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if(path==='/api/admin/candidate-delete' && req.method==='POST') {
+    const admin=await currentAdminSession(req);
+    if(!admin || admin.role!=='Administrator')return sendJson(req,res,403,{error:'Administrator access required'});
+    if((req.headers.origin&&!getCorsOrigin(req))||!String(req.headers['content-type']||'').includes('application/json'))return sendJson(req,res,403,{error:'Invalid request origin or format.'});
+    try {
+      const body=await readJsonBody(req,16000);
+      const [status,result]=await accountDeletion.permanent(body.ids,body.confirmation);
+      return sendJson(req,res,status,result);
+    } catch(error){console.error('Candidate deletion failed:',error.message);return sendJson(req,res,503,{error:'Deletion could not complete. Please retry; the candidate has not been hidden.'});}
+  }
   if(path==='/api/admin/candidate-save' && req.method==='POST') {
     const admin=await currentAdminSession(req);
     if(!admin || !['Administrator','Editor'].includes(admin.role))return sendJson(req,res,403,{error:'Administrator access required'});

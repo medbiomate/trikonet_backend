@@ -27,3 +27,18 @@ test('requirements and salary use the editor field names without invented amount
  assert.equal(p.minSalary,'5000');assert.equal(p.maxSalary,'7000');assert.equal(p.salaryType,'Monthly');assert.match(p.experience,/2 years/);assert.match(p.qualification,/Bachelor/);
  assert.equal(extractJobRequirements('Minimum 1 year experience').minSalary,undefined);
 });
+
+test('LinkedIn public markup fills title employer and description',async()=>{
+ const {extractLinkedInJob,isLinkedInJob,importPastedJob}=await import('./job-link-import.mjs');
+ const html='<h1 class="top-card-layout__title">Nurse</h1><a class="topcard__org-name-link">Hospital</a><span class="topcard__flavor--bullet">Dubai, UAE</span><div class="show-more-less-html__markup"><p>Minimum 2 years experience.</p></div>';
+ const r=extractLinkedInJob(html,'https://www.linkedin.com/jobs/view/123/');assert.equal(r.job.title,'Nurse');assert.equal(r.job.company,'Hospital');assert.match(r.job.experience,/2 years/);
+ assert.equal(isLinkedInJob('https://evil.com/jobs/view/123'),false);
+ assert.throws(()=>extractLinkedInJob('Sign in','https://www.linkedin.com/jobs/view/123'),/Paste job text/);
+ assert.equal(importPastedJob('Nurse\nMinimum 2 years experience.').job.title,'Nurse');
+});
+
+test('description keeps bullets paragraphs and emphasis without unsafe markup',async()=>{
+ const {formatImportedDescription}=await import('./job-link-import.mjs');
+ const result=formatImportedDescription('<strong>Hospital</strong> is hiring.<br><ul onclick="bad()"><li>First benefit</li><li>Second benefit</li></ul><script>alert(1)</script>');
+ assert.match(result,/<strong>Hospital<\/strong> is hiring/);assert.match(result,/<ul><li>First benefit<\/li><li>Second benefit<\/li><\/ul>/);assert.doesNotMatch(result,/onclick|script|alert/);
+});

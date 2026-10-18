@@ -27,7 +27,7 @@ export function extractJobPage(html,url){
  if(records.length!==1)throw Error(records.length?'This page lists multiple jobs. Paste a link to one specific job.':'No structured job details found. This website may require login or block automated access.');
  const p=records[0],address=[p.jobLocation].flat().find(item=>item?.address)?.address||{},salary=p.baseSalary?.value||{},company=p.hiringOrganization||{};
  const description=text(p.description);const country=typeof address.addressCountry==='object'?address.addressCountry.name:address.addressCountry;
- const job={...extractJobRequirements(p.description,p.educationRequirements,p.experienceRequirements),category:text(p.occupationalCategory),title:text(p.title),company:text(company.name),description:description?`<p>${escape(description)}</p>`:'',employmentType:[p.employmentType].flat().find(Boolean)||'',streetAddress:text(address.streetAddress),addressLocality:text(address.addressLocality),addressRegion:text(address.addressRegion),postalCode:text(address.postalCode),addressCountry:text(country),address:[address.streetAddress,address.addressLocality,address.addressRegion,country].filter(Boolean).map(text).join(', '),datePosted:String(p.datePosted||'').slice(0,10),deadline:String(p.validThrough||'').slice(0,10),minSalary:String(salary.minValue??salary.value??''),maxSalary:String(salary.maxValue??''),salaryCurrency:text(p.baseSalary?.currency),salaryType:({MONTH:'Monthly',YEAR:'Yearly',HOUR:'Hourly',WEEK:'Weekly'})[salary.unitText]||'Not specified',applyType:'External URL',applyUrl:url};
+ const job={...extractJobRequirements(p.description,p.educationRequirements,p.experienceRequirements),category:text(p.occupationalCategory),title:text(p.title),company:text(company.name),description:description?formatImportedDescription(p.description):'',employmentType:[p.employmentType].flat().find(Boolean)||'',streetAddress:text(address.streetAddress),addressLocality:text(address.addressLocality),addressRegion:text(address.addressRegion),postalCode:text(address.postalCode),addressCountry:text(country),address:[address.streetAddress,address.addressLocality,address.addressRegion,country].filter(Boolean).map(text).join(', '),datePosted:String(p.datePosted||'').slice(0,10),deadline:String(p.validThrough||'').slice(0,10),minSalary:String(salary.minValue??salary.value??''),maxSalary:String(salary.maxValue??''),salaryCurrency:text(p.baseSalary?.currency),salaryType:({MONTH:'Monthly',YEAR:'Yearly',HOUR:'Hourly',WEEK:'Weekly'})[salary.unitText]||'Not specified',applyType:'External URL',applyUrl:url};
  return {job:Object.fromEntries(Object.entries(job).filter(([,value])=>value)),sourceUrl:url,warnings:['Review imported details before publishing. Fields absent from the source remain empty.']};
 }
 
@@ -42,13 +42,14 @@ export function extractOracleJob(payload,html,url){
  const workplace=p.workLocation?.[0]||{};
  const meta=html.match(/<meta\s+property=["']og:site_name["']\s+content=["']([^"']+)/i);
  const company=text(meta?.[1]||workplace.LocationName||'');
- const description=[p.ExternalDescriptionStr,p.ExternalResponsibilitiesStr,p.ExternalQualificationsStr].filter(Boolean).map((part,index)=>`<h3>${['Job description','Responsibilities','Qualifications'][index]}</h3><p>${escape(text(part))}</p>`).join('');
+ const description=[p.ExternalDescriptionStr,p.ExternalResponsibilitiesStr,p.ExternalQualificationsStr].filter(Boolean).map((part,index)=>`<h3>${['Job description','Responsibilities','Qualifications'][index]}</h3>${formatImportedDescription(part)}`).join('');
  const job={salaryType:'Not specified',...extractJobRequirements([p.ExternalDescriptionStr,p.ExternalQualificationsStr].filter(Boolean).join(' ')),category:text(p.Category),title:text(p.Title),company,description,employmentType:/full/i.test(p.JobSchedule)?'FULL_TIME':/part/i.test(p.JobSchedule)?'PART_TIME':'',datePosted:String(p.ExternalPostedStartDate||'').slice(0,10),deadline:String(p.ExternalPostedEndDate||'').slice(0,10),addressLocality:text(workplace.TownOrCity||String(p.PrimaryLocation||'').split(',')[0]),addressRegion:text(workplace.Region1||String(p.PrimaryLocation||'').split(',')[0]),addressCountry:text(p.PrimaryLocationCountry),streetAddress:text(workplace.AddressLine1),postalCode:text(workplace.PostalCode),address:[workplace.AddressLine1,p.PrimaryLocation].filter(Boolean).map(text).join(', '),applyType:'External URL',applyUrl:url};
  return {job:Object.fromEntries(Object.entries(job).filter(([,value])=>value)),sourceUrl:url,warnings:['Review the imported details before publishing.']};
 }
 export async function importJobLink(url){
  const page=await fetchJobPage(url),endpoint=oracleJobRequest(page.url);
  if(endpoint){const response=await fetchJobPage(endpoint,0,true);return extractOracleJob(JSON.parse(response.html),page.html,page.url);}
+ if(isLinkedInJob(page.url))return extractLinkedInJob(page.html,page.url);
  return extractJobPage(page.html,page.url);
 }
 
@@ -64,4 +65,37 @@ export function extractJobRequirements(description,education,experience){
  const salary=content.match(/AED\s*([\d,]+)(?:\s*[-–]\s*(?:AED\s*)?([\d,]+))?/i);
  if(salary){job.minSalary=salary[1].replace(/,/g,'');if(salary[2])job.maxSalary=salary[2].replace(/,/g,'');job.salaryType=/per year|annual|yearly/i.test(content)?'Yearly':/per hour|hourly/i.test(content)?'Hourly':/per month|monthly/i.test(content)?'Monthly':'Not specified';}
  return job;
+}
+
+export function isLinkedInJob(input){try{const url=new URL(input);return (url.hostname==='linkedin.com'||url.hostname.endsWith('.linkedin.com'))&&/\/jobs\/view\/(?:[^/]*-)?\d+/.test(url.pathname);}catch{return false;}}
+export function extractLinkedInJob(html,url){
+ try{return extractJobPage(html,url);}catch{}
+ const field=(tag,className)=>{const expression=new RegExp(`<${tag}\\b[^>]*class=["'][^"']*${className}[^"']*["'][^>]*>([\\s\\S]*?)<\\/${tag}>`,'i');return text(html.match(expression)?.[1]||'');};
+ const title=field('h1','top-card-layout__title'),company=field('a','topcard__org-name-link'),location=field('span','topcard__flavor--bullet');
+ const match=html.match(/<div\b[^>]*class=["'][^"']*show-more-less-html__markup[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+ const description=text(match?.[1]);
+ const formattedDescription=formatImportedDescription(match?.[1]);
+ if(!title||!description)throw Error('LinkedIn did not provide public job details. Open the listing and use Paste job text instead.');
+ const job={title,company,description:formattedDescription,...extractJobRequirements(description),applyType:'External URL',applyUrl:url,salaryType:'Not specified'};
+ if(location){job.addressLocality=location.split(',')[0].trim();job.address=location;}
+ const schedule=html.match(/Employment type[\s\S]{0,500}?<span[^>]*>([^<]+)<\/span>/i)?.[1]||'';
+ if(/full.?time/i.test(schedule))job.employmentType='FULL_TIME';else if(/part.?time/i.test(schedule))job.employmentType='PART_TIME';
+ return {job,sourceUrl:url,warnings:['Review the imported LinkedIn listing before publishing.']};
+}
+export function importPastedJob(content,url=''){
+ const lines=String(content||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);if(lines.length<2)throw Error('Paste the job title and full description.');
+ const job={title:lines[0],description:`<p>${escape(lines.slice(1).join('\n'))}</p>`,...extractJobRequirements(content),salaryType:'Not specified'};
+ if(url){const link=new URL(url);if(link.protocol!=='https:')throw Error('Use an HTTPS job link.');job.applyType='External URL';job.applyUrl=link.href;}
+ return {job,warnings:['Select the existing employer and review all details.']};
+}
+
+export function formatImportedDescription(html){
+ const source=String(html||'').replace(/<(script|style|iframe|object|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'').replace(/<!--[\s\S]*?-->/g,'');
+ const allowed=new Set(['p','br','ul','ol','li','strong','b','em','i','h2','h3','h4']);
+ const safe=source.split(/(<[^>]+>)/g).map(part=>{
+  if(!part.startsWith('<'))return ( /^\s/.test(part)?' ':'' )+escape(text(part))+( /\s$/.test(part)?' ':'' );
+  const match=part.match(/^<(\/?)\s*([a-z0-9]+)/i);if(!match)return '';
+  const tag=match[2].toLowerCase();return allowed.has(tag)?`<${match[1]}${tag}>`:'';
+ }).join('');
+ return safe.trim();
 }

@@ -1,4 +1,4 @@
-import {importJobLink} from './job-link-import.mjs';
+import {importJobLink,importPastedJob} from './job-link-import.mjs';
 import {publicDirectory} from './public-directory.mjs';
 import {createCoordinatedTask} from './coordinated-task.mjs';
 import {createEmsStateReader} from './ems-state-reader.mjs';
@@ -1671,7 +1671,7 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/admin/import-job-link' && req.method==='POST'){
     const admin=await currentAdminSession(req);
     if(!admin)return sendJson(req,res,401,{error:'Sign in to import jobs.'});
-    try{const body=await readJsonBody(req);const result=await importJobLink(String(body.url||''));return sendJson(req,res,200,result);}
+    try{const body=await readJsonBody(req);const result=body.text?importPastedJob(String(body.text).slice(0,100000),String(body.url||'')):await importJobLink(String(body.url||''));return sendJson(req,res,200,result);}
     catch(error){return sendJson(req,res,400,{error:error.message||'Unable to import job.'});}
   }
   if (path === '/api/admin/autosave' && req.method === 'POST') {

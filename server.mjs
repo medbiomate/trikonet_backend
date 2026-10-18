@@ -1810,15 +1810,7 @@ const server = http.createServer(async (req, res) => {
       job.updatedAt = nowIso;
       job.local = true;
 
-      if (!job.deadline && !job.expiryDate) {
-        const d = new Date(job.createdAt || Date.now());
-        d.setDate(d.getDate() + 365);
-        job.deadline = d.toISOString().slice(0, 10);
-        job.expiryDate = job.deadline;
-      } else {
-        job.deadline = job.deadline || job.expiryDate;
-        job.expiryDate = job.expiryDate || job.deadline;
-      }
+      if(job.deadline||job.expiryDate){job.deadline=job.deadline||job.expiryDate;job.expiryDate=job.expiryDate||job.deadline;}
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await readLocalDb();

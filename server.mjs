@@ -1744,7 +1744,12 @@ const server = http.createServer(async (req, res) => {
     const jobs=await publicDirectory(db.jobs,requestUrl.searchParams,async(page,size,excluded)=>{
       const params=new URLSearchParams(requestUrl.searchParams);
       params.set('page',String(page));params.set('per_page',String(size));params.set('exclude_slugs',excluded.join(','));
-      return wordpressRecords('job_listing',params);
+      try { return await wordpressRecords('job_listing',params); }
+      catch(error) {
+        if(error.code!=='ER_NO_SUCH_TABLE')throw error;
+        await loadMemoryStore();
+        return fallbackRecords('job_listing',params);
+      }
     });
     return sendJson(req,res,200,jobs);
   }

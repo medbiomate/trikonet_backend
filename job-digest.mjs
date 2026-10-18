@@ -10,8 +10,12 @@ export function alertSlot(now=new Date()){
 }
 const ignored=new Set(['senior','junior','jobs','job','uae','dubai','the','and','of','in']);
 function roleTokens(role){return norm(role).split(' ').filter(t=>t&&!ignored.has(t)).map(t=>t==='nurses'?'nurse':t==='teachers'?'teacher':t==='accountants'?'accountant':t);}
+export function profileJobTitle(profile={}){
+ return text(profile.currentDesignation)||text(profile.role);
+}
+export function hasJobTitle(profile={}){return Boolean(profileJobTitle(profile));}
 export function matchesRole(job,profile={}){
- const role=profile.role||profile.currentDesignation;
+ const role=profileJobTitle(profile);
  const tokens=roleTokens(role);
  if(!tokens.length||['professional','other','all'].includes(norm(role)))return false;
  const title=roleTokens(job.title);
@@ -35,7 +39,7 @@ export function digestEmail(jobs,user,token,slot,origin='https://api.trikonet.co
  const url=job=>new URL(publicJobPath(job),'https://www.trikonet.com').href;
  const company=job=>text(job.company||job.companyName||job.metas?._job_employer_name)||'Hiring employer';
  const times={morning:'8:00 AM',noon:'12:00 PM',afternoon:'4:00 PM'};
- const introduction=general?'We did not find new jobs matching your role for this update. Here are general opportunities to explore—they are not exact recommendations. Complete or update your career profile so we can find jobs suited to you.':'Good news! These new opportunities match the job role in your career profile. We’re cheering you on as you take your next step.';
+ const introduction=general?'You have not added a job title to your career profile yet. Here are general opportunities to explore—they are not exact recommendations. Complete or update your career profile so we can find jobs suited to you.':'Good news! These new opportunities match the job role in your career profile. We’re cheering you on as you take your next step.';
  const cards=jobs.map(job=>{
  const logo=image(job.logo||job.metas?._job_logo||job.employerLogo);
  const location=values(job,'locations','_job_location').join(', ')||text(job.location)||'See job details';

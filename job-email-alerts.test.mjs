@@ -33,3 +33,7 @@ test('old catalog is not blasted to subscribers',async()=>{const f=fixture();f.j
 
 test('legacy single-job backlog is retired even outside a delivery window',async()=>{const f=fixture();f.outbox.set('old',{id:'old',job_id:'nurse',user_id:'u',payload:'{}',sent:0});f.setTime('2026-10-11T20:00:00Z');await f.worker.tick();assert.equal(f.outbox.get('old').sent,1);assert.equal(f.sends.length,0)});
 test('jobs removed before retry are never delivered',async()=>{const f=fixture();f.setFail(true);await f.worker.tick();f.jobs.splice(0,f.jobs.length);f.setFail(false);await f.worker.tick();assert.equal(f.sends.length,1)});
+
+test('a supplied title never falls back to unrelated general jobs',async()=>{const f=fixture();f.users[0].profile={currentDesignation:'Senior SEO Specialist',role:'Professional'};f.jobs.splice(0,2);await f.worker.tick();assert.equal(f.sends.length,0)});
+test('current designation takes priority over a stale role',async()=>{const f=fixture();f.users[0].profile={currentDesignation:'Senior SEO Specialist',role:'Nurse'};await f.worker.tick();assert.equal(f.sends.length,1);assert.match(JSON.parse(f.sends[0].body).text,/SEO Specialist/);assert.doesNotMatch(JSON.parse(f.sends[0].body).text,/Nurse/)});
+test('pending general digest is cancelled after a title is added',async()=>{const f=fixture();f.users[0].profile={};f.setFail(true);await f.worker.tick();f.users[0].profile={role:'SEO Specialist'};f.setFail(false);await f.worker.tick();assert.equal(f.sends.length,1)});

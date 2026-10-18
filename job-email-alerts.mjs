@@ -1,4 +1,4 @@
-import {alertSlot,selectDigestJobs,selectGeneralJobs,matchesRole,digestEmail} from './job-digest.mjs';
+import {alertSlot,selectDigestJobs,selectGeneralJobs,hasJobTitle,matchesRole,digestEmail} from './job-digest.mjs';
 import crypto from 'node:crypto';
 import {isActiveJob,values} from './seo-job-pages.mjs';
 import {publicJobPath} from './job-urls.mjs';
@@ -64,7 +64,7 @@ export function createJobEmailAlerts({pool,loadJobs,readUsers,env=process.env,fe
         const excluded=new Set(used.map(row=>String(row.job_id)));
         const recent=jobs.filter(job=>{const published=Date.parse(job.publishedDate||job.datePosted||job.postedDate||job.date||job.createdAt||'');return Number.isFinite(published)&&published<=now().getTime()&&now().getTime()-published<=7*86400000;});
         const matched=selectDigestJobs(recent,user.profile||{},excluded);
-        const general=!matched.length;
+        const general=!hasJobTitle(user.profile||{});
         const selected=general?selectGeneralJobs(recent,excluded):matched;
         if(!selected.length)continue;
         const payload={from:env.JOB_ALERT_FROM||env.PASSWORD_RESET_FROM,to:[user.email],...digestEmail(selected,user,subscriber.token,window.slot,env.JOB_ALERT_API_ORIGIN||'https://api.trikonet.com',{general})};
@@ -80,7 +80,7 @@ export function createJobEmailAlerts({pool,loadJobs,readUsers,env=process.env,fe
         const [active]=await connection.query('SELECT token FROM trikonet_alert_subscribers WHERE user_id=? AND enabled=1',[item.user_id]);
         const user=users.find(user=>String(user.id)===String(item.user_id));
         const message=JSON.parse(item.payload);
-        if(!active.length||!user?.email||message.to[0]!==user.email||item.job_id!==`digest:${window.day}:${window.slot}`||!message.digestJobs?.length||!message.digestJobs.every(id=>jobs.some(job=>String(job.id||job.slug)===id&&(message.general||matchesRole(job,user.profile||{}))))||!alertSlot(now()).slot||alertSlot(now()).slot!==window.slot) {
+        if(!active.length||!user?.email||message.to[0]!==user.email||item.job_id!==`digest:${window.day}:${window.slot}`||!message.digestJobs?.length||(message.general&&hasJobTitle(user.profile||{}))||!message.digestJobs.every(id=>jobs.some(job=>String(job.id||job.slug)===id&&(message.general||matchesRole(job,user.profile||{}))))||!alertSlot(now()).slot||alertSlot(now()).slot!==window.slot) {
           await connection.query('UPDATE trikonet_alert_outbox SET sent=1 WHERE id=?',[item.id]);continue;
         }
         try {

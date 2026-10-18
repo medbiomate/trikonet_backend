@@ -1,3 +1,4 @@
+import {createGoogleIndexing} from './google-indexing.mjs';
 import {findEmployerAddress,rememberEmployerAddress} from './employer-job-address.mjs';
 import {importJobLink,importPastedJob} from './job-link-import.mjs';
 import {publicDirectory} from './public-directory.mjs';
@@ -110,6 +111,7 @@ const wpDb = retryDisconnectedReads(mysql.createPool({
   keepAliveInitialDelay: 0,
 }));
 const emsSync = createEmsSync(wpDb);
+const googleIndexing=createGoogleIndexing({pool:wpDb});
 async function numericJobId(job) {
   if (job?.urlJobId) return job.urlJobId;
   if (/^[1-9]\d*$/.test(String(job?.id || ''))) return String(job.id);
@@ -1736,6 +1738,12 @@ const server = http.createServer(async (req, res) => {
     } catch { return sendJson(req,res,503,{error:'Draft save failed.'}); }
   }
 
+  if(path==='/api/admin/google-indexing-status'&&req.method==='GET'){
+    const admin=await currentAdminSession(req);
+    if(!admin||admin.role!=='Administrator')return sendJson(req,res,403,{error:'Administrator access required'});
+    try{return sendJson(req,res,200,await googleIndexing.status());}
+    catch{return sendJson(req,res,503,{error:'Indexing status temporarily unavailable'});}
+  }
   // API: Local Jobs
   if (path === '/api/job-url' && req.method === 'GET') {
     const requested = requestUrl.searchParams.get('path') || '';
@@ -1844,6 +1852,7 @@ const server = http.createServer(async (req, res) => {
       rememberEmployerAddress(db,savedJob);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
+      googleIndexing.enqueue(existingJob,savedJob).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
       emsSync.queue(savedJob, emsJobOperator(savedJob, db.users || [])).then(() => emsSync.flush())
         .catch(error => console.error('EMS sync queue failed:', error.message));
@@ -1857,8 +1866,10 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
     const db = await readLocalDb();
     const before = db.jobs.length;
+    const removedJob=db.jobs.find(item=>item.slug===slug);
     db.jobs = db.jobs.filter(item => item.slug !== slug);
     await writeLocalDb(db);
+    googleIndexing.enqueue(removedJob,null).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
     seoRepository.list(true).catch(error=>console.error('SEO refresh after job removal failed:',error.message));
     return sendJson(req, res, before === db.jobs.length ? 404 : 200, { deleted: before !== db.jobs.length });
   }
@@ -2135,3 +2146,6 @@ function logResourceUsage() {
 }
 logResourceUsage();
 setInterval(logResourceUsage,60000).unref();
+
+const googleIndexingTask=createCoordinatedTask(wpDb,'google-indexing',60000,()=>googleIndexing.tick());
+setInterval(()=>{if(googleIndexing.configured())googleIndexingTask().catch(()=>console.error('Google Indexing worker temporarily unavailable'));},60000).unref();

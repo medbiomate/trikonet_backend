@@ -1,9 +1,9 @@
-const fields=['name','email','phone','photo','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','licenseDetails','licenseStatus','accomplishments','languages','languageDetails','currentSalary','salaryExpectation','availability','noticePeriod','hospitalType','locations','summary','skills','education','educationEntries','workExperience','socialLinks','website','linkedin','gender','maritalStatus','workPermit','permanentAddress','hometown','postalCode','dateOfBirth','address','previousEmployers','visaStatus','university','certifications','departmentExperience','preferredDepartment','relocationPreference','age','preferredDistance','workType','shiftPreference','licenseExpiry'];
+export const candidateProfileFields=['name','email','phone','photo','nationality','currentLocation','industry','category','role','currentDesignation','experience','qualification','degree','specialization','licenses','licenseDetails','licenseStatus','accomplishments','languages','languageDetails','currentSalary','salaryExpectation','availability','noticePeriod','hospitalType','locations','summary','skills','education','educationEntries','workExperience','socialLinks','website','linkedin','gender','maritalStatus','workPermit','permanentAddress','hometown','postalCode','dateOfBirth','address','previousEmployers','visaStatus','university','certifications','departmentExperience','preferredDepartment','relocationPreference','age','preferredDistance','workType','shiftPreference','licenseExpiry'];
 export function updateCandidateProfile(existing={},body={},now=Date.now()){
  const incoming=Number(body.profileUpdatedAt)||now;
  if(incoming<Number(existing.profileUpdatedAt||0))return existing;
  const next={...existing};
- for(const key of fields)if(Object.hasOwn(body,key))next[key]=body[key];
+ for(const key of candidateProfileFields)if(Object.hasOwn(body,key))next[key]=body[key];
  const completed=Math.max(Number(existing.setupCompletedAt)||0,Number(body.setupCompletedAt)||0);
  if(completed){next.setupCompletedAt=completed;next.needsInitialSetup=false;}
  else if(typeof body.needsInitialSetup==='boolean')next.needsInitialSetup=body.needsInitialSetup;

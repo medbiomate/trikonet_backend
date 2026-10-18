@@ -4,7 +4,7 @@ import {createEmsStateReader} from './ems-state-reader.mjs';
 import {createCatalogueReader} from './catalogue-reader.mjs';
 import {candidateProfileRequest} from './candidate-profile-store.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
-import {adminCandidateProfile,candidateEditProfile} from './candidate-admin-profile.mjs';
+import {adminCandidateProfile,candidateEditProfile,candidateProfileData} from './candidate-admin-profile.mjs';
 import {createJobReports} from './job-reports.mjs';
 import {mergeStateChanges} from './state-changes.mjs';
 import {createAccountDeletion,removeAccountData} from './account-deletion.mjs';
@@ -1597,7 +1597,7 @@ const server = http.createServer(async (req, res) => {
       for(const id of body.removed || [])if(!db.candidateTrash.includes(String(id)))db.candidateTrash.push(String(id));
       for(const record of body.records || []) {
         if(!record.id || !record.name)continue;
-        const safe={id:record.id,name:record.name,slug:record.slug,email:record.email,phone:record.phone,jobTitle:record.jobTitle,category:record.category,location:record.location,experience:record.experience,qualification:record.qualification,bio:record.bio,status:record.status,featured:!!record.featured,createdAt:record.createdAt};
+        const safe={...candidateProfileData(record),id:record.id,name:record.name,slug:record.slug,email:record.email,phone:record.phone,jobTitle:record.jobTitle,category:record.category,location:record.location,experience:record.experience,qualification:record.qualification,bio:record.bio,status:record.status,featured:!!record.featured,createdAt:record.createdAt};
         const index=db.candidates.findIndex(c=>String(c.id)===String(record.id));
         if(index>=0)db.candidates[index]={...db.candidates[index],...safe};else db.candidates.push(safe);
         const account=db.users.find(item=>String(item.id)===String(record.id));if(account)applyAccountProfile(account,candidateEditProfile(record),updateCandidateProfile);
@@ -1640,6 +1640,7 @@ const server = http.createServer(async (req, res) => {
         const record=adminCandidateProfile(original,users.find(user=>String(user.id)===String(original.sourceAccountId||original.id)));
         const m = record.metas || {};
         const candidate = {
+          ...candidateProfileData(record),
           signInPlatforms: users.find(u=>String(u.id)===String(record.id))?.signInPlatforms || record.signInPlatforms || [],
           resumeCount: resumeCounts.get(String(record.sourceAccountId || record.id)) || 0,
           id: record.id, userId:record.userId||null, appProfile:record.appProfile||null, slug: record.slug || '', name: record.name || record.title?.rendered || record.title || '',

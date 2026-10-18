@@ -1,3 +1,4 @@
+import {findEmployerAddress,rememberEmployerAddress} from './employer-job-address.mjs';
 import {importJobLink,importPastedJob} from './job-link-import.mjs';
 import {publicDirectory} from './public-directory.mjs';
 import {createCoordinatedTask} from './coordinated-task.mjs';
@@ -1668,6 +1669,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Autosaved unfinished records are always drafts, never published overrides.
+  if(path==='/api/admin/employer-job-address' && req.method==='GET'){
+    const admin=await currentAdminSession(req);if(!admin)return sendJson(req,res,401,{error:'Sign in to load employer addresses.'});
+    try{const params=new URL(req.url,'http://localhost').searchParams;const db=await readLocalDb();return sendJson(req,res,200,findEmployerAddress(db,params.get('company'),params.get('slug')));}
+    catch(error){return sendJson(req,res,503,{error:'Unable to load the saved company address.'});}
+  }
   if(path==='/api/admin/import-job-link' && req.method==='POST'){
     const admin=await currentAdminSession(req);
     if(!admin)return sendJson(req,res,401,{error:'Sign in to import jobs.'});
@@ -1835,6 +1841,7 @@ const server = http.createServer(async (req, res) => {
           ? existingJob.createdAt : nowIso);
       job.updatedBy={id:String(admin.userId),name:String(admin.name || 'Administrator'),email:admin.email,at:nowIso};
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
+      rememberEmployerAddress(db,savedJob);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await writeLocalDb(db);
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));

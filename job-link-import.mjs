@@ -49,6 +49,7 @@ export function extractOracleJob(payload,html,url){
 export async function importJobLink(url){
  const page=await fetchJobPage(url),endpoint=oracleJobRequest(page.url);
  if(endpoint){const response=await fetchJobPage(endpoint,0,true);return extractOracleJob(JSON.parse(response.html),page.html,page.url);}
+ if(isLinkedInPost(page.url))return extractLinkedInPost(page.html,page.url);
  if(isLinkedInJob(page.url))return extractLinkedInJob(page.html,page.url);
  return extractJobPage(page.html,page.url);
 }
@@ -83,6 +84,7 @@ export function extractLinkedInJob(html,url){
  return {job,sourceUrl:url,warnings:['Review the imported LinkedIn listing before publishing.']};
 }
 export function importPastedJob(content,url=''){
+ if(/\b(?:we are hiring|hiring|looking for)\b/i.test(String(content)))return extractHiringPost(content,url);
  const lines=String(content||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);if(lines.length<2)throw Error('Paste the job title and full description.');
  const job={title:lines[0],description:`<p>${escape(lines.slice(1).join('\n'))}</p>`,...extractJobRequirements(content),salaryType:'Not specified'};
  if(url){const link=new URL(url);if(link.protocol!=='https:')throw Error('Use an HTTPS job link.');job.applyType='External URL';job.applyUrl=link.href;}
@@ -98,4 +100,38 @@ export function formatImportedDescription(html){
   const tag=match[2].toLowerCase();return allowed.has(tag)?`<${match[1]}${tag}>`:'';
  }).join('');
  return safe.trim();
+}
+
+export function isLinkedInPost(input){try{const u=new URL(input);return (u.hostname==='linkedin.com'||u.hostname.endsWith('.linkedin.com'))&&/^\/(?:posts\/|feed\/update\/urn:li:activity:)/.test(u.pathname);}catch{return false;}}
+function decodePostText(value){return String(value||'').replace(/\\r\\n|\\n|\\r/g,'\n').replace(/&#(x[0-9a-f]+|\d+);/gi,(_,code)=>{const n=code[0].toLowerCase()==='x'?parseInt(code.slice(1),16):Number(code);return n>0&&n<=0x10ffff?String.fromCodePoint(n):'';}).replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ');}
+export function extractHiringPost(content,url=''){
+ const raw=decodePostText(content).replace(/\r/g,'').trim();
+ const lines=raw.split('\n').map(line=>line.trim()).filter(Boolean);
+ const titleLine=lines.find(line=>/\b(?:we are hiring|hiring|job title|position|vacancy)\b/i.test(line))||lines[0]||'';
+ let title=titleLine.replace(/^[^\p{L}\p{N}]+/u,'').replace(/^(?:we\s+are\s+)?hiring\s*[:|!–—-]*\s*/i,'').replace(/^(?:job title|position|vacancy)\s*[:|–—-]\s*/i,'').trim();
+ if(!title||/^(?:we are hiring|hiring)$/i.test(title))title=lines[lines.indexOf(titleLine)+1]||'';
+ if(!title||lines.length<2||title.length>150)throw Error('Paste a single job announcement with its role title and description.');
+ const description=lines.map(line=>`<p>${escape(line)}</p>`).join('');
+ const job={title,description,salaryType:'Not specified',...extractJobRequirements(raw)};
+ const company=lines.filter(line=>!/^\W*we\s+are\s+hiring/i.test(line)).join('\n').match(/(?:^|\n)\s*([^\n]{2,180}?)\s+(?:is|are)\s+(?:looking for|hiring|seeking|recruiting)\b/i)?.[1]||raw.match(/(?:^|\n)\s*(?:company|employer)\s*:\s*([^\n]+)/i)?.[1];
+ if(company)job.company=company.replace(/\s+/g,' ').trim();
+ const location=raw.match(/(?:^|\n)[^\p{L}\p{N}\n]*Location\s*:\s*([^\n]+)/iu)?.[1];
+ if(location){job.address=location.trim();const city=['Abu Dhabi','Dubai','Sharjah','Ajman','Al Ain','Ras Al Khaimah','Umm Al Quwain','Fujairah'].find(city=>location.toLowerCase().includes(city.toLowerCase()));if(city){job.addressLocality=city;job.addressRegion=city;job.locations=[city];}if(/\bUAE\b|United Arab Emirates/i.test(raw)){job.addressCountry='AE';}}
+ const years=raw.match(/(?:minimum(?:\s+of)?|at least)\s+\d+(?:\s*[-–]\s*\d+)?\+?\s+years?[^.\n]*/i)?.[0];if(years)job.experience=years.trim();
+ const schedule=raw.match(/\b(full[ -]time|part[ -]time|internship|temporary|contract)\b/i)?.[0].toLowerCase();
+ if(schedule){job.employmentType=/full/.test(schedule)?'FULL_TIME':/part/.test(schedule)?'PART_TIME':schedule==='internship'?'INTERN':schedule==='temporary'?'TEMPORARY':'CONTRACTOR';job.types=[({'FULL_TIME':'Full Time','PART_TIME':'Part Time','INTERN':'Internship','TEMPORARY':'Temporary','CONTRACTOR':'Contract'})[job.employmentType]];}
+ const email=raw.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0];
+ if(email){job.applyType='By Email';job.applyEmail=email;}
+ else if(url){job.applyType='External URL';job.applyUrl=url;}
+ return {job,sourceUrl:url,warnings:['Extracted from a hiring announcement. Review the employer, role and application details before publishing.']};
+}
+export function extractLinkedInPost(html,url){
+ let body='';
+ for(const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
+  try{const parsed=JSON.parse(match[1]);const items=Array.isArray(parsed)?parsed:parsed['@graph']||[parsed];const post=items.find(item=>['SocialMediaPosting','DiscussionForumPosting','Article'].includes(item['@type'])&&typeof item.articleBody==='string');if(post){body=post.articleBody;break;}}catch{}
+ }
+ if(!body){for(const tag of html.matchAll(/<meta\b[^>]*>/gi)){const attributes={};for(const a of tag[0].matchAll(/([\w:-]+)\s*=\s*(["'])([\s\S]*?)\2/g))attributes[a[1].toLowerCase()]=a[3];if(attributes.property==='og:description'){body=attributes.content||'';break;}}}
+ if(!/\b(?:hiring|looking for|vacancy|job title|position)\b/i.test(body)||body.length<80)throw Error('LinkedIn did not expose the full hiring post. Open Paste job text and paste the announcement.');
+ if(/(?:…|\.\.\.)\s*$/.test(body))throw Error('LinkedIn returned a shortened preview. Paste the full job text to avoid importing incomplete details.');
+ return extractHiringPost(body,url);
 }

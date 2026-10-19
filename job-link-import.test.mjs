@@ -42,3 +42,12 @@ test('description keeps bullets paragraphs and emphasis without unsafe markup',a
  const result=formatImportedDescription('<strong>Hospital</strong> is hiring.<br><ul onclick="bad()"><li>First benefit</li><li>Second benefit</li></ul><script>alert(1)</script>');
  assert.match(result,/<strong>Hospital<\/strong> is hiring/);assert.match(result,/<ul><li>First benefit<\/li><li>Second benefit<\/li><\/ul>/);assert.doesNotMatch(result,/onclick|script|alert/);
 });
+
+test('LinkedIn hiring posts map employer role city experience and email independently of the author',async()=>{
+ const {extractLinkedInPost,isLinkedInPost}=await import('./job-link-import.mjs');
+ const body='📢 WE ARE HIRING | OPERATIONS COORDINATOR\\n\\nDr. Firas Dental &amp; Orthodontic Center is looking for an Operations Coordinator.\\nLocation: Al Rahba, Abu Dhabi, UAE\\nQualifications:\\n-Bachelors degree in Healthcare Administration.\\n-Minimum 4 years of progressive experience in hospital front office or healthcare operations.\\nSend your CV to careers@firasdoc.com';
+ const result=extractLinkedInPost(`<meta property="og:description" content="${body}"><meta property="og:title" content="Hiring | Ghyrlyn B.">`,'https://www.linkedin.com/posts/example');
+ assert.equal(result.job.title,'OPERATIONS COORDINATOR');assert.equal(result.job.company,'Dr. Firas Dental & Orthodontic Center');assert.deepEqual(result.job.locations,['Abu Dhabi']);assert.equal(result.job.applyType,'By Email');assert.equal(result.job.applyEmail,'careers@firasdoc.com');assert.match(result.job.experience,/4 years/);assert.match(result.job.qualification,/Bachelors/);assert.equal(result.job.minSalary,undefined);
+ assert.equal(isLinkedInPost('https://www.linkedin.com/posts/example'),true);assert.equal(isLinkedInPost('https://linkedin.com.evil.test/posts/example'),false);
+ assert.throws(()=>extractLinkedInPost('<meta property="og:description" content="Sign in">','https://linkedin.com/posts/x'),/Paste job text/);
+});

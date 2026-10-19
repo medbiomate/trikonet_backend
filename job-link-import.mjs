@@ -9,7 +9,7 @@ export function publicAddress(address){
 export async function fetchJobPage(input,redirects=0,json=false){
  const url=new URL(input);if(url.protocol!=='https:'||url.username||url.password||url.port&&url.port!=='443')throw Error('Use a public HTTPS job link.');
  const addresses=await lookup(url.hostname,{all:true});if(!addresses.length||addresses.some(item=>!publicAddress(item.address)))throw Error('This link does not point to a public website.');
- const selected=addresses[0];
+ const selected=addresses.find(item=>item.family===4)||addresses[0];
  return new Promise((resolve,reject)=>{
   const request=https.get(url,{lookup:(_host,options,callback)=>options.all?callback(null,[selected]):callback(null,selected.address,selected.family),headers:{'User-Agent':'Trikonet job importer','Accept':json?'application/json':'text/html'},timeout:12000},response=>{
    if([301,302,303,307,308].includes(response.statusCode)){response.resume();if(redirects>=3)return reject(Error('Too many redirects.'));return fetchJobPage(new URL(response.headers.location,url).href,redirects+1,json).then(resolve,reject);}

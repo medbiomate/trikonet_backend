@@ -51,3 +51,18 @@ test('LinkedIn hiring posts map employer role city experience and email independ
  assert.equal(isLinkedInPost('https://www.linkedin.com/posts/example'),true);assert.equal(isLinkedInPost('https://linkedin.com.evil.test/posts/example'),false);
  assert.throws(()=>extractLinkedInPost('<meta property="og:description" content="Sign in">','https://linkedin.com/posts/x'),/Paste job text/);
 });
+
+test('ATS JSON with literal line breaks and apostrophe escapes is parsed as data',async()=>{
+ const {parseJobJson}=await import('./job-link-import.mjs');
+ assert.equal(parseJobJson('{"description":"<p>Academy\\\'s responsibilities\nNext paragraph</p>"}').description,"<p>Academy's responsibilities\nNext paragraph</p>");
+ assert.throws(()=>parseJobJson('arbitrary()'));
+});
+test('SuccessFactors microdata supports nested descriptions and explicit dates',async()=>{
+ const {extractMicrodataJob}=await import('./job-link-import.mjs');
+ const html='<div itemtype="http://schema.org/JobPosting"><meta itemprop="hiringOrganization" content="Al Futtaim"><meta itemprop="validThrough" content="2026-10-29"><h1 itemprop="title">Registered Nurse, Dubai</h1><span itemprop="description"><p>Provide nursing care and support to patients.</p><span>Qualifications</span><ul><li>Bachelors degree</li></ul></span></div>';
+ const r=extractMicrodataJob(html,'https://example.com/job');assert.equal(r.job.company,'Al Futtaim');assert.equal(r.job.addressLocality,'Dubai');assert.equal(r.job.deadline,'2026-10-29');assert.match(r.job.description,/<ul><li>Bachelors degree/);
+});
+test('encoded descriptions become safe formatting instead of literal tags',async()=>{
+ const {formatImportedDescription}=await import('./job-link-import.mjs');
+ assert.equal(formatImportedDescription('&lt;p&gt;&lt;strong&gt;Responsibilities&lt;/strong&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Care&lt;/li&gt;&lt;/ul&gt;'),'<p><strong>Responsibilities</strong></p><ul><li>Care</li></ul>');
+});

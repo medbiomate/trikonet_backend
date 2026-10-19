@@ -23,7 +23,7 @@ const text=value=>String(value??'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' 
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function extractJobPage(html,url){
  const records=[];function walk(value){if(Array.isArray(value))return value.forEach(walk);if(!value||typeof value!=='object')return;if([value['@type']].flat().includes('JobPosting'))records.push(value);if(value['@graph'])walk(value['@graph']);}
- for(const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){try{walk(JSON.parse(match[1]));}catch{}}
+ for(const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){try{walk(parseJobJson(match[1]));}catch{}}
  if(records.length!==1)throw Error(records.length?'This page lists multiple jobs. Paste a link to one specific job.':'No structured job details found. This website may require login or block automated access.');
  const p=records[0],address=[p.jobLocation].flat().find(item=>item?.address)?.address||{},salary=p.baseSalary?.value||{},company=p.hiringOrganization||{};
  const description=text(p.description);const country=typeof address.addressCountry==='object'?address.addressCountry.name:address.addressCountry;
@@ -51,7 +51,7 @@ export async function importJobLink(url){
  if(endpoint){const response=await fetchJobPage(endpoint,0,true);return extractOracleJob(JSON.parse(response.html),page.html,page.url);}
  if(isLinkedInPost(page.url))return extractLinkedInPost(page.html,page.url);
  if(isLinkedInJob(page.url))return extractLinkedInJob(page.html,page.url);
- return extractJobPage(page.html,page.url);
+ try{return extractJobPage(page.html,page.url);}catch(error){if(/itemtype\s*=\s*["']https?:\/\/schema.org\/JobPosting["']/i.test(page.html))return extractMicrodataJob(page.html,page.url);throw error;}
 }
 
 export function extractJobRequirements(description,education,experience){
@@ -92,7 +92,7 @@ export function importPastedJob(content,url=''){
 }
 
 export function formatImportedDescription(html){
- const source=String(html||'').replace(/<(script|style|iframe|object|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'').replace(/<!--[\s\S]*?-->/g,'');
+ const source=decodeDescriptionMarkup(html).replace(/<(script|style|iframe|object|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,'').replace(/<!--[\s\S]*?-->/g,'');
  const allowed=new Set(['p','br','ul','ol','li','strong','b','em','i','h2','h3','h4']);
  const safe=source.split(/(<[^>]+>)/g).map(part=>{
   if(!part.startsWith('<'))return ( /^\s/.test(part)?' ':'' )+escape(text(part))+( /\s$/.test(part)?' ':'' );
@@ -134,4 +134,49 @@ export function extractLinkedInPost(html,url){
  if(!/\b(?:hiring|looking for|vacancy|job title|position)\b/i.test(body)||body.length<80)throw Error('LinkedIn did not expose the full hiring post. Open Paste job text and paste the announcement.');
  if(/(?:…|\.\.\.)\s*$/.test(body))throw Error('LinkedIn returned a shortened preview. Paste the full job text to avoid importing incomplete details.');
  return extractHiringPost(body,url);
+}
+
+// Some ATS templates put literal newlines and JavaScript apostrophe escapes in
+// JSON strings. Repair only these syntax defects; never execute source scripts.
+export function parseJobJson(source){
+ try{return JSON.parse(source);}catch{}
+ let output='',quoted=false;
+ for(let i=0;i<source.length;i++){
+  const ch=source[i];
+  if(quoted&&ch==='\\'){
+   const next=source[++i];if(next==="'"){output+="'";continue;}
+   output+='\\'+(next??'');continue;
+  }
+  if(ch==='"')quoted=!quoted;
+  output+=quoted&&ch==='\n'?'\\n':quoted&&ch==='\r'?'\\r':quoted&&ch==='\t'?'\\t':ch;
+ }
+ return JSON.parse(output);
+}
+function markupElement(html,property){
+ const opening=new RegExp(`<([a-z][\\w:-]*)\\b[^>]*\\bitemprop\\s*=\\s*["']${property}["'][^>]*>`,'i').exec(html);
+ if(!opening)return null;
+ const tag=opening[1].toLowerCase(),attrs=opening[0];
+ if(tag==='meta')return {content:attrs.match(/\bcontent\s*=\s*(["'])([\s\S]*?)\1/i)?.[2]||''};
+ const rest=html.slice(opening.index+attrs.length),tokens=new RegExp(`<\\/?${tag}\\b[^>]*>`,'gi');let depth=1;
+ for(const match of rest.matchAll(tokens)){depth+=/^<\//.test(match[0])?-1:1;if(depth===0)return {content:rest.slice(0,match.index)};}
+ return null;
+}
+export function extractMicrodataJob(html,url){
+ if(!/itemtype\s*=\s*["']https?:\/\/schema.org\/JobPosting["']/i.test(html))throw Error('No structured job details found. Paste the full job text instead.');
+ const title=text(markupElement(html,'title')?.content),description=markupElement(html,'description')?.content;
+ if(!title||!description||text(description).length<40)throw Error('This job page did not expose enough details. Paste the full job text instead.');
+ const p={'@type':'JobPosting',title,description,hiringOrganization:{name:text(markupElement(html,'hiringOrganization')?.content)}};
+ for(const key of ['datePosted','validThrough']){const value=markupElement(html,key)?.content;const date=new Date(value||'');if(value&&Number.isFinite(date.getTime()))p[key]=date.toISOString();}
+ const city=['Abu Dhabi','Dubai','Sharjah','Ajman','Al Ain','Ras Al Khaimah','Fujairah'].find(city=>new RegExp(`\\b${city}\\b`,'i').test(title));
+ if(city)p.jobLocation={address:{addressLocality:city,addressRegion:city}};
+ return extractJobPage(`<script type="application/ld+json">${JSON.stringify(p).replace(/</g,'\\u003c')}</script>`,url);
+}
+
+function decodeDescriptionMarkup(value){
+ let output=String(value||'');
+ for(let pass=0;pass<2;pass++){
+  if(!/&(?:amp;)?lt;\/?(?:p|strong|ul|ol|li|br|div|span|h[1-6])\b/i.test(output))break;
+  output=output.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+ }
+ return output.replace(/&(?:nbsp|ndash|mdash|rsquo|lsquo|rdquo|ldquo);/g,e=>({'&nbsp;':' ','&ndash;':'–','&mdash;':'—','&rsquo;':"'",'&lsquo;':"'",'&rdquo;':'"','&ldquo;':'"'}[e]));
 }

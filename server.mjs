@@ -1,3 +1,4 @@
+import {teamActivity} from './team-activity.mjs';
 import {createGoogleIndexing} from './google-indexing.mjs';
 import {findEmployerAddress,rememberEmployerAddress} from './employer-job-address.mjs';
 import {importJobLink,importPastedJob} from './job-link-import.mjs';
@@ -990,6 +991,15 @@ const server = http.createServer(async (req, res) => {
     const slugs = (requestUrl.searchParams.get('slugs') || '').split(',').filter(slug => /^[a-z0-9][a-z0-9-]{0,190}$/.test(slug)).slice(0,100);
     try { return sendJson(req,res,200,await jobViews.counts(slugs)); }
     catch { return sendJson(req,res,503,{error:'View counts temporarily unavailable.'}); }
+  }
+  if (path === '/api/admin/team-activity' && req.method === 'GET') {
+    const admin = await currentAdminSession(req);
+    if (!admin) return sendJson(req,res,401,{error:'Administrator authentication required.'});
+    if (admin.role !== 'Administrator') return sendJson(req,res,403,{error:'Administrator access required.'});
+    const date = requestUrl.searchParams.get('date') || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date+'T00:00:00Z')) || new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date) return sendJson(req,res,400,{error:'Select a valid date.'});
+    try { return sendJson(req,res,200,teamActivity(await readCatalogueDb(['jobs','employers']),date)); }
+    catch { return sendJson(req,res,503,{error:'Team activity is temporarily unavailable.'}); }
   }
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin = await currentAdminSession(req);

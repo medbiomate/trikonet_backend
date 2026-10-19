@@ -66,3 +66,11 @@ test('encoded descriptions become safe formatting instead of literal tags',async
  const {formatImportedDescription}=await import('./job-link-import.mjs');
  assert.equal(formatImportedDescription('&lt;p&gt;&lt;strong&gt;Responsibilities&lt;/strong&gt;&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Care&lt;/li&gt;&lt;/ul&gt;'),'<p><strong>Responsibilities</strong></p><ul><li>Care</li></ul>');
 });
+
+test('experience detects possessive years and intervening clinical requirements',async()=>{
+ const {extractJobRequirements}=await import('./job-link-import.mjs');
+ for(const text of ["Minimum 2 years’ post-registration nursing experience.","Minimum 2 years' post-registration nursing experience.",'At least 3–5 years of relevant clinical experience.','2 years nursing experience','Minimum 6 months of hospital experience']){
+  assert.match(extractJobRequirements(text).experience,/experience/i,text);
+ }
+ assert.equal(extractJobRequirements('Our hospital celebrates 20 years of quality care.').experience,undefined);
+});

@@ -57,7 +57,7 @@ export async function importJobLink(url){
 export function extractJobRequirements(description,education,experience){
  const content=text(description);const job={};
  const experienceText=typeof experience==='object'&&experience?.monthsOfExperience?`${Number(experience.monthsOfExperience)/12} years`:text(typeof experience==='string'?experience:'');
- const years=content.match(/(?:minimum(?: of)?|at least|over|more than)?\s*\d+(?:\s*[-–to]+\s*\d+)?\+?\s*(?:years?|months?)(?:\s+(?:of\s+)?(?:relevant\s+|professional\s+|work\s+)?experience|\s+experience)/i);
+ const years=content.match(/(?:minimum(?: of)?|at least|over|more than)?\s*\d+(?:\s*(?:[-–—]|to)\s*\d+)?\+?\s*(?:years?|months?)[’']?(?:\s+of)?(?:\s+(?:[a-z]+(?:[-–][a-z]+)*)){0,8}\s+experience\b/i);
  if(experienceText||years)job.experience=experienceText||years[0].trim();
  const educationText=text(typeof education==='string'?education:education?.credentialCategory||'');
  const qualifications=content.match(/(?:bachelor[’']?s?(?:\s+degree)?|master[’']?s?(?:\s+degree)?|diploma|MBBS|BSc|MSc|PhD|high school)(?:\s+in\s+[a-z &]+)?/gi);

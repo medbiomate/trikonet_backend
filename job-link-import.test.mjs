@@ -74,3 +74,10 @@ test('experience detects possessive years and intervening clinical requirements'
  }
  assert.equal(extractJobRequirements('Our hospital celebrates 20 years of quality care.').experience,undefined);
 });
+
+test('GEMS visible skills and safeguarding sections supplement its shorter schema description',async()=>{
+ const {completeVisibleJobSections}=await import('./job-link-import.mjs');
+ const html='<h4>Job Description</h4><div class="custom-editor-field"><p>Lead the school.</p></div><h4>Skills Description</h4><div class="custom-editor-field"><ul><li>Significant experience in senior school leadership.</li><li>Bachelors degree and PGCE.</li></ul></div><h4>GEMS Safeguarding</h4><div class="custom-editor-field"><p>Pre-employment checks required.</p></div><h4>Other jobs</h4><div class="custom-editor-field">Unrelated</div>';
+ const r=completeVisibleJobSections({job:{title:'Vice Principal',description:'Lead the school.'}},html,'https://careers.gemseducation.com/en/job');
+ assert.match(r.job.description,/Skills Description/);assert.match(r.job.description,/Pre-employment checks/);assert.doesNotMatch(r.job.description,/Unrelated/);assert.match(r.job.experience,/Significant experience/);assert.match(r.job.qualification,/Bachelors/);
+});

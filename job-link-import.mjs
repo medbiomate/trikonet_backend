@@ -51,7 +51,7 @@ export async function importJobLink(url){
  if(endpoint){const response=await fetchJobPage(endpoint,0,true);return extractOracleJob(JSON.parse(response.html),page.html,page.url);}
  if(isLinkedInPost(page.url))return extractLinkedInPost(page.html,page.url);
  if(isLinkedInJob(page.url))return extractLinkedInJob(page.html,page.url);
- try{return extractJobPage(page.html,page.url);}catch(error){if(/itemtype\s*=\s*["']https?:\/\/schema.org\/JobPosting["']/i.test(page.html))return extractMicrodataJob(page.html,page.url);throw error;}
+ try{return completeVisibleJobSections(extractJobPage(page.html,page.url),page.html,page.url);}catch(error){if(/itemtype\s*=\s*["']https?:\/\/schema.org\/JobPosting["']/i.test(page.html))return extractMicrodataJob(page.html,page.url);throw error;}
 }
 
 export function extractJobRequirements(description,education,experience){
@@ -179,4 +179,25 @@ function decodeDescriptionMarkup(value){
   output=output.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
  }
  return output.replace(/&(?:nbsp|ndash|mdash|rsquo|lsquo|rdquo|ldquo);/g,e=>({'&nbsp;':' ','&ndash;':'–','&mdash;':'—','&rsquo;':"'",'&lsquo;':"'",'&rdquo;':'"','&ldquo;':'"'}[e]));
+}
+
+export function completeVisibleJobSections(result,html,url){
+ const host=new URL(url).hostname;
+ if(host!=='careers.gemseducation.com')return result;
+ const sections=[];
+ for(const match of html.matchAll(/<h4\b[^>]*>([^<]*)<\/h4>\s*<div\b[^>]*class=["'][^"']*custom-editor-field[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)){
+  const heading=text(match[1]);
+  if(!/^(Job Description|Skills Description|GEMS Safeguarding)$/i.test(heading))continue;
+  const body=formatImportedDescription(match[2]);
+  if(text(body))sections.push({heading,body});
+ }
+ if(!sections.some(section=>section.heading==='Job Description'))return result;
+ const description=sections.map(section=>`<h3>${escape(section.heading)}</h3>${section.body}`).join('');
+ const requirements=extractJobRequirements(description);
+ if(!requirements.experience){
+  const bullets=[...description.matchAll(/<li>([\s\S]*?)<\/li>/gi)].map(match=>text(match[1]));
+  const requirement=bullets.find(line=>/^(?:significant|proven|relevant|previous|extensive)\s+experience\b/i.test(line));
+  if(requirement)requirements.experience=requirement;
+ }
+ return {...result,job:{...result.job,...requirements,description}};
 }

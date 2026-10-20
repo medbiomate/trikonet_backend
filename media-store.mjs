@@ -56,8 +56,7 @@ export function createMediaStore(pool, options = {}) {
       const [uploads]=await pool.query('SELECT checksum,public_url FROM trikonet_uploaded_public_media');
       for(const row of uploads)if(String(row.public_url).startsWith('https://media.trikonet.com/'))publicByChecksum.set(row.checksum,row.public_url);
       if(!valid.length)return;
-      const check=await fetch(valid[0].public_url,{method:'HEAD',signal:AbortSignal.timeout(10000),redirect:'error'});
-      if(!check.ok)throw Error(`Public media verification failed: ${check.status}`);
+      // These mappings were verified when uploaded; reads must not wait on CDN health.
       for(const row of valid){publicByChecksum.set(row.checksum,row.public_url);resolved.set(Number(row.attachment_id),row.public_url);}
     })().catch(error=>{publicUrlsReady=null;console.error('CDN unavailable; retaining origin images:',error.message);});
   }

@@ -76,3 +76,7 @@ test('Mine requires the actual creator and excludes trash from every tab', () =>
  assert.equal(localJobMatches(job,new URLSearchParams({status:'mine',_owner_id:'alice'})),true);
  assert.equal(localJobMatches({...job,status:'trash'},new URLSearchParams({status:'all'})),false);
 });
+test('precise publication time orders a newly published old draft before earlier jobs today',()=>{
+ const jobs=[{id:'newer-draft',slug:'earlier',status:'publish',postedDate:'2026-10-20',createdAt:'2026-10-20T06:00:00Z',publishedAt:'2026-10-20T06:00:00Z'}, {id:'older-draft',slug:'latest',status:'publish',postedDate:'2026-10-20',createdAt:'2026-10-19T06:00:00Z',publishedAt:'2026-10-20T08:00:00Z'}];
+ assert.equal(importedJobPage([],jobs,new URLSearchParams({status:'publish'})).jobs[0].slug,'latest');
+});

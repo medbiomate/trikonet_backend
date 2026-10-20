@@ -1,3 +1,4 @@
+import {prepareStateMedia} from './state-media.mjs';
 import {teamActivity} from './team-activity.mjs';
 import {createGoogleIndexing} from './google-indexing.mjs';
 import {findEmployerAddress,rememberEmployerAddress} from './employer-job-address.mjs';
@@ -38,7 +39,7 @@ import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } fr
 import {jobCreator,withoutTeamAttribution} from './job-attribution.mjs';
 import { createEmsSync, emsJobOperator } from './ems-sync.mjs';
 import { findJobIndex, saveJobRecord, refreshPublicationDate } from './job-identity.mjs';
-import { adminJobConditions, localJobMatches, pagePlan, importedJobPage } from './admin-job-pagination.mjs';
+import { adminJobConditions, localJobMatches, pagePlan, importedJobPage, adminJobsFirst } from './admin-job-pagination.mjs';
 import http from 'node:http';
 import { createJobViews } from './job-views.mjs';
 import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
@@ -631,11 +632,7 @@ async function writeLocalDb(db, {skipMedia=false}={}) {
   const snapshot=stateSnapshots.get(db);
   const before=snapshot ? JSON.parse(snapshot) : undefined;
   repairEmployerSnapshots(db);
-  if(!skipMedia){
-  db = await mediaStore.normalize(db);
-  db.jobs = await mediaStore.publish(db.jobs || [], 'job');
-  db.employers = await mediaStore.publish(db.employers || [], 'employer');
-  }
+  if(!skipMedia) db = await prepareStateMedia(db, before, mediaStore);
   await ensurePersistentState();
   await accountDeletion.ensure();
   const connection=await wpDb.getConnection();
@@ -716,10 +713,9 @@ function adminJobListing(job) {
 }
 
 async function sendJson(req, res, status, value) {
-  // Persist embedded images before returning stable public URLs. Originals remain intact.
+  // Resolve media mappings without uploading the catalogue during API responses.
   try {
-    const publicContent = /^\/api\/(?:local\/(?:jobs|employers)(?:[/?]|$)|wp\/(?:job_listing|employer|posts|top-employers)(?:\?|$)|employers\/|employer-jobs\/)/.test(req.url);
-    value=await (publicContent && req.method !== 'GET' ? mediaStore.publish(value) : mediaStore.normalize(value));
+    value=await mediaStore.normalize(value);
   } catch(error) { console.error('Media persistence unavailable:',error.message); }
   const attributionRequest=new URL(req.url,'https://api.trikonet.com');
   if(!attributionRequest.pathname.startsWith('/api/admin/') && !(attributionRequest.searchParams.get('admin')==='1' && await currentAdminSession(req)))value=withoutTeamAttribution(value);
@@ -1011,7 +1007,7 @@ const server = http.createServer(async (req, res) => {
       const status = params.get('status') || 'all';
       if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
       const db = await readLocalDb();
-      const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true }));
+      const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true })).sort(adminJobsFirst);
       const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
       const counts = Object.fromEntries(await Promise.all(['all','publish','draft','pending','expired','mine'].map(async tab => {
         const countParams = new URLSearchParams({ status:tab, _owner_id:String(admin.userId), _owner_email:admin.email || '' });
@@ -1837,7 +1833,7 @@ const server = http.createServer(async (req, res) => {
       else job.publishedDate = formattedDate;
       job.createdBy=jobCreator(existingIndex>=0?db.jobs[existingIndex]:null,admin);
       const existingJob = existingIndex >= 0 ? db.jobs[existingIndex] : null;
-      const identity = existingJob || { ...job, id:crypto.randomUUID() };
+      const identity = existingJob || { ...job, id:/^[a-f0-9-]{36}$/i.test(String(job.id || '')) ? job.id : crypto.randomUUID() };
       job.id = identity.id;
       job = applyJobUrl(job, existingJob, await numericJobId(identity), admin.role === 'Administrator');
       if (job.publicPath.startsWith('/jobs/') && (!existingJob || job.slug !== existingJob.slug)) {

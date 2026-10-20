@@ -50,7 +50,7 @@ export function importedJobPage(imported, local, params) {
 
 export function adminJobsFirst(a, b) {
   const time = job => {
-    const value = job.postedDate || job.datePosted || job.publishedDate || job.date || job.createdAt || '';
+    const value = job.publishedAt || job.postedDate || job.datePosted || job.publishedDate || job.date || job.createdAt || '';
     const timestamp = Date.parse(String(value).replace(' ', 'T'));
     return Number.isFinite(timestamp) ? timestamp : 0;
   };

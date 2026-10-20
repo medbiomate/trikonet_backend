@@ -10,7 +10,14 @@ export function mergeStateChanges(current,before,next){
       const old=new Map(before.map(item=>[String(item.id),item]));
       const outgoing=new Map(next.map(item=>[String(item.id),item]));
       const result=current.filter(item=>!old.has(String(item.id))||outgoing.has(String(item.id))).map(item=>{
-        const id=String(item.id);return outgoing.has(id)&&old.has(id)?mergeStateChanges(item,old.get(id),outgoing.get(id)):item;
+        const id=String(item.id);
+        if(item.status==='publish' && outgoing.get(id)?.autosaved && outgoing.get(id)?.status==='draft')return item;
+        if(outgoing.has(id)&&old.has(id))return mergeStateChanges(item,old.get(id),outgoing.get(id));
+        // A publish can race its first autosave, which shares the stable ID.
+        // Promote the draft; a late autosave must never demote a saved job.
+        const incoming=outgoing.get(id);
+        if(incoming && !old.has(id) && item.status==='draft' && ['publish','published','active'].includes(incoming.status))return structuredClone(incoming);
+        return item;
       });
       const present=new Set(current.map(item=>String(item.id)));
       for(const item of next)if(!old.has(String(item.id))&&!present.has(String(item.id)))result.push(structuredClone(item));

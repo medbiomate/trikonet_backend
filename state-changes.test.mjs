@@ -24,3 +24,14 @@ test('unrelated concurrent resumes are retained and explicit field removal works
  const current={resumes:[...before.resumes,{id:'two',name:'Keep'}]};
  assert.deepEqual(mergeStateChanges(current,before,next),{resumes:[{id:'one',name:'New'},{id:'two',name:'Keep'}]});
 });
+test('publish racing first autosave promotes one stable job; late draft cannot demote it',()=>{
+ const before={jobs:[]};const draft={id:'one',status:'draft',title:'Draft'};const published={id:'one',status:'publish',title:'Ready'};
+ assert.deepEqual(mergeStateChanges({jobs:[draft]},before,{jobs:[published]}).jobs,[published]);
+ assert.deepEqual(mergeStateChanges({jobs:[published]},before,{jobs:[draft]}).jobs,[published]);
+});
+test('autosave based on an old draft cannot overwrite the published content',()=>{
+ const before={jobs:[{id:'one',title:'Old',status:'draft',autosaved:true}]};
+ const current={jobs:[{id:'one',title:'Published',status:'publish'}]};
+ const next={jobs:[{id:'one',title:'Late draft',status:'draft',autosaved:true}]};
+ assert.deepEqual(mergeStateChanges(current,before,next),current);
+});

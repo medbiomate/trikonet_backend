@@ -159,3 +159,23 @@ against a local test server as root. This opt-in test creates and drops its own
 fixture database, verifies large private fields are excluded, and checks locks,
 staggered workers, cooldown expiry and retry after failure. Check runtime
 `resource_usage` logs to verify memory under live traffic after deployment.
+
+
+## Indexed admin job lists
+
+The console jobs endpoint reads `trikonet_admin_job_index`, a compact SQL read
+model indexed by date, status and creator. Only the selected page of card rows
+is transferred to Node. One grouped query supplies the filtered status counts.
+Today (Asia/Kolkata) remains the default; all dates is explicit.
+
+On first startup the index merges imported jobs with local overrides under the
+application-state lock. A source hash avoids rebuilding it for every worker.
+The source jobs remain unchanged. Editor saves, autosaves and deletes update
+the index in the same transaction as the authoritative records; failures roll
+back both. Full-state legacy writers synchronize changed jobs too.
+
+Validation: `node --test admin-job-index.test.mjs` runs unit checks. Setting
+`TEST_MYSQL_SOCKET` to a disposable local MariaDB/MySQL socket also runs the
+15,000-job database integration test. It creates and drops its own uniquely
+named test database. Runtime `admin_jobs_indexed_page` logs and the
+`Server-Timing: jobs` header report query duration without account details.

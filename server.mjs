@@ -1,3 +1,4 @@
+import {createAdminJobIndex} from './admin-job-index.mjs';
 function jobCreators(jobs=[]){return [...new Map(jobs.filter(j=>j.createdBy?.id).map(j=>[String(j.createdBy.id),{id:String(j.createdBy.id),name:j.createdBy.name||'Team member'}])).values()].sort((a,b)=>a.name.localeCompare(b.name));}
 import {selectedDay} from './admin-job-filters.mjs';
 import {createAlertUserReader} from './alert-users.mjs';
@@ -610,7 +611,8 @@ async function ensurePersistentState() {
 
 const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
 
-const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore);
+const adminJobIndex=createAdminJobIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.jobs||[];},ensurePersistentState);
+const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore,adminJobIndex);
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
@@ -635,6 +637,7 @@ async function readLocalDb() {
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
   if(await editorState.write(db)) return;
+  await adminJobIndex.ensure();
   const snapshot=stateSnapshots.get(db);
   const before=snapshot ? JSON.parse(snapshot) : undefined;
   repairEmployerSnapshots(db);
@@ -645,10 +648,12 @@ async function writeLocalDb(db, {skipMedia=false}={}) {
   try {
     await connection.beginTransaction();
     const [current]=await connection.query("SELECT payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
-    if(before&&current[0])db=mergeStateChanges(JSON.parse(current[0].payload),before,db);
+    const previousState=current[0]?JSON.parse(current[0].payload):{};
+    if(before&&current[0])db=mergeStateChanges(previousState,before,db);
     const [deletions]=await connection.query('SELECT * FROM trikonet_account_deletions');
     removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
     await connection.query("UPDATE trikonet_app_state SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[JSON.stringify({...emptyDb,...db})]);
+    await adminJobIndex.sync(connection,previousState.jobs||[],db.jobs||[]);
     await connection.commit();
   } catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }
@@ -1009,49 +1014,19 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req,res,200,(memoryStore.employers||[]).map(item=>({id:item.id,slug:item.slug,title:item.title,status:item.status,metas:{_employer_logo:item.metas?._employer_logo||item.logo||'',_employer_featured_image:item.metas?._employer_featured_image||''}})));
   }
   if (path === '/api/admin/jobs' && req.method === 'GET') {
-    const admin = await currentAdminSession(req);
-    if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
-    try {
-      const params = new URLSearchParams(requestUrl.searchParams);
-      params.set('day',selectedDay(params.get('period')||'today'));
-      params.set('_owner_id', String(admin.userId));
-      params.set('_owner_email', admin.email || '');
-      const status = params.get('status') || 'all';
-      if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
-      const db = await readCatalogueDb(['jobs']);
-      const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true })).sort(adminJobsFirst);
-      const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
-      const counts = Object.fromEntries(await Promise.all(['all','publish','draft','pending','expired','mine'].map(async tab => {
-        const countParams = new URLSearchParams({ day:params.get('day')||'',creator:params.get('creator')||'', status:tab, _owner_id:String(admin.userId), _owner_email:admin.email || '' });
-        const localCount = (db.jobs || []).filter(job => localJobMatches(job,countParams)).length;
-        return [tab,localCount + (tab === 'mine' ? 0 : await wordpressCount('job_listing',countParams,options))];
-      })));
-      const remoteTotal = status === 'mine' ? 0 : await wordpressCount('job_listing', params, options);
-      const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
-      const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
-      const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
-      return sendJson(req, res, 200, { day:params.get('day'),creators:jobCreators(db.jobs), jobs: [...plan.local, ...remote].map(adminJobListing), total: plan.total, page: plan.page, perPage: size, counts });
-    } catch (error) {
-      if (error.code === 'ER_NO_SUCH_TABLE') {
-        try {
-          await loadMemoryStore();
-          const db = await readCatalogueDb(['jobs']);
-          if (!Array.isArray(memoryStore.jobs)) throw new Error('Imported jobs unavailable');
-          const params = new URLSearchParams(requestUrl.searchParams);
-          params.set('day',selectedDay(params.get('period')||'today'));
-          params.set('_owner_id',String(admin.userId));
-          params.set('_owner_email',admin.email || '');
-          const counts = Object.fromEntries(['all','publish','draft','pending','expired','mine'].map(status => [status,importedJobPage(memoryStore.jobs,db.jobs || [],new URLSearchParams({day:params.get('day')||'',creator:params.get('creator')||'',status,_owner_id:String(admin.userId),_owner_email:admin.email || ''})).total]));
-          const payload = importedJobPage(memoryStore.jobs, db.jobs || [], params);
-          payload.jobs = payload.jobs.map(adminJobListing);
-          return sendJson(req, res, 200, {...payload, counts,day:params.get('day'),creators:jobCreators(db.jobs)});
-        } catch (fallbackError) {
-          console.error(JSON.stringify({ event: 'admin_jobs_import_failed', code: fallbackError.code || fallbackError.name }));
-        }
-      }
-      console.error(JSON.stringify({ event: 'admin_jobs_load_failed', code: error.code || error.name, message: String(error.message || '').slice(0, 300) }));
-      return sendJson(req, res, 503, { error: 'Unable to load jobs. Please retry.' });
+    const admin=await currentAdminSession(req);
+    if(!admin||admin.expiresAt<=Date.now())return sendJson(req,res,401,{error:'Administrator authentication required'});
+    const params=new URLSearchParams(requestUrl.searchParams);
+    if(!['all','publish','draft','pending','expired','mine'].includes(params.get('status')||'all'))return sendJson(req,res,400,{error:'Invalid job status'});
+    try{
+      const started=performance.now();
+      const payload=await adminJobIndex.page(params,admin);
+      const durationMs=Math.round(performance.now()-started);
+      res.setHeader('Server-Timing',`jobs;dur=${durationMs}`);
+      console.log(JSON.stringify({event:'admin_jobs_indexed_page',durationMs,rows:payload.jobs.length,total:payload.total}));
+      return sendJson(req,res,200,payload);
     }
+    catch(error){console.error(JSON.stringify({event:'admin_jobs_index_failed',message:String(error.message||'').slice(0,200)}));return sendJson(req,res,503,{error:'Unable to load jobs. Please retry.'});}
   }
 
   // Uploads must be confirmed in durable storage before the editor calls them saved.
@@ -2102,6 +2077,7 @@ const server = http.createServer(async (req, res) => {
 // Bind first; requests wait for initialization rather than reading partial data.
 startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   await loadMemoryStore();
+  await adminJobIndex.ensure();
   const catalogue = await readCatalogueDb(['jobs']);
   if (shortenGeneratedJobUrls(catalogue.jobs || [],memoryStore.jobs || [])) {
     const db = await editorState.read(['jobs']);

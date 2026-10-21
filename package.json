@@ -6,6 +6,7 @@
   "main": "server.mjs",
   "description": "Trikonet Backend API and Admin Service",
   "scripts": {
+    "repair:approved-access": "node scripts/repair-approved-access.mjs --apply",
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "sync:logos": "node scripts/sync-employer-logos.mjs",

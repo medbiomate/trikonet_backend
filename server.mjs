@@ -1872,15 +1872,30 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'DELETE') {
-    const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
-    const db = await editorState.read();
-    const before = db.jobs.length;
-    const removedJob=db.jobs.find(item=>item.slug===slug);
-    db.jobs = db.jobs.filter(item => item.slug !== slug);
-    await writeLocalDb(db);
-    googleIndexing.enqueue(removedJob,null).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
-    seoRepository.list(true).catch(error=>console.error('SEO refresh after job removal failed:',error.message));
-    return sendJson(req, res, before === db.jobs.length ? 404 : 200, { deleted: before !== db.jobs.length });
+    const admin = await currentAdminSession(req);
+    if (!admin) return sendJson(req,res,401,{error:'Sign in to delete jobs.'});
+    try {
+      const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
+      const db = await editorState.read();
+      let job = db.jobs.find(item => item.slug === slug);
+      if (!job) {
+        const params = new URLSearchParams({slug,per_page:'1'});
+        let records;
+        try { records = await wordpressRecords('job_listing',params,{excludedSlugs:[]}); }
+        catch(error) { if(error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); records = fallbackRecords('job_listing',params); }
+        job = records[0];
+        if (!job) return sendJson(req,res,404,{error:'Job not found.'});
+        db.jobs.push(job);
+      }
+      // Keep an override so imported records cannot reappear after deletion.
+      const removedJob = {...job};
+      job.status = 'trash';
+      job.updatedAt = new Date().toISOString();
+      await writeLocalDb(db);
+      googleIndexing.enqueue(removedJob,null).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
+      seoRepository.list(true).catch(error=>console.error('SEO refresh after job removal failed:',error.message));
+      return sendJson(req,res,200,{deleted:true});
+    } catch(error) { return sendJson(req,res,500,{error:'Unable to move job to Trash.'}); }
   }
 
   // API: Local Employers

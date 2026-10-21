@@ -26,15 +26,17 @@ export function createEditorState(pool,ensure,media,index){
    const [rows]=await connection.query(`SELECT CAST(JSON_OBJECT(${projection(changed)}) AS CHAR) payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE`);
    if(!rows[0])throw Error('Editor storage unavailable');
    const current=JSON.parse(rows[0].payload);
-   let mergedJobs;
+   let mergedJobs,mergedEmployers;
    const values=[];
    const updates=changed.map(key=>{
     const merged=mergeStateChanges(current[key]??snapshot.before[key],snapshot.before[key],next[key]);
     if(key==='jobs')mergedJobs=merged;
+    if(key==='employers')mergedEmployers=merged;
     values.push(`$.${key}`,JSON.stringify(merged));return '?,JSON_EXTRACT(?,\'$\')';
    });
    await connection.query(`UPDATE trikonet_app_state SET payload=JSON_SET(payload,${updates.join(',')}),updated_at=CURRENT_TIMESTAMP WHERE state_key='main'`,values);
    if(index&&mergedJobs)await index.sync(connection,current.jobs||[],mergedJobs);
+   if(index?.syncEmployers&&mergedEmployers)await index.syncEmployers(connection,current.employers||[],mergedEmployers);
    await connection.commit();return true;
   }catch(error){await connection.rollback();throw error;}finally{connection.release();}
  }

@@ -1,3 +1,4 @@
+import {createAdminEmployerIndex} from './admin-employer-index.mjs';
 import {createAdminJobIndex} from './admin-job-index.mjs';
 function jobCreators(jobs=[]){return [...new Map(jobs.filter(j=>j.createdBy?.id).map(j=>[String(j.createdBy.id),{id:String(j.createdBy.id),name:j.createdBy.name||'Team member'}])).values()].sort((a,b)=>a.name.localeCompare(b.name));}
 import {selectedDay} from './admin-job-filters.mjs';
@@ -612,7 +613,9 @@ async function ensurePersistentState() {
 const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
 
 const adminJobIndex=createAdminJobIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.jobs||[];},ensurePersistentState);
-const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore,adminJobIndex);
+const adminEmployerIndex=createAdminEmployerIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.employers||[];},ensurePersistentState);
+const editorIndexes={ensure:async()=>{await adminJobIndex.ensure();await adminEmployerIndex.ensure();},sync:(...args)=>adminJobIndex.sync(...args),syncEmployers:(...args)=>adminEmployerIndex.sync(...args)};
+const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore,editorIndexes);
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
@@ -637,7 +640,7 @@ async function readLocalDb() {
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
   if(await editorState.write(db)) return;
-  await adminJobIndex.ensure();
+  await editorIndexes.ensure();
   const snapshot=stateSnapshots.get(db);
   const before=snapshot ? JSON.parse(snapshot) : undefined;
   repairEmployerSnapshots(db);
@@ -654,6 +657,7 @@ async function writeLocalDb(db, {skipMedia=false}={}) {
     removeAccountData(db,deletions.filter(row=>row.status==='deleted'||Number(row.delete_after)<=Date.now()).map(row=>row.user_id));
     await connection.query("UPDATE trikonet_app_state SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[JSON.stringify({...emptyDb,...db})]);
     await adminJobIndex.sync(connection,previousState.jobs||[],db.jobs||[]);
+    await adminEmployerIndex.sync(connection,previousState.employers||[],db.employers||[]);
     await connection.commit();
   } catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }
@@ -1012,6 +1016,18 @@ const server = http.createServer(async (req, res) => {
     if(!await currentAdminSession(req))return sendJson(req,res,401,{error:'Sign in to load companies.'});
     await loadMemoryStore();
     return sendJson(req,res,200,(memoryStore.employers||[]).map(item=>({id:item.id,slug:item.slug,title:item.title,status:item.status,metas:{_employer_logo:item.metas?._employer_logo||item.logo||'',_employer_featured_image:item.metas?._employer_featured_image||''}})));
+  }
+  if(path.startsWith('/api/admin/employer-record/')&&req.method==='GET'){
+    if(!await currentAdminSession(req))return sendJson(req,res,401,{error:'Sign in to load companies.'});
+    const slug=decodeURIComponent(path.slice('/api/admin/employer-record/'.length));
+    const db=await readCatalogueDb(['employers']);await loadMemoryStore();
+    const record=db.employers.find(e=>e.slug===slug)||memoryStore.employers.find(e=>e.slug===slug);
+    return sendJson(req,res,record?200:404,record||{error:'Company not found'});
+  }
+  if(path==='/api/admin/employers'&&req.method==='GET'){
+    const admin=await currentAdminSession(req);if(!admin)return sendJson(req,res,401,{error:'Sign in to load employers.'});
+    try{const payload=await adminEmployerIndex.page(requestUrl.searchParams,admin);return sendJson(req,res,200,{...payload,employers:payload.jobs,jobs:undefined});}
+    catch(error){console.error('Employer index failed:',error.message);return sendJson(req,res,503,{error:'Unable to load employers.'});}
   }
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin=await currentAdminSession(req);
@@ -2077,7 +2093,7 @@ const server = http.createServer(async (req, res) => {
 // Bind first; requests wait for initialization rather than reading partial data.
 startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   await loadMemoryStore();
-  await adminJobIndex.ensure();
+  await editorIndexes.ensure();
   const catalogue = await readCatalogueDb(['jobs']);
   if (shortenGeneratedJobUrls(catalogue.jobs || [],memoryStore.jobs || [])) {
     const db = await editorState.read(['jobs']);

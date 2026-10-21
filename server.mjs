@@ -1752,7 +1752,7 @@ const server = http.createServer(async (req, res) => {
       if (index >= 0) list[index] = saved; else list.unshift(saved);
       await writeLocalDb(db);
       return sendJson(req,res,200,{slug,status:'draft'});
-    } catch { return sendJson(req,res,503,{error:'Draft save failed.'}); }
+    } catch(error) {console.error(JSON.stringify({event:'admin_autosave_failed',code:error.code||error.name,message:String(error.message||'').slice(0,220)}));return sendJson(req,res,503,{error:'Server draft sync failed. Your device recovery copy is retained.'}); }
   }
 
   if(path==='/api/admin/google-indexing-status'&&req.method==='GET'){

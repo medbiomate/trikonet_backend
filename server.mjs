@@ -1,3 +1,5 @@
+function jobCreators(jobs=[]){return [...new Map(jobs.filter(j=>j.createdBy?.id).map(j=>[String(j.createdBy.id),{id:String(j.createdBy.id),name:j.createdBy.name||'Team member'}])).values()].sort((a,b)=>a.name.localeCompare(b.name));}
+import {selectedDay} from './admin-job-filters.mjs';
 import {createAlertUserReader} from './alert-users.mjs';
 import {createEditorState} from './editor-state.mjs';
 import {prepareStateMedia} from './state-media.mjs';
@@ -1011,6 +1013,7 @@ const server = http.createServer(async (req, res) => {
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
     try {
       const params = new URLSearchParams(requestUrl.searchParams);
+      params.set('day',selectedDay(params.get('period')||'today'));
       params.set('_owner_id', String(admin.userId));
       params.set('_owner_email', admin.email || '');
       const status = params.get('status') || 'all';
@@ -1019,7 +1022,7 @@ const server = http.createServer(async (req, res) => {
       const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true })).sort(adminJobsFirst);
       const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
       const counts = Object.fromEntries(await Promise.all(['all','publish','draft','pending','expired','mine'].map(async tab => {
-        const countParams = new URLSearchParams({ status:tab, _owner_id:String(admin.userId), _owner_email:admin.email || '' });
+        const countParams = new URLSearchParams({ day:params.get('day')||'',creator:params.get('creator')||'', status:tab, _owner_id:String(admin.userId), _owner_email:admin.email || '' });
         const localCount = (db.jobs || []).filter(job => localJobMatches(job,countParams)).length;
         return [tab,localCount + (tab === 'mine' ? 0 : await wordpressCount('job_listing',countParams,options))];
       })));
@@ -1027,7 +1030,7 @@ const server = http.createServer(async (req, res) => {
       const size = Math.min(100, Math.max(1, Math.floor(Number(params.get('per_page')) || 20)));
       const plan = pagePlan(local, remoteTotal, Math.floor(Number(params.get('page')) || 1), size);
       const remote = plan.remoteLimit && remoteTotal ? await wordpressRecords('job_listing', new URLSearchParams({ ...Object.fromEntries(params), per_page: String(plan.remoteLimit) }), { ...options, offset: plan.remoteOffset }) : [];
-      return sendJson(req, res, 200, { jobs: [...plan.local, ...remote].map(adminJobListing), total: plan.total, page: plan.page, perPage: size, counts });
+      return sendJson(req, res, 200, { day:params.get('day'),creators:jobCreators(db.jobs), jobs: [...plan.local, ...remote].map(adminJobListing), total: plan.total, page: plan.page, perPage: size, counts });
     } catch (error) {
       if (error.code === 'ER_NO_SUCH_TABLE') {
         try {
@@ -1035,12 +1038,13 @@ const server = http.createServer(async (req, res) => {
           const db = await readCatalogueDb(['jobs']);
           if (!Array.isArray(memoryStore.jobs)) throw new Error('Imported jobs unavailable');
           const params = new URLSearchParams(requestUrl.searchParams);
+          params.set('day',selectedDay(params.get('period')||'today'));
           params.set('_owner_id',String(admin.userId));
           params.set('_owner_email',admin.email || '');
-          const counts = Object.fromEntries(['all','publish','draft','pending','expired','mine'].map(status => [status,importedJobPage(memoryStore.jobs,db.jobs || [],new URLSearchParams({status,_owner_id:String(admin.userId),_owner_email:admin.email || ''})).total]));
+          const counts = Object.fromEntries(['all','publish','draft','pending','expired','mine'].map(status => [status,importedJobPage(memoryStore.jobs,db.jobs || [],new URLSearchParams({day:params.get('day')||'',creator:params.get('creator')||'',status,_owner_id:String(admin.userId),_owner_email:admin.email || ''})).total]));
           const payload = importedJobPage(memoryStore.jobs, db.jobs || [], params);
           payload.jobs = payload.jobs.map(adminJobListing);
-          return sendJson(req, res, 200, {...payload, counts});
+          return sendJson(req, res, 200, {...payload, counts,day:params.get('day'),creators:jobCreators(db.jobs)});
         } catch (fallbackError) {
           console.error(JSON.stringify({ event: 'admin_jobs_import_failed', code: fallbackError.code || fallbackError.name }));
         }

@@ -1,11 +1,15 @@
+import {jobFilterMatch} from './admin-job-filters.mjs';
 export function adminJobConditions(where, values, params, excludedSlugs = []) {
   const status = params.get('status') || 'all';
   if (status === 'all') where.push("post_status IN ('publish','draft','pending','expired')");
   else { where.push('post_status = ?'); values.push(status === 'active' ? 'publish' : status); }
+  if(params.get('day')){where.push('DATE(post_date) = ?');values.push(params.get('day'));}
+  if(params.get('creator'))where.push('1=0'); // Imported records have no verified console creator.
   if (excludedSlugs.length) { where.push(`post_name NOT IN (${excludedSlugs.map(() => '?').join(',')})`); values.push(...excludedSlugs); }
 }
 
 export function localJobMatches(job, params) {
+  if(!jobFilterMatch(job,params))return false;
   const status = params.get('status') || 'all';
   const normalized = ['active', 'published', 'publish', ''].includes(job.status || '') ? 'publish' : job.status;
   if (!['publish', 'draft', 'pending', 'expired'].includes(normalized)) return false;

@@ -1292,8 +1292,15 @@ const server = http.createServer(async (req, res) => {
   // API: Auth Me
   if (path === '/api/auth/me' && req.method === 'GET') {
     const session = currentSession(req);
-    const db=session?await readLocalDb():null;const user=db?.users.find(item=>String(item.id)===String(session.userId));
-    return sendJson(req,res,user?200:401,user?{user:accountView(user),deletion:await accountDeletion.status(user.id)}:{error:'Authentication required'});
+    let user=null;
+    if(session){
+      await ensurePersistentState();
+      const [rows]=await wpDb.query("SELECT CAST(JSON_EXTRACT(s.payload,CONCAT('$.users[',u.position-1,']')) AS CHAR) account FROM trikonet_app_state s, JSON_TABLE(s.payload,'$.users[*]' COLUMNS (position FOR ORDINALITY,id VARCHAR(191) PATH '$.id')) u WHERE s.state_key='main' AND u.id=? LIMIT 1",[String(session.userId)]);
+      if(rows[0]?.account)user=JSON.parse(rows[0].account);
+    }
+    const deletion=user?await accountDeletion.status(user.id):null;
+    if(deletion?.status==='deleted')user=null;
+    return sendJson(req,res,user?200:401,user?{user:accountView(user),deletion}:{error:'Authentication required'});
   }
 
   // API: Auth Logout
@@ -2093,7 +2100,7 @@ startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   await loadMemoryStore();
   const catalogue = await readCatalogueDb(['jobs']);
   if (shortenGeneratedJobUrls(catalogue.jobs || [],memoryStore.jobs || [])) {
-    const db = await readLocalDb();
+    const db = await editorState.read(['jobs']);
     if (shortenGeneratedJobUrls(db.jobs || [],memoryStore.jobs || [])) await writeLocalDb(db);
   }
 });

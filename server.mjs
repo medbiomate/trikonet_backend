@@ -1824,6 +1824,9 @@ const server = http.createServer(async (req, res) => {
       if (!job.title?.trim()) {
         return sendJson(req, res, 400, { error: 'Job title is required' });
       }
+      if (['publish','published','active'].includes(job.status) && (!Array.isArray(job.categories) || !job.categories.some(value => typeof value === 'string' && value.trim()))) {
+        return sendJson(req,res,400,{error:'Select at least one job category before publishing.',fields:['categories']});
+      }
       job.slug = String(job.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
       const nowIso = new Date().toISOString();
       job.createdAt = job.createdAt || nowIso;

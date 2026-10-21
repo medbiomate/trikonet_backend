@@ -1,3 +1,5 @@
+import {createAlertUserReader} from './alert-users.mjs';
+import {createEditorState} from './editor-state.mjs';
 import {prepareStateMedia} from './state-media.mjs';
 import {teamActivity} from './team-activity.mjs';
 import {createGoogleIndexing} from './google-indexing.mjs';
@@ -606,6 +608,7 @@ async function ensurePersistentState() {
 
 const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
 
+const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore);
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
@@ -629,6 +632,7 @@ async function readLocalDb() {
 }
 
 async function writeLocalDb(db, {skipMedia=false}={}) {
+  if(await editorState.write(db)) return;
   const snapshot=stateSnapshots.get(db);
   const before=snapshot ? JSON.parse(snapshot) : undefined;
   repairEmployerSnapshots(db);
@@ -801,7 +805,7 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
   return `trikonet_session=${token}; HttpOnly; SameSite=${sameSite}${secure}; Path=/; Max-Age=${maxAge}`;
 }
 
-const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:async()=> (await readLocalDb()).users.filter(user=>isCandidateAccount(user)&&!user.accountDeletionPending),loadJobs:async()=>{
+const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:createAlertUserReader(wpDb,()=>accountDeletion.ensure()),loadJobs:async()=>{
   const {jobs}=await loadSeoRecords();
   const local=await readCatalogueDb(['jobs','employers']);
   const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
@@ -997,6 +1001,11 @@ const server = http.createServer(async (req, res) => {
     try { return sendJson(req,res,200,teamActivity(await readCatalogueDb(['jobs','employers']),date)); }
     catch { return sendJson(req,res,503,{error:'Team activity is temporarily unavailable.'}); }
   }
+  if(path==='/api/admin/employer-options' && req.method==='GET'){
+    if(!await currentAdminSession(req))return sendJson(req,res,401,{error:'Sign in to load companies.'});
+    await loadMemoryStore();
+    return sendJson(req,res,200,(memoryStore.employers||[]).map(item=>({id:item.id,slug:item.slug,title:item.title,status:item.status,metas:{_employer_logo:item.metas?._employer_logo||item.logo||'',_employer_featured_image:item.metas?._employer_featured_image||''}})));
+  }
   if (path === '/api/admin/jobs' && req.method === 'GET') {
     const admin = await currentAdminSession(req);
     if (!admin || admin.expiresAt <= Date.now()) return sendJson(req, res, 401, { error: 'Administrator authentication required' });
@@ -1006,7 +1015,7 @@ const server = http.createServer(async (req, res) => {
       params.set('_owner_email', admin.email || '');
       const status = params.get('status') || 'all';
       if (!['all', 'mine', 'publish', 'draft', 'pending', 'expired'].includes(status)) return sendJson(req, res, 400, { error: 'Invalid job status' });
-      const db = await readLocalDb();
+      const db = await readCatalogueDb(['jobs']);
       const local = (db.jobs || []).filter(job => localJobMatches(job, params)).map(job => ({ ...job, local: true })).sort(adminJobsFirst);
       const options = { excludedSlugs: (db.jobs || []).flatMap(job => [job.slug, ...(job.urlAliases || []).map(path=>path.split('/').pop())]).filter(Boolean) };
       const counts = Object.fromEntries(await Promise.all(['all','publish','draft','pending','expired','mine'].map(async tab => {
@@ -1023,7 +1032,7 @@ const server = http.createServer(async (req, res) => {
       if (error.code === 'ER_NO_SUCH_TABLE') {
         try {
           await loadMemoryStore();
-          const db = await readLocalDb();
+          const db = await readCatalogueDb(['jobs']);
           if (!Array.isArray(memoryStore.jobs)) throw new Error('Imported jobs unavailable');
           const params = new URLSearchParams(requestUrl.searchParams);
           params.set('_owner_id',String(admin.userId));
@@ -1679,7 +1688,7 @@ const server = http.createServer(async (req, res) => {
   // Autosaved unfinished records are always drafts, never published overrides.
   if(path==='/api/admin/employer-job-address' && req.method==='GET'){
     const admin=await currentAdminSession(req);if(!admin)return sendJson(req,res,401,{error:'Sign in to load employer addresses.'});
-    try{const params=new URL(req.url,'http://localhost').searchParams;const db=await readLocalDb();return sendJson(req,res,200,findEmployerAddress(db,params.get('company'),params.get('slug')));}
+    try{const params=new URL(req.url,'http://localhost').searchParams;const db=await editorState.read();return sendJson(req,res,200,findEmployerAddress(db,params.get('company'),params.get('slug')));}
     catch(error){return sendJson(req,res,503,{error:'Unable to load the saved company address.'});}
   }
   if(path==='/api/admin/import-job-link' && req.method==='POST'){
@@ -1699,7 +1708,7 @@ const server = http.createServer(async (req, res) => {
       if (body.type === 'job' && !String(record.title || '').trim() && !String(record.description || '').trim()) return sendJson(req,res,200,{skipped:true});
       if (!String(record.title || '').trim() && body.type !== 'job') return sendJson(req,res,400,{error:'Enter a title to save a draft.'});
       if (body.type === 'job' && !String(record.title || '').trim()) record.title = 'Untitled job';
-      const db = await readLocalDb();
+      const db = await editorState.read();
       const list = body.type === 'job' ? db.jobs : db.employers;
       if (body.type === 'job') {
         const now = new Date().toISOString();
@@ -1819,7 +1828,7 @@ const server = http.createServer(async (req, res) => {
       if(job.deadline||job.expiryDate){job.deadline=job.deadline||job.expiryDate;job.expiryDate=job.expiryDate||job.deadline;}
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      const db = await readLocalDb();
+      const db = await editorState.read();
       let existingIndex = findJobIndex(db.jobs, job);
       if (existingIndex < 0 && (job.originalSlug || job.id)) {
         let records;
@@ -1862,7 +1871,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'DELETE') {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
-    const db = await readLocalDb();
+    const db = await editorState.read();
     const before = db.jobs.length;
     const removedJob=db.jobs.find(item=>item.slug===slug);
     db.jobs = db.jobs.filter(item => item.slug !== slug);
@@ -1876,8 +1885,7 @@ const server = http.createServer(async (req, res) => {
   if (path === '/api/local/employers' && req.method === 'GET') {
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const db = adminView ? await readLocalDb() : await readCatalogueDb(['employers']);
-    if (adminView && repairEmployerSnapshots(db)) await writeLocalDb(db,{skipMedia:true});
+    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb(['employers']);
     return sendJson(req, res, 200, adminView ? db.employers : db.employers.filter(isPublicRecord));
   }
 
@@ -1885,7 +1893,7 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const db = adminView ? await readLocalDb() : await readCatalogueDb(['employers']);
+    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb(['employers']);
     const employer = db.employers.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
     return sendJson(req, res, employer ? 200 : 404, employer || { error: 'Employer not found' });
   }
@@ -1910,7 +1918,7 @@ const server = http.createServer(async (req, res) => {
       employer.createdAt = employer.createdAt || employer.updatedAt;
       employer.local = true;
 
-      const db = await readLocalDb();
+      const db = await editorState.read();
       const index = db.employers.findIndex(item => item.slug === employer.originalSlug || item.slug === employer.slug);
       const existing = index >= 0 ? db.employers[index] : null;
       const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));
@@ -1940,7 +1948,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/local/employers/') && req.method === 'DELETE') {
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
-    const db = await readLocalDb();
+    const db = await editorState.read();
     const before = db.employers.length;
     db.employers = db.employers.filter(item => item.slug !== slug);
     await writeLocalDb(db);

@@ -6,6 +6,7 @@ export function jobDay(job){
 }
 export function indiaDay(date=new Date()){return indiaFormatter.format(date);}
 export function selectedDay(period,now=new Date()){
+ if(/^\d{4}-\d{2}-\d{2}$/.test(period||'') && Number.isFinite(Date.parse(period+'T00:00:00Z')) && new Date(period+'T00:00:00Z').toISOString().slice(0,10)===period)return period;
  return period==='all'?'':indiaDay(new Date(now.getTime()-(period==='yesterday'?86400000:0)));
 }
 export function jobFilterMatch(job,params){

@@ -1,3 +1,4 @@
+import {employerOptions} from './employer-options.mjs';
 import {trashJobRecord} from './job-trash.mjs';
 import {createAdminEmployerIndex} from './admin-employer-index.mjs';
 import {createAdminJobIndex} from './admin-job-index.mjs';
@@ -1016,7 +1017,8 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/admin/employer-options' && req.method==='GET'){
     if(!await currentAdminSession(req))return sendJson(req,res,401,{error:'Sign in to load companies.'});
     await loadMemoryStore();
-    return sendJson(req,res,200,(memoryStore.employers||[]).map(item=>({id:item.id,slug:item.slug,title:item.title,status:item.status,metas:{_employer_logo:item.metas?._employer_logo||item.logo||'',_employer_featured_image:item.metas?._employer_featured_image||''}})));
+    const db=await readCatalogueDb(['employers']);
+    return sendJson(req,res,200,employerOptions(memoryStore.employers||[],db.employers||[]));
   }
   if(path.startsWith('/api/admin/employer-record/')&&req.method==='GET'){
     if(!await currentAdminSession(req))return sendJson(req,res,401,{error:'Sign in to load companies.'});

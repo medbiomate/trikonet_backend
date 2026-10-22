@@ -79,3 +79,16 @@ test('first publication of yesterday draft is created activity on its publicatio
  assert.equal(payload.uploadedAt,'2026-10-03T04:23:02Z');
  assert.equal(Date.parse(payload.createdAt),Date.parse(job.createdAt));
 });
+
+test('Phlebotomist work is credited to Sajna while original creator stays Hasna',()=>{
+ const record={...job,createdBy:{id:'hasna',name:'Hasna',email:'hasna@example.com'},emsFirstPublishedAt:'2026-10-02T09:06:38.404Z',updatedBy:{id:'sajna',name:'Sajna',email:'sajna@example.com',at:'2026-10-22T04:25:08.587Z'}};
+ const operator=emsJobOperator(record);
+ assert.equal(operator.id,'sajna');
+ const payload=emsJobPayload(record,operator);
+ assert.equal(payload.uploaderEmail,'sajna@example.com');
+ assert.equal(payload.activityType,'edited');
+ assert.equal(payload.editedBy,'Sajna');
+ assert.equal(record.createdBy.name,'Hasna');
+ assert.equal(emsJobOperator({...record,updatedBy:{...record.updatedBy,at:record.emsFirstPublishedAt}}).id,'hasna');
+ assert.equal(emsJobOperator({...record,updatedBy:{...record.updatedBy,at:'invalid'}}).id,'hasna');
+});

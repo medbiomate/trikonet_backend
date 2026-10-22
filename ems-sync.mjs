@@ -2,7 +2,10 @@ import { publicJobPath } from './job-urls.mjs';
 import { createHash } from 'node:crypto';
 const cutoff = Date.parse('2026-10-01T18:30:00Z');
 export function emsJobOperator(job, users = []) {
-  const actor = job.createdBy || job.updatedBy;
+  const first = Date.parse(job.emsFirstPublishedAt || job.createdAt || '');
+  const edited = Date.parse(job.updatedBy?.at || '');
+  const actor = job.updatedBy?.id && Number.isFinite(edited) && (!Number.isFinite(first) || edited > first)
+    ? job.updatedBy : job.createdBy || job.updatedBy;
   if (!actor?.id) return null;
   const user = users.find(user => String(user.id) === String(actor.id));
   return { ...actor, email: actor.email || user?.email };

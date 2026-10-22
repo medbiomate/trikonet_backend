@@ -1,3 +1,4 @@
+import {normalizeJobEmployer} from './job-employer.mjs';
 const allowed = new Set(['jobs','employers','taxonomies']);
 // Share only the in-flight SQL read, never mutable records or stale account data.
 export function createCatalogueReader(pool, ensure) {
@@ -17,6 +18,6 @@ export function createCatalogueReader(pool, ensure) {
       pending.set(key, task);
     }
     const data = JSON.parse(await task);
-    return {jobs:data.jobs || [], employers:data.employers || [], taxonomies:data.taxonomies || {}};
+    return {jobs:(data.jobs || []).map(normalizeJobEmployer), employers:data.employers || [], taxonomies:data.taxonomies || {}};
   };
 }

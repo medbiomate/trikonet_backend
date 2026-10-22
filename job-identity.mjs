@@ -1,3 +1,4 @@
+import {normalizeJobEmployer} from './job-employer.mjs';
 export function findJobIndex(jobs, record) {
   if (record.id) {
     const index = jobs.findIndex(job => String(job.id) === String(record.id));
@@ -14,7 +15,7 @@ export function saveJobRecord(jobs, record, createId, now) {
   const aliasCollision = jobs.findIndex((job, i) => i !== index && ((job.urlAliases || []).includes(record.publicPath) || (record.urlAliases || []).includes(job.publicPath || `/job/${job.slug}`)));
   if (aliasCollision >= 0) throw new Error('This URL is reserved for another job.');
   if (collision >= 0 && collision !== index) throw new Error('This URL slug belongs to another job. Choose a different slug.');
-  const saved = { ...existing, ...record, id: existing?.id || record.id || createId(), createdAt: existing?.createdAt || record.createdAt || now, updatedAt: now, local: true };
+  const saved = normalizeJobEmployer({ ...existing, ...record, id: existing?.id || record.id || createId(), createdAt: existing?.createdAt || record.createdAt || now, updatedAt: now, local: true });
   delete saved.originalSlug;
   delete saved.recoveryDraft;
   delete saved.autosaved;

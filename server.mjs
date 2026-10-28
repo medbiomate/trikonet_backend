@@ -1,3 +1,4 @@
+import {employerIdentity} from './employer-identity.mjs';
 import {findJobByPath} from './job-url-lookup.mjs';
 import {employerOptions} from './employer-options.mjs';
 import {trashJobRecord} from './job-trash.mjs';
@@ -1749,7 +1750,7 @@ const server = http.createServer(async (req, res) => {
       const slug = `autosave-${body.type}-${body.draftId}`;
       const index = list.findIndex(item => item.slug === slug);
       const now = new Date().toISOString();
-      const saved = { ...record, slug, originalSlug: '', status: 'draft', local: true, autosaved: true,
+      const saved = { ...record, id: body.draftId, requestedSlug: record.slug || '', createdBy: jobCreator(index >= 0 ? list[index] : null, admin), slug, originalSlug: '', status: 'draft', local: true, autosaved: true,
         autosaveOwner: admin.userId, sourceSlug: String(body.sourceSlug || ''), updatedAt: now,
         createdAt: index >= 0 ? list[index].createdAt : now, date: now, publishedDate: now };
       if (index >= 0 && String(list[index].autosaveOwner) !== String(admin.userId)) return sendJson(req,res,403,{error:'Draft access denied.'});
@@ -1937,13 +1938,15 @@ const server = http.createServer(async (req, res) => {
       employer.local = true;
 
       const db = await editorState.read();
-      const index = db.employers.findIndex(item => item.slug === employer.originalSlug || item.slug === employer.slug);
-      const existing = index >= 0 ? db.employers[index] : null;
+      const {index, existing, slug: requestedSlug, snapshot} = employerIdentity(employer, db.employers, memoryStore.employers || []);
+      employer.slug = requestedSlug;
+      if (snapshot) { delete employer.autosaved; delete employer.autosaveOwner; delete employer.sourceSlug; delete employer.requestedSlug; }
       const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));
       if (duplicate) return sendJson(req,res,409,{error:'A company with this name already exists. Select or edit the existing company.',existingSlug:duplicate.slug});
       const nowIso = employer.updatedAt;
       employer.id = existing?.id || crypto.randomUUID();
       if (existing?.urlAliases) employer.urlAliases = [...new Set([...(existing.urlAliases || []),...(employer.urlAliases || [])])];
+      if (existing && !snapshot && existing.slug !== employer.slug) employer.urlAliases = [...new Set([...(employer.urlAliases || []), `/employer/${existing.slug}`])];
       employer.createdAt = existing ? existing.createdAt : nowIso;
       employer.createdBy = jobCreator(existing, admin);
       if (employer.createdBy && String(employer.createdBy.id) === String(admin.userId)) employer.createdBy.email = admin.email;
@@ -1960,7 +1963,7 @@ const server = http.createServer(async (req, res) => {
         .catch(error => console.error('EMS employer sync queue failed:', error.message));
       return sendJson(req, res, 200, employer);
     } catch (error) {
-      return sendJson(req, res, 400, { error: error.message });
+      return sendJson(req, res, error.status || 400, { error: error.message });
     }
   }
 

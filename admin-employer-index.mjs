@@ -16,7 +16,7 @@ export function indexEmployer(job){
  return [String(job.slug),status,jobDay(job)||null,Number.isFinite(parsed)?parsed:0,String(job.createdBy?.id||''),String(job.createdBy?.email||'').toLowerCase(),String(job.createdBy?.name||''),Boolean(job.local),`${text(job.title)} ${text(job.company||m._employer_name)} ${categories.join(' ')} ${card.locations.join(' ')}`.toLowerCase(),JSON.stringify(categories.map(v=>v.toLowerCase())),JSON.stringify(types.map(v=>v.toLowerCase())),JSON.stringify(card)];
 }
 export function indexWhere(params,admin,{status=true}={}){
- const where=["status IN ('publish','draft','pending','expired')"],values=[];
+ const where=["status IN ('publish','draft','pending','expired')", "slug NOT LIKE 'autosave-%'", "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(card,'$.autosaved')),'false') <> 'true'"],values=[];
  const day=selectedDay(params.get('period')||'today');
  if(day){where.push('job_day=?');values.push(day);}
  if(params.get('creator')){where.push('creator_id=?');values.push(params.get('creator'));}

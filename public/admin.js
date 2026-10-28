@@ -5410,7 +5410,9 @@ export async function initAdmin() {
 
     // Slug & Status
     const slugField = document.getElementById('field-employer-slug');
-    if (slugField) slugField.value = item.slug || '';
+    if (slugField) slugField.value = item.autosaved || String(item.slug || '').startsWith('autosave-')
+      ? (item.requestedSlug || String(item.title || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
+      : (item.slug || '');
 
     const statusField = document.getElementById('field-employer-status');
     if (statusField) statusField.value = item.status || 'publish';
@@ -5498,7 +5500,7 @@ export async function initAdmin() {
             </div>
             <div class="row-actions">
               <a href="#employer-editor" class="row-action-link edit-link" data-employer-edit="${esc(x.slug)}">Edit</a>
-              <a href="/employer/${encodeURIComponent(x.slug)}" target="_blank" rel="noopener" class="row-action-link view-link">View ↗</a>
+${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','published','active',''].includes(x.status || '') ? `<a href="/employer/${encodeURIComponent(x.slug)}" target="_blank" rel="noopener" class="row-action-link view-link">View ↗</a>` : '<span class="row-action-link">Not published</span>'}
               <a href="#" class="row-action-link trash-link" data-employer-delete="${esc(x.slug)}">Delete</a>
             </div>
           </td>
@@ -7976,6 +7978,8 @@ export async function initAdmin() {
       localEmployers = localEmployers.filter(x => x.slug !== employer.originalSlug && x.slug !== saved.slug);
       localEmployers.unshift(saved);
       employerForm.originalSlug.value = saved.slug;
+      const savedSlugField = document.getElementById('field-employer-slug');
+      if (savedSlugField) savedSlugField.value = saved.slug;
       const deleteBtn = document.getElementById('employer-delete-btn');
       if (deleteBtn) deleteBtn.hidden = false;
       const statusLabel = saved.status === 'publish' ? 'published' : saved.status === 'pending' ? 'saved as pending' : 'saved as a draft';

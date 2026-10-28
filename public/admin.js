@@ -4232,6 +4232,24 @@ export async function initAdmin() {
     } else if (hash === 'job-editor') {
       restoreJobAfterCompany();
       switchView('job-edit');
+    } else if (hash.startsWith('employer-editor/')) {
+      const slug = decodeURIComponent(hash.slice('employer-editor/'.length));
+      try {
+        const response = await fetch(`/api/admin/employer-record/${encodeURIComponent(slug)}`, {cache:'no-store'});
+        if (!response.ok) throw new Error('Unable to load the saved company.');
+        const item = await response.json();
+        const m = item.metas || {};
+        const employer = item.local ? item : {...item,
+          title:item.title?.rendered || item.title || '', description:item.content?.rendered || '',
+          logo:item.logo || m._employer_logo || m._employer_featured_image || '',
+          categories:Object.values(m._employer_category || {}), locations:Object.values(m._employer_location || {}),
+          email:m._employer_email || '', phone:m._employer_phone || '', website:m._employer_website || ''};
+        fillEmployer(employer);
+        switchView('employer-edit');
+      } catch (error) {
+        switchView('employers');
+        showAdminNotice(error.message || 'Unable to load the saved company.', 'error');
+      }
     } else if (hash === 'employer-editor') {
       if (!employerForm.originalSlug.value) {
         fillEmployer({});

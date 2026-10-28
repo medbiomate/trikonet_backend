@@ -1967,8 +1967,10 @@ const server = http.createServer(async (req, res) => {
       employer.local = true;
 
       const db = await editorState.read();
+      await loadMemoryStore();
       const {index, existing, slug: requestedSlug, snapshot} = employerIdentity(employer, db.employers, memoryStore.employers || []);
-      if (existing && isPublicRecord(existing) && !isPublicRecord(employer) && publishedCompanyDependents(existing,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before unpublishing the company.'});
+      const previousCompany = existing || (memoryStore.employers || []).find(item=>item.slug===employer.originalSlug);
+      if (previousCompany && isPublicRecord(previousCompany) && !isPublicRecord(employer) && publishedCompanyDependents(previousCompany,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before unpublishing the company.'});
       employer.slug = requestedSlug;
       if (snapshot) { delete employer.autosaved; delete employer.autosaveOwner; delete employer.sourceSlug; delete employer.requestedSlug; }
       const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));

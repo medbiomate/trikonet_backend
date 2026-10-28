@@ -1,3 +1,4 @@
+import {createAdminUserStore} from './admin-user-store.mjs';
 import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany,publishedCompanyDependents} from './company-profile-audit.mjs';
 const companyRepairTokens = new Map();
 import {employerIdentity} from './employer-identity.mjs';
@@ -622,6 +623,7 @@ const adminJobIndex=createAdminJobIndex(wpDb,async()=>{await loadMemoryStore();r
 const adminEmployerIndex=createAdminEmployerIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.employers||[];},ensurePersistentState);
 const editorIndexes={ensure:async()=>{await adminJobIndex.ensure();await adminEmployerIndex.ensure();},sync:(...args)=>adminJobIndex.sync(...args),syncEmployers:(...args)=>adminEmployerIndex.sync(...args)};
 const editorState=createEditorState(wpDb,ensurePersistentState,mediaStore,editorIndexes);
+const adminUserStore = createAdminUserStore(wpDb, ensurePersistentState);
 const stateSnapshots=new WeakMap();
 async function readLocalDb() {
   try {
@@ -1385,7 +1387,7 @@ const server = http.createServer(async (req, res) => {
     if (!admin || admin.expiresAt <= Date.now() || admin.role !== 'Administrator') {
       return sendJson(req, res, 403, { error: 'Administrator access required' });
     }
-    const db = await readLocalDb();
+    const db = await adminUserStore.read();
     const allowed = new Set(['administrator', 'editor', 'content editor']);
     const users = (db.users || []).filter(user => allowed.has(String(user.role || '').toLowerCase())).map(user => ({
       id: user.id,
@@ -1410,7 +1412,7 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await readJsonBody(req);
-      const db = await readLocalDb();
+      const db = await adminUserStore.read();
       const username = String(body.username || '').trim();
       const email = String(body.email || '').trim().toLowerCase();
       const name = String(body.name || username).trim();
@@ -1457,7 +1459,7 @@ const server = http.createServer(async (req, res) => {
         delete user.salt;
         delete user.hash;
       }
-      await writeLocalDb(db);
+      await adminUserStore.write(db);
       return sendJson(req, res, 200, {
         id: user.id,
         username: user.username,
@@ -1482,7 +1484,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(req, res, 403, { error: 'Administrator access required' });
     }
     const id = path.slice('/api/admin/users/'.length);
-    const db = await readLocalDb();
+    const db = await adminUserStore.read();
     const target = (db.users || []).find(user => String(user.id) === id);
     if (!target) return sendJson(req, res, 404, { error: 'User not found' });
     if (String(target.id) === String(admin.userId)) {
@@ -1493,7 +1495,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(req, res, 400, { error: 'You cannot delete the last administrator account.' });
     }
     db.users = db.users.filter(user => String(user.id) !== id);
-    await writeLocalDb(db);
+    await adminUserStore.write(db);
     return sendJson(req, res, 200, { ok: true });
   }
 

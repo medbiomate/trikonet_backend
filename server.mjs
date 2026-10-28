@@ -1,3 +1,4 @@
+import {findJobByPath} from './job-url-lookup.mjs';
 import {employerOptions} from './employer-options.mjs';
 import {trashJobRecord} from './job-trash.mjs';
 import {createAdminEmployerIndex} from './admin-employer-index.mjs';
@@ -1771,7 +1772,8 @@ const server = http.createServer(async (req, res) => {
     if (!match) return sendJson(req,res,404,{error:'Job not found'});
     const db = await readCatalogueDb(['jobs']);
     const suffix = match[2].match(/-(\d+)$/)?.[1];
-    let job = db.jobs.find(item => publicJobPath(item) === requested.replace(/\/$/,'') || (item.urlAliases || []).includes(requested.replace(/\/$/,'')) || item.slug === match[2] || (match[1] === 'jobs' && suffix && String(item.urlJobId) === suffix));
+    let job = findJobByPath(db.jobs, requested);
+    if (!job && match[1] === 'jobs' && suffix) job = db.jobs.find(item => String(item.urlJobId) === suffix);
     if (!job) {
       let records;
       try { records = await wordpressRecords('job_listing',new URLSearchParams({slug:match[2],per_page:'1'}),{excludedSlugs:[]}); }
@@ -1812,7 +1814,8 @@ const server = http.createServer(async (req, res) => {
     const db = await readCatalogueDb(['jobs']);
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
-    const job = db.jobs.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
+    const match = findJobByPath(db.jobs, `/job/${slug}`);
+    const job = match && (adminView || isPublicRecord(match)) ? match : null;
     return sendJson(req, res, job ? 200 : 404, job || { error: 'Job not found' });
   }
 

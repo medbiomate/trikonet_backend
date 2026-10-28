@@ -1,6 +1,6 @@
 import {mergeStateChanges} from './state-changes.mjs';
 import {prepareStateMedia} from './state-media.mjs';
-const allowed=new Set(['jobs','employers','jobRecoveryById','employerJobAddresses']);
+const allowed=new Set(['jobs','employers','jobRecoveryById','employerJobAddresses','employerRepairArchive']);
 // Never transfer account profiles, CVs or resumes into an editor request.
 export function createEditorState(pool,ensure,media,index){
  const snapshots=new WeakMap();

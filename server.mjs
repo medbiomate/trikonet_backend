@@ -1,3 +1,5 @@
+import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany} from './company-profile-audit.mjs';
+const companyRepairTokens = new Map();
 import {employerIdentity} from './employer-identity.mjs';
 import {findJobByPath} from './job-url-lookup.mjs';
 import {employerOptions} from './employer-options.mjs';
@@ -1027,7 +1029,28 @@ const server = http.createServer(async (req, res) => {
     const slug=decodeURIComponent(path.slice('/api/admin/employer-record/'.length));
     const db=await readCatalogueDb(['employers']);await loadMemoryStore();
     const record=db.employers.find(e=>e.slug===slug)||memoryStore.employers.find(e=>e.slug===slug);
-    return sendJson(req,res,record?200:404,record||{error:'Company not found'});
+    return sendJson(req,res,record?200:404,record?normalizedCompanyDraft(record):{error:'Company not found'});
+  }
+  if(path==='/admin/company-profile-repair' && ['GET','POST'].includes(req.method)){
+    const admin=await currentAdminSession(req);
+    if(!admin||admin.role!=='Administrator'){res.writeHead(401,{'Content-Type':'text/html'});return res.end('<h1>Sign in to the Trikonet admin console first.</h1>');}
+    const escape=value=>String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    await loadMemoryStore();
+    const db=await editorState.read(['jobs','employers','employerRepairArchive']);
+    let result=null;
+    if(req.method==='POST'){
+      let body='';for await(const chunk of req){body+=chunk;if(body.length>4096)throw Error('Invalid repair request');}
+      const token=new URLSearchParams(body).get('token');const stored=companyRepairTokens.get(token);
+      if(!stored||stored.user!==String(admin.userId)||stored.expires<Date.now()){res.writeHead(403,{'Content-Type':'text/html'});return res.end('<h1>Repair session expired. Reload this page and retry.</h1>');}
+      companyRepairTokens.delete(token);
+      result=repairCompanyProfiles(db,memoryStore.employers||[],admin,new Date().toISOString(),()=>crypto.randomUUID());
+      await writeLocalDb(db);
+    }
+    const audit=auditCompanyProfiles(db,memoryStore.employers||[]);
+    const safe=audit.filter(row=>row.action!=='review').length;
+    const token=crypto.randomUUID();companyRepairTokens.set(token,{user:String(admin.userId),expires:Date.now()+600000});
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Robots-Tag':'noindex'});
+    return res.end(`<!doctype html><html><head><title>Company profile audit | Trikonet</title></head><body style="font:16px system-ui;max-width:1100px;margin:40px auto;padding:24px"><h1>Company profile audit</h1>${result?`<p role="status">Recovered ${result.recovered} profiles; corrected ${result.relinked} job links.</p>`:''}<p>${audit.length} company links need attention. ${safe} can be repaired from existing saved data.</p><p>Only complete recovery profiles linked to published jobs are restored. Originals are archived. Incomplete or ambiguous records stay unchanged.</p>${safe?`<form method="post"><input type="hidden" name="token" value="${token}"><button type="submit">Repair complete company profiles and links</button></form>`:''}<table border="1" cellpadding="10"><thead><tr><th>Company</th><th>URL</th><th>Published jobs</th><th>Action</th></tr></thead><tbody>${audit.map(row=>`<tr><td>${escape(row.name)}</td><td>${escape(row.slug)}</td><td>${row.jobs.length}</td><td>${escape(row.reason||row.action)}</td></tr>`).join('')}</tbody></table></body></html>`);
   }
   if(path==='/api/admin/employers'&&req.method==='GET'){
     const admin=await currentAdminSession(req);if(!admin)return sendJson(req,res,401,{error:'Sign in to load employers.'});
@@ -1841,6 +1864,12 @@ const server = http.createServer(async (req, res) => {
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await editorState.read();
+      if (['publish','published','active'].includes(job.status) && job.employerSlug) {
+        await loadMemoryStore();
+        const company=resolvePublishedCompany(job,db.employers,memoryStore.employers||[]);
+        if(!company)return sendJson(req,res,409,{error:'Save and publish the employer profile before publishing this job. Its company profile is not publicly available.',fields:['employerSlug']});
+        job.employerSlug=company.slug;job.employerUrl=`/employer/${company.slug}`;
+      }
       let existingIndex = findJobIndex(db.jobs, job);
       if (existingIndex < 0 && (job.originalSlug || job.id)) {
         let records;

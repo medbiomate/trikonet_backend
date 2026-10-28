@@ -4334,17 +4334,6 @@ export async function initAdmin() {
       }
     });
 
-    allJobs().forEach(j => {
-      if (j.autosaved || String(j.employerSlug || '').startsWith('autosave-')) return;
-      if (j.company && j.company.trim() && !employerMap.has(j.company.trim().toLowerCase())) {
-        employerMap.set(j.company.trim().toLowerCase(), {
-          title: j.company.trim(),
-          slug: j.employerSlug || '',
-          logo: j.logo || ''
-        });
-      }
-    });
-
     employerDataset = [...employerMap.values()].sort((a, b) => a.title.localeCompare(b.title));
 
     const searchInput = document.getElementById('employer-combobox-search');
@@ -4750,12 +4739,19 @@ export async function initAdmin() {
     }
   }
 
+  function companyTermsWithSelection(terms, selected) {
+    const result = [...(terms || [])];
+    for (const name of selected) if (!result.some(term => (typeof term === 'string' ? term : term.name) === name)) {
+      result.push({name, slug:String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-'),parent:''});
+    }
+    return result;
+  }
   function renderEmployerGutenbergChecklists(checkedCats = null, checkedLocs = null) {
     // 1. Categories Hierarchical Tree Checklist
     const catsWrap = document.getElementById('employer-checklist-categories');
     if (catsWrap) {
       const currentChecked = checkedCats instanceof Set ? checkedCats : new Set(checkedCats || [...catsWrap.querySelectorAll('input:checked')].map(x => x.value));
-      const empCats = (taxonomies.employerCategories && taxonomies.employerCategories.length) ? taxonomies.employerCategories : taxonomies.categories;
+      const empCats = companyTermsWithSelection((taxonomies.employerCategories && taxonomies.employerCategories.length) ? taxonomies.employerCategories : defaults.employerCategories.map(name=>({name,slug:name.toLowerCase().replace(/[^a-z0-9]+/g,'-'),parent:''})), currentChecked);
       const hierCats = buildHierarchy(empCats);
       catsWrap.innerHTML = hierCats.map(c => {
         const isChecked = currentChecked.has(c.name) ? 'checked' : '';
@@ -4769,7 +4765,7 @@ export async function initAdmin() {
     const locsWrap = document.getElementById('employer-checklist-locations');
     if (locsWrap) {
       const currentChecked = checkedLocs instanceof Set ? checkedLocs : new Set(checkedLocs || [...locsWrap.querySelectorAll('input:checked')].map(x => x.value));
-      const hierLocs = buildHierarchy(taxonomies.locations);
+      const hierLocs = buildHierarchy(companyTermsWithSelection(taxonomies.locations, currentChecked));
       locsWrap.innerHTML = hierLocs.map(l => {
         const isChecked = currentChecked.has(l.name) ? 'checked' : '';
         const lvlClass = l.depth ? `level-${l.depth}` : '';
@@ -5428,6 +5424,7 @@ export async function initAdmin() {
 
     // Slug & Status
     const slugField = document.getElementById('field-employer-slug');
+    if (slugField) slugField.dataset.manuallyEdited = item.slug && !String(item.slug).startsWith('autosave-') ? 'true' : 'false';
     if (slugField) slugField.value = item.autosaved || String(item.slug || '').startsWith('autosave-')
       ? (item.requestedSlug || String(item.title || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
       : (item.slug || '');
@@ -7621,13 +7618,13 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
     const val = employerGutenbergTitle.value.trim();
     if (employerDocStatusTitle) employerDocStatusTitle.textContent = `${val || 'Add title'} · Employer`;
     if (employerSummaryTitle) employerSummaryTitle.textContent = val || 'Add title';
-    if (employerSlugInput && !employerForm.originalSlug.value) {
+    if (employerSlugInput && !employerForm.originalSlug.value && employerSlugInput.dataset.manuallyEdited !== 'true') {
       employerSlugInput.value = val.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     }
     updateEmployerPreview();
   });
 
-  employerSlugInput?.addEventListener('input', updateEmployerPreview);
+  employerSlugInput?.addEventListener('input', () => { employerSlugInput.dataset.manuallyEdited='true'; updateEmployerPreview(); });
 
   document.getElementById('employer-gutenberg-content')?.addEventListener('input', e => {
     updateEmployerReadingStats(e.target.value);
@@ -8012,6 +8009,10 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
       if (returnCtxStr) {
         try {
           const returnCtx = JSON.parse(returnCtxStr);
+          if (!['publish','published','active'].includes(saved.status || '')) {
+            showAdminNotice('Company saved as a draft. Set Publication Status to Published and save before returning to the job.');
+            return;
+          }
           returnCtx.selectedEmployer = {
             title: saved.title,
             logo: saved.logo || '',

@@ -1,4 +1,4 @@
-import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany} from './company-profile-audit.mjs';
+import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany,publishedCompanyDependents} from './company-profile-audit.mjs';
 const companyRepairTokens = new Map();
 import {employerIdentity} from './employer-identity.mjs';
 import {findJobByPath} from './job-url-lookup.mjs';
@@ -1864,7 +1864,7 @@ const server = http.createServer(async (req, res) => {
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await editorState.read();
-      if (['publish','published','active'].includes(job.status) && job.employerSlug) {
+      if (['publish','published','active'].includes(job.status) && (job.employerSlug || job.employerUrl || job.company || job.metas?._job_employer_name)) {
         await loadMemoryStore();
         const company=resolvePublishedCompany(job,db.employers,memoryStore.employers||[]);
         if(!company)return sendJson(req,res,409,{error:'Save and publish the employer profile before publishing this job. Its company profile is not publicly available.',fields:['employerSlug']});
@@ -1968,6 +1968,7 @@ const server = http.createServer(async (req, res) => {
 
       const db = await editorState.read();
       const {index, existing, slug: requestedSlug, snapshot} = employerIdentity(employer, db.employers, memoryStore.employers || []);
+      if (existing && isPublicRecord(existing) && !isPublicRecord(employer) && publishedCompanyDependents(existing,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before unpublishing the company.'});
       employer.slug = requestedSlug;
       if (snapshot) { delete employer.autosaved; delete employer.autosaveOwner; delete employer.sourceSlug; delete employer.requestedSlug; }
       const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));
@@ -1997,8 +1998,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (path.startsWith('/api/local/employers/') && req.method === 'DELETE') {
+    if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
     const db = await editorState.read();
+    const company = db.employers.find(item=>item.slug===slug);
+    if(company && publishedCompanyDependents(company,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before deleting the company.'});
     const before = db.employers.length;
     db.employers = db.employers.filter(item => item.slug !== slug);
     await writeLocalDb(db);

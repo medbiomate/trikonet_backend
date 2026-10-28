@@ -46,3 +46,10 @@ test('older matching recovery description is reused before a neutral introductio
  const older={...draft,slug:'autosave-employer-older',updatedAt:'2026-10-28T05:00:00Z',autosaveOwner:'owner'};
  const report=auditCompanyProfiles({jobs:[job],employers:[latest,older]});assert.equal(report[0].draft.description,draft.description);assert.equal(report[0].draft.descriptionSource,undefined);
 });
+
+import {publishedCompanyDependents} from './company-profile-audit.mjs';
+test('company cannot disappear while published jobs use its slug, old URL or name',()=>{
+ const company={title:'Insights Psychology DMCC',slug:'new-profile',urlAliases:['/employer/old-profile']};
+ const jobs=[{status:'publish',employerSlug:'new-profile'},{status:'publish',employerUrl:'https://www.trikonet.com/employer/old-profile'},{status:'publish',company:'Insights Psychology DMCC'},{status:'draft',employerSlug:'new-profile'},{status:'publish',company:'Unrelated'}];
+ assert.equal(publishedCompanyDependents(company,jobs).length,3);
+});

@@ -74,3 +74,8 @@ export function resolvePublishedCompany(job,local,imported=[]){
  const matches=companies.filter(e=>employerNameKey(title(e))===employerNameKey(job.company));
  return matches.length===1?matches[0]:null;
 }
+
+export function publishedCompanyDependents(company,jobs=[]){
+ const slugs=new Set([company.slug,...(company.urlAliases||[]).map(path=>path.replace(/\/$/,'').split('/').pop())]);
+ return jobs.filter(job=>isPublicRecord(job)&&(slugs.has(job.employerSlug)||slugs.has(String(job.employerUrl||job.metas?._job_employer_url||'').replace(/\/$/,'').split('/').pop())||employerNameKey(job.company||job.metas?._job_employer_name)===employerNameKey(title(company))));
+}

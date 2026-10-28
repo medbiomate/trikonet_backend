@@ -27,12 +27,22 @@ export function auditCompanyProfiles(db,imported=[]){
   const drafts=locals.filter(e=>isEmployerSnapshot(e)&&employerNameKey(title(e))===group.key).sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0));
   if(!drafts.length)return {...group,action:'review',reason:'No saved company or recovery profile found.'};
   const draft=normalizedCompanyDraft(drafts[0]);
+  if(!String(draft.description||'').replace(/<[^>]*>/g,'').trim()) {
+    const older=drafts.find(e=>String(e.autosaveOwner||'')===String(draft.autosaveOwner||'')&&String(e.description||'').replace(/<[^>]*>/g,'').trim());
+    if(older)draft.description=older.description;
+  }
   const missing=[];
   if(!String(draft.description||'').replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim())missing.push('description');
   if(!draft.logo)missing.push('logo');if(!draft.categories.length)missing.push('company category');if(!draft.locations.length)missing.push('company location');
+  if(missing.length===1&&missing[0]==='description') {
+    const safeName=title(draft).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    draft.description=`<p>Browse job opportunities at ${safeName} on Trikonet. View current vacancies and application details below.</p>`;
+    draft.descriptionSource='recovery-listing-introduction';
+    missing.length=0;
+  }
   if(missing.length)return {...group,action:'review',draft,reason:`Recovery profile needs ${missing.join(', ')}.`};
   if(companies.some(e=>e.slug===group.slug&&e.slug!==draft.slug))return {...group,action:'review',draft,reason:'Requested URL is reserved by another saved company.'};
-  return {...group,action:'recover',draft,reason:''};
+  return {...group,action:'recover',draft,reason:draft.descriptionSource==='recovery-listing-introduction'?'Saved description is empty; restore with a neutral vacancy-listing introduction.':''};
  });
 }
 export function repairCompanyProfiles(db,imported,admin,now,createId){

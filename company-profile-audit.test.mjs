@@ -36,3 +36,13 @@ test('publication resolves real renamed company and rejects snapshot-only employ
  assert.equal(resolvePublishedCompany(job,[company]),company);
  assert.equal(resolvePublishedCompany(job,[{...company,status:'draft'}]),null);
 });
+test('description-only gap uses factual listing introduction without invented company claims',()=>{
+ const db={jobs:[{...job}],employers:[{...draft,description:''}]};
+ const report=auditCompanyProfiles(db);assert.equal(report[0].action,'recover');assert.match(report[0].draft.description,/Browse job opportunities/);assert.ok(!report[0].draft.description.includes('leading'));
+ repairCompanyProfiles(db,[],who,'now',()=> 'id');assert.equal(db.employers[0].descriptionSource,'recovery-listing-introduction');
+});
+test('older matching recovery description is reused before a neutral introduction',()=>{
+ const latest={...draft,description:'',updatedAt:'2026-10-28T06:00:00Z',autosaveOwner:'owner'};
+ const older={...draft,slug:'autosave-employer-older',updatedAt:'2026-10-28T05:00:00Z',autosaveOwner:'owner'};
+ const report=auditCompanyProfiles({jobs:[job],employers:[latest,older]});assert.equal(report[0].draft.description,draft.description);assert.equal(report[0].draft.descriptionSource,undefined);
+});

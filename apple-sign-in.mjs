@@ -58,8 +58,19 @@ export async function revokeAppleAccount(user){
  const response=await fetch('https://appleid.apple.com/auth/revoke',{method:'POST',body:new URLSearchParams({client_id:audience(),client_secret:clientSecret(),token:openAppleToken(user.appleRefreshToken),token_type_hint:'refresh_token'}),signal:AbortSignal.timeout(15000)});
  if(!response.ok)throw Error('Apple token revocation failed; deletion will retry');
 }
-export async function appleAccount(identity,{name,refreshToken,readLocalDb,writeLocalDb,onSignIn}){
- const db=await readLocalDb();const email=identity.email.toLowerCase();
+export async function appleAccount(identity,{name,refreshToken,readLocalDb,writeLocalDb,onSignIn,findExisting,saveExisting}){
+ const email=identity.email.trim().toLowerCase();
+ if(findExisting){
+  const entry=await findExisting(identity.sub,email);
+  if(entry){
+   const user=entry.user;
+   if(!isCandidateAccount(user)||user.status==='inactive')throw Error('This account is unavailable.');
+   if(user.appleSubject&&user.appleSubject!==identity.sub)throw Error('This account is linked to a different Apple account.');
+   if(![true,'true'].includes(identity.email_verified))throw Error('Apple email is not verified');
+   user.appleSubject=identity.sub;user.appleRefreshToken=sealAppleToken(refreshToken);onSignIn?.(user);await saveExisting(entry);return user;
+  }
+ }
+ const db=await readLocalDb();
  let user=db.users.find(user=>user.appleSubject===identity.sub);
  if(!user){
   const existing=db.users.find(user=>String(user.email).trim().toLowerCase()===email);

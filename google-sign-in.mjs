@@ -12,11 +12,15 @@ export async function googleIdentity(credential,clientId){
 }
 export async function googleAccount(identity,{readLocalDb,writeLocalDb,candidateRole='Candidate',onSignIn,findExisting,saveExisting}){
  if(findExisting){
-  const entry=await findExisting(identity.sub);
+  const entry=await findExisting(identity.sub,identity.email.toLowerCase());
   if(entry){
    const user=entry.user;
    if(!isCandidateAccount(user)||user.status==='inactive')throw new Error('Use your existing sign-in method for this account.');
-   if(onSignIn){onSignIn(user);await saveExisting(entry)}
+   if(user.googleSubject&&user.googleSubject!==identity.sub)throw Error('Google account does not match.');
+   if(!user.googleSubject&&!(identity.email.toLowerCase().endsWith('@gmail.com')||identity.hd))throw Error('Sign in with your password first to link this Google account.');
+   user.googleSubject=identity.sub;
+   if(onSignIn)onSignIn(user);
+   await saveExisting(entry);
    return user;
   }
  }

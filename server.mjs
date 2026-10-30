@@ -46,7 +46,7 @@ import {createCategorySpelling} from './category-spelling.mjs';
 import {createPointsStore} from './points-store.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
 import {appleConfigured,createPersistentAppleChallenges,verifyAppleToken,exchangeAppleCode,appleAccount,revokeAppleAccount} from './apple-sign-in.mjs';
-import {findGoogleAccount,saveGoogleAccount} from './google-account-store.mjs';
+import {findSocialAccount,saveSocialSignIn} from './social-account-store.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
 import { applyJobUrl, publicJobPath, uniqueJobSlug, shortenGeneratedJobUrls } from './job-urls.mjs';
@@ -1235,15 +1235,17 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/auth/apple'&&req.method==='POST'){
     if(!appleConfigured())return sendJson(req,res,503,{error:'Apple sign-in is not configured yet.'});
     try{
+      const authStarted=performance.now();
       const body=await readJsonBody(req);await appleChallenges.consume(body.nonce);
       const identity=await verifyAppleToken(body.credential,body.nonce);
       const tokens=await exchangeAppleCode(body.authorizationCode);
       const exchanged=await verifyAppleToken(tokens.id_token,body.nonce);
       if(exchanged.sub!==identity.sub)throw Error('Apple account mismatch');
-      const user=await appleAccount(identity,{name:body.name,refreshToken:tokens.refresh_token,readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true}),onSignIn:user=>recordSignInPlatform(user,req,body)});
+      const user=await appleAccount(identity,{name:body.name,refreshToken:tokens.refresh_token,readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true}),onSignIn:user=>recordSignInPlatform(user,req,body),findExisting:(subject,email)=>findSocialAccount(wpDb,'apple',subject,email),saveExisting:entry=>saveSocialSignIn(wpDb,entry,'apple')});
       const deletion=await accountDeletion.status(user.id);
       if(deletion.status==='deleted')return sendJson(req,res,401,{error:'This account is no longer available.'});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});await sessions.flush();
+      res.setHeader('Server-Timing',`auth;dur=${(performance.now()-authStarted).toFixed(1)}`);
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
       return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion});
     }catch(error){return sendJson(req,res,401,{error:error.message==='An account already uses this email. Sign in with your existing method.'?error.message:'Apple sign-in could not be completed. Please try again.'})}
@@ -1251,14 +1253,16 @@ const server = http.createServer(async (req, res) => {
   if(path==='/api/auth/google-config'&&req.method==='GET')return sendJson(req,res,200,{clientId:process.env.GOOGLE_CLIENT_ID||null});
   if(path==='/api/auth/google'&&req.method==='POST'){
     try {
+      const authStarted=performance.now();
       const body=await readJsonBody(req);
       const identity=await googleIdentity(body.credential,process.env.GOOGLE_CLIENT_ID);
       let accountSaved=Promise.resolve();
-      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body),findExisting:subject=>findGoogleAccount(wpDb,subject),saveExisting:entry=>{accountSaved=saveGoogleAccount(wpDb,entry);return Promise.resolve()}});
+      const user=await googleAccount(identity,{readLocalDb,writeLocalDb:db=>{accountSaved=writeLocalDb(db,{skipMedia:true});return Promise.resolve()},onSignIn:user=>recordSignInPlatform(user,req,body),findExisting:(subject,email)=>findSocialAccount(wpDb,'google',subject,email),saveExisting:entry=>{accountSaved=saveSocialSignIn(wpDb,entry,'google');return accountSaved}});
       await accountSaved;
       if((await accountDeletion.status(user.id)).status==='deleted')return sendJson(req,res,401,{error:'This account is no longer available.'});
       const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});
       await Promise.all([accountSaved,sessions.flush()]);
+      res.setHeader('Server-Timing',`auth;dur=${(performance.now()-authStarted).toFixed(1)}`);
       res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
       return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion:await accountDeletion.status(user.id)});
     }catch{return sendJson(req,res,401,{error:'Google sign-in could not be completed. Please try your email and password.'});}

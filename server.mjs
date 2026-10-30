@@ -158,9 +158,10 @@ async function populateMemoryStore() {
   // Migration datasets live in MySQL so redeployments cannot revert imported data.
   // The packaged snapshots remain a fallback when the database is unavailable.
   try {
-    const [rows] = await wpDb.query('SELECT dataset_key, payload FROM trikonet_imported_data WHERE dataset_key IN (\'jobs\',\'employers\',\'posts\',\'taxonomies\')');
-    for (const row of rows) {
-      if (Object.hasOwn(memoryStore, row.dataset_key)) memoryStore[row.dataset_key] = JSON.parse(row.payload);
+    // Read one imported dataset at a time, avoiding simultaneous large SQL strings.
+    for(const dataset of ['jobs','employers','posts','taxonomies']){
+      const [rows]=await wpDb.query('SELECT payload FROM trikonet_imported_data WHERE dataset_key=? LIMIT 1',[dataset]);
+      if(rows[0]?.payload)memoryStore[dataset]=JSON.parse(rows[0].payload);
     }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') console.error('Imported dataset read failed:', error.code || error.name);

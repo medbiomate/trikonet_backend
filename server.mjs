@@ -22,6 +22,7 @@ import {createCoordinatedTask} from './coordinated-task.mjs';
 import {createEmsStateReader} from './ems-state-reader.mjs';
 import {createCatalogueReader} from './catalogue-reader.mjs';
 import {candidateProfileRequest} from './candidate-profile-store.mjs';
+import {createPasswordLoginSecurity} from './password-login-security.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
 import {adminCandidateProfile,candidateEditProfile,candidateProfileData} from './candidate-admin-profile.mjs';
 import {createJobReports} from './job-reports.mjs';
@@ -854,7 +855,8 @@ const admobRewards=createAdmobRewards(pointsStore);
 const registrationVerification=createRegistrationVerification({sendEmail:(email,code)=>sendEmailChangeCode(email,code,'signup')});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const supportContact=createSupportContact();
-const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
+const passwordLoginSecurity=createPasswordLoginSecurity(wpDb);
+const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail,onReset:email=>passwordLoginSecurity.clear(email)});
 
 let startupReady;
 const server = http.createServer(async (req, res) => {
@@ -1324,11 +1326,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const email = String(body.email || '').trim().toLowerCase();
       await ensurePersistentState();
+      if(email.length>254||!/^\S+@\S+\.\S+$/.test(email)||String(body.password||'').length>256)return sendJson(req,res,400,{error:'Enter a valid email and a password of at most 256 characters.'});
       const entry=await findPasswordAccount(wpDb,email);
       const user=entry?.user;
 
-      if (!user || !passwordMatches(String(body.password || ''), user)) {
-        return sendJson(req, res, 401, { error: 'Invalid email or password' });
+      const attempt=await passwordLoginSecurity.check(email,()=>Boolean(user&&passwordMatches(String(body.password||''),user)));
+      if(!attempt.allowed){
+        if(attempt.lockedUntil){res.setHeader('Retry-After',String(Math.ceil((attempt.lockedUntil-Date.now())/1000)));return sendJson(req,res,429,{error:'Password sign-in is locked for 24 hours after 3 incorrect attempts. Reset your password to sign in sooner.',lockedUntil:attempt.lockedUntil,resetAvailable:true});}
+        return sendJson(req,res,401,{error:`Invalid email or password. ${3-attempt.failures} attempt${attempt.failures===2?'':'s'} remaining before a 24-hour lock. You can reset your password instead.`});
       }
 
       const deletion=await accountDeletion.status(user.id);

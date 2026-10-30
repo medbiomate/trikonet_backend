@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail,now=Date.now}){
+export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail,onReset=async()=>{},now=Date.now}){
  const challenges=new Map();const limits=new Map();
  const digest=value=>crypto.createHash('sha256').update(value).digest('hex');
  return async function(path,body,ip){
@@ -28,7 +28,7 @@ export function createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessi
   const password=String(body.new_password||'');if(password.length<8||password.length>256)return [400,{error:'Use a password between 8 and 256 characters.'}];
   // Consume before awaiting storage to prevent concurrent replay.
   challenges.delete(challenge);const db=await readLocalDb();const user=db.users.find(user=>user.id===item.userId);if(!user)return [400,{error:'Unable to reset this account.'}];
-  const credentials=passwordHash(password);user.passwordSalt=credentials.salt;user.passwordHash=credentials.hash;await writeLocalDb(db);
+  const credentials=passwordHash(password);user.passwordSalt=credentials.salt;user.passwordHash=credentials.hash;await writeLocalDb(db);await onReset(email);
   for(const [token,session] of sessions)if(session.userId===user.id)sessions.delete(token);
   if(sessions.flush)await sessions.flush();
   for(const [key,value] of challenges)if(value.userId===user.id)challenges.delete(key);

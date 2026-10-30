@@ -22,7 +22,7 @@ export function unreferencedPrivateMedia(before,after){
   const hashes=value=>new Set([...JSON.stringify(value).matchAll(/api\.trikonet\.com\/media\/images\/([a-f0-9]{64})\//g)].map(match=>match[1]));
   const remaining=hashes(after);return [...hashes(before)].filter(id=>!remaining.has(id));
 }
-export function createAccountDeletion({pool,sessions,now=Date.now}) {
+export function createAccountDeletion({pool,sessions,now=Date.now,beforeErase=async()=>{}}) {
   let ready;
   const ensure = () => ready ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_account_deletions (
     user_id VARCHAR(191) PRIMARY KEY, status VARCHAR(16) NOT NULL,
@@ -96,6 +96,7 @@ export function createAccountDeletion({pool,sessions,now=Date.now}) {
         }catch(error){if(error.code!=='ER_NO_SUCH_TABLE')throw error;}
       }
 
+      for(const user of db.users||[])if(ids.includes(String(user.id)))await beforeErase(user);
       const before=structuredClone(db);
       removeAccountData(db,ids);
       for(const hash of unreferencedPrivateMedia(before,db)){

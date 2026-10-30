@@ -45,6 +45,7 @@ import { createCompanyReviews } from './company-reviews.mjs';
 import {createCategorySpelling} from './category-spelling.mjs';
 import {createPointsStore} from './points-store.mjs';
 import {googleIdentity,googleAccount} from './google-sign-in.mjs';
+import {appleConfigured,createPersistentAppleChallenges,verifyAppleToken,exchangeAppleCode,appleAccount,revokeAppleAccount} from './apple-sign-in.mjs';
 import {findGoogleAccount,saveGoogleAccount} from './google-account-store.mjs';
 import {createPasswordReset,sendPasswordResetEmail,sendEmailChangeCode} from './password-reset.mjs';
 import { listAdminMedia } from './admin-media-library.mjs';
@@ -768,7 +769,8 @@ async function sendJson(req, res, status, value) {
 }
 
 const sessions = await createPersistentSessions(wpDb);
-const accountDeletion=createAccountDeletion({pool:wpDb,sessions});
+const appleChallenges=createPersistentAppleChallenges(wpDb);
+const accountDeletion=createAccountDeletion({pool:wpDb,sessions,beforeErase:revokeAppleAccount});
 function registerSeoDefaults() {
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
 seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
@@ -1225,6 +1227,26 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(removed?200:404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
       return res.end(removed?'<!doctype html><html lang="en"><title>Unsubscribed</title><h1>You have unsubscribed</h1><p>You can enable job emails again in your Trikonet profile.</p></html>':'Invalid unsubscribe link.');
     }catch{return sendJson(req,res,503,{error:'Please try again shortly.'});}
+  }
+  if(path==='/api/auth/apple-challenge'&&req.method==='GET'){
+    if(!appleConfigured())return sendJson(req,res,503,{error:'Apple sign-in is not configured yet.'});
+    try{res.setHeader('Cache-Control','no-store');return sendJson(req,res,200,{nonce:await appleChallenges.issue()})}catch{return sendJson(req,res,429,{error:'Please try again shortly.'})}
+  }
+  if(path==='/api/auth/apple'&&req.method==='POST'){
+    if(!appleConfigured())return sendJson(req,res,503,{error:'Apple sign-in is not configured yet.'});
+    try{
+      const body=await readJsonBody(req);await appleChallenges.consume(body.nonce);
+      const identity=await verifyAppleToken(body.credential,body.nonce);
+      const tokens=await exchangeAppleCode(body.authorizationCode);
+      const exchanged=await verifyAppleToken(tokens.id_token,body.nonce);
+      if(exchanged.sub!==identity.sub)throw Error('Apple account mismatch');
+      const user=await appleAccount(identity,{name:body.name,refreshToken:tokens.refresh_token,readLocalDb,writeLocalDb:db=>writeLocalDb(db,{skipMedia:true}),onSignIn:user=>recordSignInPlatform(user,req,body)});
+      const deletion=await accountDeletion.status(user.id);
+      if(deletion.status==='deleted')return sendJson(req,res,401,{error:'This account is no longer available.'});
+      const token=crypto.randomUUID();sessions.set(token,{userId:user.id,email:user.email,name:user.name});await sessions.flush();
+      res.setHeader('Set-Cookie',getSessionCookieHeader(req,token));
+      return sendJson(req,res,200,{user:{id:user.id,name:user.name,email:user.email},profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},deletion});
+    }catch(error){return sendJson(req,res,401,{error:error.message==='An account already uses this email. Sign in with your existing method.'?error.message:'Apple sign-in could not be completed. Please try again.'})}
   }
   if(path==='/api/auth/google-config'&&req.method==='GET')return sendJson(req,res,200,{clientId:process.env.GOOGLE_CLIENT_ID||null});
   if(path==='/api/auth/google'&&req.method==='POST'){

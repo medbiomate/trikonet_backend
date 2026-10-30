@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAccountDeletion,RECOVERY_MS,deletionView,removeAccountData,unreferencedPrivateMedia} from './account-deletion.mjs';
-function fixture(){
+function fixture(beforeErase){
  let time=1_800_000_000_000;
  const original={users:[{id:'alice',email:'alice@example.test',role:'Candidate',uploadedResume:{base64:'private'},profile:{name:'Alice'}},{id:'bob',email:'bob@example.test',role:'Candidate'},{id:'admin',role:'Administrator'}],resumes:[{userId:'alice',id:'cv-a'},{userId:'bob',id:'cv-b'}],companyReviews:[{userId:'alice',text:'private'},{userId:'bob',text:'keep'}],applications:[{candidateId:'alice'}],jobs:[{id:7}]};
  let state=structuredClone(original);let records=new Map();const sideDeletes=[];let failDelete=false;
@@ -22,7 +22,7 @@ function fixture(){
   throw new Error(`Unexpected SQL: ${sql}`);
  }
  const pool={query,async getConnection(){let snapshot;return {query,async beginTransaction(){snapshot={state:structuredClone(state),records:structuredClone(records)}},async commit(){},async rollback(){state=snapshot.state;records=snapshot.records},release(){}}}};
- const api=createAccountDeletion({pool,sessions,now:()=>time});
+ const api=createAccountDeletion({pool,sessions,now:()=>time,beforeErase});
  return {api,sessions,original,state:()=>state,records:()=>records,sideDeletes,advance:ms=>time+=ms,fail:()=>failDelete=true};
 }
 test('request requires explicit confirmation, authenticated candidate ID; does not remove unrelated users',async()=>{
@@ -74,3 +74,6 @@ test('legacy email-owned applications and source-account profile copies are eras
 });
 
 test('repeating a completed admin deletion is safe and idempotent',async()=>{const f=fixture();assert.equal((await f.api.permanent(['alice'],'DELETE'))[0],200);assert.equal((await f.api.permanent(['alice'],'DELETE'))[0],200);assert.equal(f.state().users.length,2)});
+
+test('permanent deletion revokes external credentials before removing the user',async()=>{const revoked=[];const f=fixture(async user=>{assert.ok(f.state().users.some(item=>item.id===user.id));revoked.push(user.id)});await f.api.permanent(['alice'],'DELETE');assert.deepEqual(revoked,['alice']);assert.ok(!f.state().users.some(user=>user.id==='alice'))});
+test('external revocation failure keeps credentials for retry',async()=>{const f=fixture(async()=>{throw Error('Apple unavailable')});await f.api.request('alice','DELETE');f.advance(RECOVERY_MS);await assert.rejects(()=>f.api.sweep(),/Apple unavailable/);assert.ok(f.state().users.some(user=>user.id==='alice'));assert.equal(f.records().get('alice').status,'pending')});

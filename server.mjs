@@ -1,3 +1,5 @@
+import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
+const publicResponses=createPublicResponseCache();
 import {createSupportContact} from './support-contact.mjs';
 import {createAdminUserStore} from './admin-user-store.mjs';
 import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany,publishedCompanyDependents} from './company-profile-audit.mjs';
@@ -768,6 +770,7 @@ async function sendJson(req, res, status, value) {
   }
   headers['Vary'] = [headers['Vary'], 'Accept-Encoding'].filter(Boolean).join(', ');
   headers['Content-Length'] = body.length;
+  if(status===200)publicResponses.set(publicResponseKey(req),body,headers);
   res.writeHead(status, headers);
   res.end(body);
 }
@@ -867,6 +870,9 @@ const server = http.createServer(async (req, res) => {
   await startupReady;
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
+  if(!['GET','HEAD','OPTIONS'].includes(req.method))publicResponses.clear();
+  const publicKey=publicResponseKey(req),cachedPublic=publicKey&&publicResponses.get(publicKey);
+  if(cachedPublic){res.writeHead(200,cachedPublic.headers);return res.end(cachedPublic.body);}
   const legacyImage=path.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
   if(legacyImage && ['GET','HEAD'].includes(req.method)){
     try{const location=await mediaStore.attachment(Number(legacyImage[1]));res.writeHead(302,{Location:location});return res.end();}

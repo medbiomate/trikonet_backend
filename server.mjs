@@ -22,6 +22,7 @@ import {createCoordinatedTask} from './coordinated-task.mjs';
 import {createEmsStateReader} from './ems-state-reader.mjs';
 import {createCatalogueReader} from './catalogue-reader.mjs';
 import {candidateProfileRequest} from './candidate-profile-store.mjs';
+import {createAdReports} from './ad-reports.mjs';
 import {createPasswordLoginSecurity} from './password-login-security.mjs';
 import {findPasswordAccount,savePasswordSignIn} from './password-account-store.mjs';
 import {adminCandidateProfile,candidateEditProfile,candidateProfileData} from './candidate-admin-profile.mjs';
@@ -855,6 +856,7 @@ const admobRewards=createAdmobRewards(pointsStore);
 const registrationVerification=createRegistrationVerification({sendEmail:(email,code)=>sendEmailChangeCode(email,code,'signup')});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
 const supportContact=createSupportContact();
+const adReports=createAdReports({readLocalDb,writeLocalDb});
 const passwordLoginSecurity=createPasswordLoginSecurity(wpDb);
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail,onReset:email=>passwordLoginSecurity.clear(email)});
 
@@ -1193,11 +1195,21 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if(path==='/api/ad-reports'&&req.method==='POST'){
+    try{const [status,result]=await adReports(await readJsonBody(req,10000),req.socket.remoteAddress||'unknown');return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Could not save the ad report. Please retry.'})}
+  }
+  if(path==='/api/admin/ad-reports'&&req.method==='POST'){
+    const admin=await currentAdminSession(req);if(!admin||!['Administrator','Editor','Content Editor'].includes(admin.role))return sendJson(req,res,403,{error:'Moderator access required.'});
+    const db=await readLocalDb();return sendJson(req,res,200,{reports:db.adReports||[]});
+  }
   if(path==='/api/candidate/job-reports'){
     try{const body=req.method==='POST'?await readJsonBody(req,12000):{};const [status,result]=await jobReports(req.method,currentSession(req),body);return sendJson(req,res,status,result)}
     catch{return sendJson(req,res,503,{error:'Unable to save your report. Please try again.'})}
   }
 
+  if(path==='/api/admin/review-moderation'&&req.method==='POST'){
+    try{const [status,result]=await companyReviews('MODERATION','moderation',await currentAdminSession(req),await readJsonBody(req,10000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Moderation is temporarily unavailable.'})}
+  }
   if(path.startsWith('/api/company-reviews/')){
     try{const companyId=path.slice('/api/company-reviews/'.length);const body=req.method==='POST'?await readJsonBody(req,10000):{};const [status,result]=await companyReviews(req.method,companyId,currentSession(req),body);return sendJson(req,res,status,result)}
     catch{return sendJson(req,res,503,{error:'Reviews are temporarily unavailable. Please try again.'})}

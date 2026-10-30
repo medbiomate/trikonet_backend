@@ -12,9 +12,10 @@ export function removeAccountData(db, ids) {
   const emails = new Set((db.users||[]).filter(user=>removed.has(String(user.id))).map(user=>String(user.email||'').trim().toLowerCase()).filter(Boolean));
   const owned = item => ['userId','user_id','candidateId','candidate_id','accountId'].some(key => removed.has(String(item?.[key]))) || (item?.email && emails.has(String(item.email).trim().toLowerCase()));
   db.users = (db.users || []).filter(user => !removed.has(String(user.id)));
-  for (const key of ['resumes','applications','savedJobs','companyReviews','jobReports','employerClaims','emailCampaigns','notifications','searchHistory','activity','uploadedResumes','atsChecks']) {
+  for (const key of ['resumes','applications','savedJobs','companyReviews','reviewReports','jobReports','employerClaims','emailCampaigns','notifications','searchHistory','activity','uploadedResumes','atsChecks']) {
     if (Array.isArray(db[key])) db[key] = db[key].filter(item => !owned(item));
   }
+  if(Array.isArray(db.reviewBlocks))db.reviewBlocks=db.reviewBlocks.filter(item=>!removed.has(String(item.userId))&&!removed.has(String(item.blockedUserId)));
   if (Array.isArray(db.candidates)) db.candidates = db.candidates.filter(item => !removed.has(String(item.id)) && !removed.has(String(item.sourceAccountId)) && !owned(item));
   return db;
 }

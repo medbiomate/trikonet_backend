@@ -1,3 +1,4 @@
+import {createSupportContact} from './support-contact.mjs';
 import {createAdminUserStore} from './admin-user-store.mjs';
 import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany,publishedCompanyDependents} from './company-profile-audit.mjs';
 const companyRepairTokens = new Map();
@@ -852,6 +853,7 @@ const pointsStore=createPointsStore(wpDb,{readLocalDb});
 const admobRewards=createAdmobRewards(pointsStore);
 const registrationVerification=createRegistrationVerification({sendEmail:(email,code)=>sendEmailChangeCode(email,code,'signup')});
 const emailChange=createEmailChange({readLocalDb,writeLocalDb,sendEmail:sendEmailChangeCode});
+const supportContact=createSupportContact();
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail});
 
 let startupReady;
@@ -1227,6 +1229,9 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(removed?200:404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
       return res.end(removed?'<!doctype html><html lang="en"><title>Unsubscribed</title><h1>You have unsubscribed</h1><p>You can enable job emails again in your Trikonet profile.</p></html>':'Invalid unsubscribe link.');
     }catch{return sendJson(req,res,503,{error:'Please try again shortly.'});}
+  }
+  if(path==='/api/candidate/support'&&req.method==='POST'){
+    try{const [status,result]=await supportContact(currentSession(req),await readJsonBody(req,12000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,400,{error:'Unable to read your support request.'})}
   }
   if(path==='/api/auth/apple-challenge'&&req.method==='GET'){
     if(!appleConfigured())return sendJson(req,res,503,{error:'Apple sign-in is not configured yet.'});

@@ -62,8 +62,15 @@ export async function appleAccount(identity,{name,refreshToken,readLocalDb,write
  const db=await readLocalDb();const email=identity.email.toLowerCase();
  let user=db.users.find(user=>user.appleSubject===identity.sub);
  if(!user){
-  if(db.users.some(user=>String(user.email).toLowerCase()===email))throw Error('An account already uses this email. Sign in with your existing method.');
-  user={id:crypto.randomUUID(),name:typeof name==='string'&&name.trim()?name.trim().slice(0,120):'Trikonet User',email,role:'Candidate',appleSubject:identity.sub,createdAt:new Date().toISOString()};db.users.push(user);
+  const existing=db.users.find(user=>String(user.email).trim().toLowerCase()===email);
+  if(existing){
+   if(![true,'true'].includes(identity.email_verified))throw Error('Apple email is not verified');
+   if(existing.appleSubject&&existing.appleSubject!==identity.sub)throw Error('This account is linked to a different Apple account.');
+   if(!isCandidateAccount(existing)||existing.status==='inactive')throw Error('This account is unavailable.');
+   user=existing;user.appleSubject=identity.sub;
+  }else{
+   user={id:crypto.randomUUID(),name:typeof name==='string'&&name.trim()?name.trim().slice(0,120):'Trikonet User',email,role:'Candidate',appleSubject:identity.sub,createdAt:new Date().toISOString()};db.users.push(user);
+  }
  }
  if(!isCandidateAccount(user)||user.status==='inactive')throw Error('This account is unavailable.');
  user.appleRefreshToken=sealAppleToken(refreshToken);onSignIn?.(user);await writeLocalDb(db);return user;

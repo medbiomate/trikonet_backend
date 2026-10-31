@@ -1,0 +1,17 @@
+import { renderCategoryLinks } from './category-links.js';
+export const escapeSeo = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const plain = value => String(value || '').replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
+const terms = value => Array.isArray(value) ? value.join(', ') : value && typeof value==='object' ? Object.values(value).join(', ') : String(value || '');
+export function renderSeoLanding(payload, pageNumber = 1, links = payload.links || []) {
+  return renderSeoLandingMarkup(payload,pageNumber,[]).replace('</main>',renderCategoryLinks(links,{category:payload.page.category,slug:payload.page.slug})+'</main>');
+}
+function renderSeoLandingMarkup(payload, pageNumber = 1, links = []) {
+  const {page,jobs,total}=payload;
+  const start=total?(pageNumber-1)*10+1:0;
+  const content=text=>text?`<div class="seo-landing-content" style="white-space:pre-wrap;line-height:1.8;padding:24px 0">${escapeSeo(text)}</div>`:'';
+  return `<main class="container seo-landing" style="padding-top:40px;padding-bottom:48px"><div class="page-head"><h1>${escapeSeo(page.h1 || page.title)}</h1><p>${escapeSeo(page.metaDescription || '')}</p></div>${content(page.introContent)}<div class="nurse-results-toolbar"><span>Showing ${start}–${Math.min((pageNumber-1)*10+jobs.length,total)} of ${total} active jobs</span><a class="primary" href="/jobs?category=${encodeURIComponent(page.category)}${page.location?'&location='+encodeURIComponent(page.location):''}">Filter Jobs</a></div><div class="nurse-job-list">${jobs.map(job=>{const m=job.metas || {};return `<article class="nurse-job-card standard-job-card"><div class="job-card-header"><h2><a href="/job/${escapeSeo(job.slug)}">${escapeSeo(job.title?.rendered || job.title)}</a></h2><p>${escapeSeo(job.company || m._job_employer_name || '')}</p></div><div class="job-meta"><span>${escapeSeo(terms(job.types || m._job_type))}</span><span>${escapeSeo(terms(job.locations || m._job_location))}</span></div><p>${escapeSeo(plain(job.description || job.content?.rendered || '').slice(0,220))}</p><a class="outline" href="/job/${escapeSeo(job.slug)}">View Job →</a></article>`;}).join('') || '<div class="nurse-job-card"><p>No active vacancies are currently available. Please check again soon.</p></div>'}</div><nav aria-label="Job result pages" class="pagination" style="display:flex;gap:16px;justify-content:center;margin:24px 0">${pageNumber>1?`<a href="/${escapeSeo(page.slug)}?page=${pageNumber-1}">← Previous</a>`:''}<span>Page ${pageNumber} of ${Math.max(1,Math.ceil(total/10))}</span>${pageNumber*10<total?`<a href="/${escapeSeo(page.slug)}?page=${pageNumber+1}">Next →</a>`:''}</nav>${content(page.bottomContent)}${links.length?`<section><h2>Related job pages</h2><div style="display:flex;flex-wrap:wrap;gap:16px">${links.filter(p=>p.slug!==page.slug && p.category===page.category).map(p=>`<a href="/${escapeSeo(p.slug)}">${escapeSeo(p.title)}</a>`).join('')}</div></section>`:''}</main>`;
+}
+export function seoHead(page, pageNumber = 1) {
+  const title=page.seoTitle || `${page.title} | Trikonet`;
+  return `<title>${escapeSeo(title)}</title><meta name="description" content="${escapeSeo(page.metaDescription || '')}"><link rel="canonical" href="https://www.trikonet.com/${escapeSeo(page.slug)}${pageNumber > 1 ? `?page=${pageNumber}` : ''}"><meta name="robots" content="${page.indexingStatus==='Noindex'?'noindex,follow':'index,follow'}">`;
+}

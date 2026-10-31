@@ -1,0 +1,624 @@
+/* Navigation items & triggers */
+.topbar .links {
+  display: flex;
+  gap: 36px;
+  align-items: center;
+}
+
+.nav-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 68px;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 8px 4px;
+  transition: color 0.18s ease;
+  cursor: pointer;
+}
+
+.nav-link:hover,
+.nav-link.active,
+.nav-item:hover > .nav-link {
+  color: #b00008;
+}
+
+.nav-arrow {
+  display: inline-block;
+  width: 10px;
+  height: 6px;
+  flex-shrink: 0;
+  color: #475569;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+.nav-link:hover .nav-arrow,
+.nav-link.active .nav-arrow,
+.nav-item:hover > .nav-link .nav-arrow {
+  color: #b00008;
+}
+
+.nav-item:hover .nav-arrow,
+.nav-item:focus-within .nav-arrow {
+  transform: rotate(180deg);
+  color: #b00008;
+}
+
+/* Base Mega Menu & Dropdown Panel */
+.nav-mega-panel,
+.nav-services-dropdown {
+  position: absolute;
+  top: 68px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.15), 0 0 1px rgba(15, 23, 42, 0.08);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+  z-index: 1100;
+}
+
+.nav-item:hover .nav-mega-panel,
+.nav-item:hover .nav-services-dropdown,
+.nav-item:focus-within .nav-mega-panel,
+.nav-item:focus-within .nav-services-dropdown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* 1. JOBS MEGA MENU - Minimal & Modern */
+.nav-jobs-mega {
+  position: fixed;
+  width: min(790px, calc(100vw - 32px));
+  max-height: calc(100vh - 88px);
+  left: 50%;
+  right: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
+  transform: translateX(-50%) translateY(8px);
+  padding: 22px 26px;
+}
+
+.nav-item:hover .nav-jobs-mega,
+.nav-item:focus-within .nav-jobs-mega {
+  transform: translateX(-50%) translateY(0);
+}
+
+.mega-grid {
+  display: grid;
+  grid-template-columns: 1.85fr 1fr;
+  gap: 22px;
+}
+
+.mega-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.mega-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.mega-view-all {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b00008;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.mega-view-all:hover {
+  text-decoration: underline;
+  color: #8a0006;
+}
+
+.mega-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 12px;
+}
+
+.mega-cat-item {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.mega-cat-item:hover {
+  background: #f8fafc;
+  transform: translateX(3px);
+}
+
+.mega-cat-info strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
+  transition: color 0.15s ease;
+}
+
+.mega-cat-item:hover .mega-cat-info strong {
+  color: #b00008;
+}
+
+.mega-cat-info small {
+  display: block;
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.mega-side-col {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #f1f5f9;
+  padding-left: 20px;
+}
+
+.mega-region-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.mega-region-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.mega-region-pill:hover {
+  background: #f8fafc;
+  color: #b00008;
+  padding-left: 13px;
+}
+
+.mega-region-arrow {
+  color: #cbd5e1;
+  font-size: 14px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.mega-region-pill:hover .mega-region-arrow {
+  color: #b00008;
+  transform: translateX(2px);
+}
+
+.mega-cta-card {
+  margin-top: auto;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.mega-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #fee2e2;
+  color: #b00008;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.mega-cta-card h4 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mega-cta-card p {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.mega-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #b00008;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.mega-cta-btn:hover {
+  background: #b00008;
+  color: #ffffff;
+  border-color: #b00008;
+}
+
+/* 2. EMPLOYERS MEGA MENU - Minimal & Modern (Matches Jobs Mega Menu) */
+.nav-employers-mega {
+  position: fixed;
+  width: min(790px, calc(100vw - 32px));
+  max-height: calc(100vh - 88px);
+  left: 50%;
+  right: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
+  transform: translateX(-50%) translateY(8px);
+  padding: 22px 26px;
+}
+
+.nav-item:hover .nav-employers-mega,
+.nav-item:focus-within .nav-employers-mega {
+  transform: translateX(-50%) translateY(0);
+}
+
+.mega-employers-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.mega-emp-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border-radius: 10px;
+  border: 1px solid #edf2f7;
+  background: #ffffff;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  position: relative;
+}
+
+.mega-emp-card:hover {
+  border-color: #cbd5e1;
+  background: #fafbfc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -3px rgba(15, 23, 42, 0.06);
+}
+
+.mega-emp-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mega-emp-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.mega-emp-title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s ease;
+  letter-spacing: -0.01em;
+}
+
+.mega-emp-card:hover .mega-emp-title {
+  color: var(--red, #b00008);
+}
+
+.mega-emp-count-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.mega-emp-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mega-emp-chip {
+  font-size: 11px;
+  font-weight: 450;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  padding: 1.5px 7px;
+  border-radius: 5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.mega-emp-card:hover .mega-emp-chip {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.mega-emp-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, color 0.2s ease;
+  opacity: 0.7;
+}
+
+.mega-emp-card:hover .mega-emp-action {
+  color: #b00008;
+  transform: translateX(2px);
+  opacity: 1;
+}
+
+.mega-footer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 9px;
+  border: 1px solid #f1f5f9;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #475569;
+}
+
+.mega-footer-txt {
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.mega-footer-link {
+  font-weight: 600;
+  color: #b00008;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: gap 0.15s ease, color 0.15s ease;
+}
+
+.mega-footer-link:hover {
+  text-decoration: underline;
+  color: #8a0006;
+  gap: 7px;
+}
+
+/* 3. SERVICES DROPDOWN */
+.nav-services-dropdown {
+  width: min(360px, calc(100vw - 24px));
+  left: auto;
+  right: 0;
+  box-sizing: border-box;
+  padding: 14px;
+}
+
+.nav-services-dropdown .service-text,
+.nav-services-dropdown .service-text p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.service-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  background: transparent;
+  transition: all 0.16s ease;
+}
+
+.service-item:hover {
+  background: #f8fafc;
+  transform: translateX(3px);
+}
+
+.service-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b00008;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  border: 1px solid #fee2e2;
+}
+
+.service-text {
+  flex: 1;
+}
+
+.service-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.service-title-row strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.service-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.service-tag.highlight {
+  background: #fef2f2;
+  color: #b00008;
+}
+
+.service-text p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Mobile Navigation */
+@media(max-width: 1100px) {
+  .topbar .links {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 68px;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    padding: 20px;
+    gap: 14px;
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.12);
+    border-top: 1px solid #e2e8f0;
+    max-height: calc(100vh - 70px);
+    overflow-y: auto;
+  }
+
+  .topbar .links.open {
+    display: flex;
+  }
+
+  .nav-item {
+    height: auto;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-link {
+    width: 100%;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-size: 16px;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .nav-mega-panel,
+  .nav-services-dropdown {
+    position: static;
+    transform: none !important;
+    opacity: 0;
+    visibility: hidden;
+    display: none;
+    pointer-events: none;
+    width: 100%;
+    box-shadow: none;
+    border: 1px solid #f1f5f9;
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #fdfdfd;
+  }
+
+  .nav-item.mobile-expanded .nav-mega-panel,
+  .nav-item.mobile-expanded .nav-services-dropdown {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .nav-item.mobile-expanded .nav-arrow {
+    transform: rotate(180deg);
+    color: #b00008;
+  }
+
+  .mega-grid,
+  .mega-category-grid,
+  .mega-employers-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mega-side-col {
+    border-left: 0;
+    padding-left: 0;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 14px;
+    margin-top: 14px;
+  }
+}
+
+/* Put the primary Jobs destination first in the mobile accordion. */
+@media (max-width: 1100px) {
+  .nav-jobs-mega .mega-side-col {
+    display: contents;
+  }
+  .nav-jobs-mega .mega-cta-card {
+    order: -1;
+    margin: 0 0 14px;
+  }
+}

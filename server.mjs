@@ -1,3 +1,4 @@
+import {adminPageRedirect} from './admin-page-access.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
 const publicResponses=createPublicResponseCache();
@@ -875,6 +876,14 @@ const server = http.createServer(async (req, res) => {
   await startupReady;
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
+  if (['GET','HEAD'].includes(req.method) && (path === '/' || path === '/admin' || path.startsWith('/admin/') || ['/admin-login','/admin-portal','/trikonet-admin-access'].includes(path))) {
+    const isPage=path==='/'||path==='/admin'||!extname(path);
+    if(isPage){
+      const session=await currentAdminSession(req);
+      const destination=adminPageRedirect(path,!!session);
+      if(destination){res.writeHead(302,{Location:destination,'Cache-Control':'no-store'});return res.end();}
+    }
+  }
   if(!['GET','HEAD','OPTIONS'].includes(req.method))publicResponses.clear();
   const publicKey=publicResponseKey(req),cachedPublic=publicKey&&publicResponses.get(publicKey);
   if(cachedPublic){res.writeHead(200,cachedPublic.headers);return res.end(cachedPublic.body);}
@@ -2183,6 +2192,12 @@ const server = http.createServer(async (req, res) => {
     target = join(root, 'index.html');
   }
 
+  // Serve the same current interface used by the website, from this domain only.
+  const uiPath = path === '/' || path === '/admin' || !extname(path) ? 'index.html' : path.replace(/^\/admin\//,'').replace(/^\//,'');
+  const uiTarget = normalize(join(root,'admin-web',uiPath));
+  if (uiTarget.startsWith(join(root,'admin-web')+'/')) {
+    try { if((await stat(uiTarget)).isFile())target=uiTarget; } catch {}
+  }
   try {
     const body = await readFile(target);
     const origin = getCorsOrigin(req);

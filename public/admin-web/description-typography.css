@@ -1,0 +1,42 @@
+/* Imported editor formatting must not enlarge job/company descriptions. */
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.7 !important;
+  text-align: left !important;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content * {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  text-align: left !important;
+  letter-spacing: normal !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content :is(h1,h2,h3,h4,h5,h6) {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+  margin: 18px 0 8px !important;
+  padding: 0 !important;
+  color: #1e293b;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content :is(p,ul,ol,blockquote) {
+  margin: 0 0 12px !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content p {
+  padding: 0 !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content :is(ul,ol) {
+  padding: 0 0 0 22px !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content li {
+  margin: 0 0 6px !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content > :first-child {
+  margin-top: 0 !important;
+}
+:is(.detail-page, .detail-exact, .emp-profile-page) .wordpress-content > :last-child {
+  margin-bottom: 0 !important;
+}

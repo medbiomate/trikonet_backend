@@ -1,0 +1,48 @@
+/* Motion-interpolated video with the bottom watermark strip cropped out. */
+.trikonet-initial-loader,
+#seo-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #fff !important;
+  color: #64748b;
+  font: 500 14px/1.5 system-ui, sans-serif;
+}
+.trikonet-initial-loader > header,
+.trikonet-initial-loader > main { display: none; }
+.loading-scene-video {
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  display: block;
+  flex: none;
+  width: min(560px, 90vw);
+  height: auto;
+  aspect-ratio: 640 / 326;
+  object-fit: contain;
+  /* H.264 decodes the source white as 253; lift it to the page's pure white. */
+  filter: brightness(1.01);
+  background: #fff;
+}
+.trikonet-initial-loader::before,
+#seo-loading::before {
+  content: '';
+  position: absolute;
+  width: min(560px, 90vw);
+  aspect-ratio: 1280 / 650;
+  background: #fff url('/assets/loading-scene.gif') center top / 100% auto no-repeat;
+}
+.trikonet-initial-loader > p { margin: 8px 0 0; }
+.trikonet-initial-loader > p::before { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .loading-scene-video { display: none; }
+  .trikonet-initial-loader::before,
+  #seo-loading::before {
+    background: #fff url('/assets/logo-black.png') center / min(200px, 60%) auto no-repeat;
+  }
+}

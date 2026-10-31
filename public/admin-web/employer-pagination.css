@@ -1,0 +1,12 @@
+.employer-jobs-pagination { margin-top:24px; padding-top:20px; border-top:1px solid #e2e8f0; }
+.employer-jobs-pagination p { margin:0 0 16px; font-size:13px; color:#64748b; }
+.employer-jobs-pagination .pagination-pages { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.employer-jobs-pagination .pagination-btn { display:inline-flex; justify-content:center; align-items:center; min-width:40px; min-height:40px; padding:8px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; font-size:14px; line-height:1.2; text-decoration:none; color:#334155; box-sizing:border-box; }
+.employer-jobs-pagination .pagination-btn.active { background:#b8170c; border-color:#b8170c; color:white; font-weight:600; }
+.employer-jobs-pagination a:hover { border-color:#b8170c; }
+.employer-jobs-pagination a:focus-visible { outline:2px solid #b8170c; outline-offset:3px; }
+.employer-jobs-pagination .disabled { color:#94a3b8; background:#f8fafc; }
+@media(max-width:600px) { .employer-jobs-pagination .pagination-pages { gap:6px; } .employer-jobs-pagination .pagination-btn { min-width:36px; padding:8px 10px; } }
+.nurse-company-row .company-profile-link { text-decoration:none; }
+.nurse-company-row .company-profile-link:hover { color:#b8170c; text-decoration:underline; }
+.nurse-company-row .company-profile-link:focus-visible { outline:2px solid #b8170c; outline-offset:3px; border-radius:3px; }

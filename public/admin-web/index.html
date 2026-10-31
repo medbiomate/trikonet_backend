@@ -15,7 +15,7 @@
   <meta charset="utf-8">
   <script>
     if(location.pathname==='/admin'||location.pathname.startsWith('/admin/')){
-      const preload=document.createElement('link');preload.rel='modulepreload';preload.href='/admin.js?v=20261031-all-entry-2';document.head.append(preload);
+      const preload=document.createElement('link');preload.rel='modulepreload';preload.href='/admin-web/admin.js?v=20261031-all-entry-2';document.head.append(preload);
       const api=window.TRIKONET_API_BASE||(['localhost','127.0.0.1'].includes(location.hostname)?'':'https://api.trikonet.com');
       const read=path=>fetch(api+path,{credentials:'include',cache:'no-store',signal:AbortSignal.timeout(15000)});
       window.trikonetEarlyAdminSession=read('/api/admin/me').catch(()=>null);
@@ -49,49 +49,49 @@
   </script>
   <meta name="description" content="With Trikonet, you can search unlimited jobs online to find the next step in your career in UAE. With tools for job search, company reviews and more.">
   <link rel="canonical" href="https://www.trikonet.com">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=20260929">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=20260929">
-  <link rel="shortcut icon" href="/favicon.ico?v=20260929">
-  <link rel="apple-touch-icon" href="/assets/favicon-192.png?v=20260929">
-  <link rel="modulepreload" href="/app.js?v=20261030-employer-pages-3">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin-web/favicon-32x32.png?v=20260929">
+  <link rel="icon" type="image/png" sizes="16x16" href="/admin-web/favicon-16x16.png?v=20260929">
+  <link rel="shortcut icon" href="/admin-web/favicon.ico?v=20260929">
+  <link rel="apple-touch-icon" href="/admin-web/assets/favicon-192.png?v=20260929">
+  <link rel="modulepreload" href="/admin-web/app.js?v=20261030-employer-pages-3">
   <title>Trikonet: Your Gateway to Exciting Careers in the UAE</title>
-  <link rel="stylesheet" href="/style.css?v=20261018-click">
-  <link rel="stylesheet" href="/detail.css?v=20261021-email-apply-10">
-  <link rel="stylesheet" href="/employer-pagination.css?v=2">
-  <link rel="stylesheet" href="/overrides.css?v=12.0">
-  <link rel="stylesheet" href="/detail-exact.css?v=3.1">
-  <link rel="stylesheet" href="/mobile-detail.css?v=3.4">
-  <link rel="stylesheet" href="/article-slider.css?v=3.0">
+  <link rel="stylesheet" href="/admin-web/style.css?v=20261018-click">
+  <link rel="stylesheet" href="/admin-web/detail.css?v=20261021-email-apply-10">
+  <link rel="stylesheet" href="/admin-web/employer-pagination.css?v=2">
+  <link rel="stylesheet" href="/admin-web/overrides.css?v=12.0">
+  <link rel="stylesheet" href="/admin-web/detail-exact.css?v=3.1">
+  <link rel="stylesheet" href="/admin-web/mobile-detail.css?v=3.4">
+  <link rel="stylesheet" href="/admin-web/article-slider.css?v=3.0">
   <script>
     if ((pathname => pathname.startsWith('/admin'))(location.pathname)) {
-      document.write('<link rel="stylesheet" href="/admin.css?v=20261031-all-entry-2">');
+      document.write('<link rel="stylesheet" href="/admin-web/admin.css?v=20261031-all-entry-2">');
     }
   </script>
-  <link rel="stylesheet" href="/navigation.css?v=10.0">
-  <link rel="stylesheet" href="/blog-post.css?v=3.0">
+  <link rel="stylesheet" href="/admin-web/navigation.css?v=10.0">
+  <link rel="stylesheet" href="/admin-web/blog-post.css?v=3.0">
   <script>
     if ((pathname => /login|signin|sign-in|register|signup|sign-up|profile|submit-job/.test(pathname))(location.pathname)) {
-      document.write('<link rel="stylesheet" href="/auth.css?v=12.0">');
+      document.write('<link rel="stylesheet" href="/admin-web/auth.css?v=12.0">');
     }
   </script>
   <script>
     if ((pathname => /profile|saved-jobs|applied-jobs|followed-companies/.test(pathname))(location.pathname)) {
-      document.write('<link rel="stylesheet" href="/candidate-profile.css?v=20261018-focused-profile-31">');
+      document.write('<link rel="stylesheet" href="/admin-web/candidate-profile.css?v=20261018-focused-profile-31">');
     }
   </script>
-  <link rel="stylesheet" href="/hero-modern.css?v=61.4-job-actions">
+  <link rel="stylesheet" href="/admin-web/hero-modern.css?v=61.4-job-actions">
   <script>
     if ((pathname => /resume|cv-builder/.test(pathname))(location.pathname)) {
-      document.write('<link rel="stylesheet" href="/cv-builder.css?v=20260930-bottom-icons-v44">');
+      document.write('<link rel="stylesheet" href="/admin-web/cv-builder.css?v=20260930-bottom-icons-v44">');
     }
   </script>
   <script>
     if ((pathname => pathname.startsWith('/admin'))(location.pathname)) {
-      document.write('<link rel="stylesheet" href="/admin-candidate-profile.css?v=1">');
+      document.write('<link rel="stylesheet" href="/admin-web/admin-candidate-profile.css?v=1">');
     }
   </script>
-  <link rel="stylesheet" href="/description-typography.css?v=20261009-1">
-<link rel="stylesheet" href="/category-picker.css?v=20261031-both-2">
+  <link rel="stylesheet" href="/admin-web/description-typography.css?v=20261009-1">
+<link rel="stylesheet" href="/admin-web/category-picker.css?v=20261031-both-2">
 </head>
 <style>
 /* Universal scrollbar removal across entire website (keeps natural scrolling) */
@@ -618,7 +618,7 @@ html.jobs-awaiting-page #favicon-flash{right:calc(50% - 29px);bottom:calc(50% - 
   const delayed=setTimeout(()=>{
     if(ready)return;
     flash=document.createElement('div');flash.id='favicon-flash';flash.setAttribute('aria-hidden','true');
-    const logo=document.createElement('img');logo.src='/assets/favicon-192.png?v=20260929';logo.alt='';logo.width=36;logo.height=36;flash.append(logo);document.body.append(flash);
+    const logo=document.createElement('img');logo.src='/admin-web/assets/favicon-192.png?v=20260929';logo.alt='';logo.width=36;logo.height=36;flash.append(logo);document.body.append(flash);
   },jobListing?0:600);
   const limit=setTimeout(clear,8000);
   window.addEventListener('trikonet:ready',clear,{once:true});
@@ -627,5 +627,5 @@ html.jobs-awaiting-page #favicon-flash{right:calc(50% - 29px);bottom:calc(50% - 
 })();
 </script>
 <div id="app"></div><style></style>
-<script src="/config.js?v=20261018-server-job-list"></script><script type="module" src="/bootstrap.js?v=20261031-all-entry-2"></script></body>
+<script src="/admin-web/config.js?v=20261018-server-job-list"></script><script type="module" src="/admin-web/bootstrap.js?v=20261031-all-entry-2"></script></body>
 </html>

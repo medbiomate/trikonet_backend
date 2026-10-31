@@ -141,7 +141,7 @@ export function renderAdmin() {
   <!-- Modern Sleek Top Header -->
   <header class="admin-top-header">
     <div class="admin-header-left">
-      <a href="/" class="admin-brand" title="Go to Trikonet homepage">
+      <a href="https://www.trikonet.com/" class="admin-brand" title="Go to Trikonet homepage">
         <img src="/assets/logo-black.png?v=4.0" alt="Trikonet" class="admin-brand-logo-img">
         <span class="admin-brand-badge">Console</span>
       </a>
@@ -160,7 +160,7 @@ export function renderAdmin() {
     </div>
 
     <div class="admin-header-right">
-      <a href="/" target="_blank" rel="noopener" class="admin-header-btn secondary" title="View live job portal website">
+      <a href="https://www.trikonet.com/" target="_blank" rel="noopener" class="admin-header-btn secondary" title="View live job portal website">
         <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4h6m0 0v6m0-6L7 13"/><path d="M14 11v5a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5"/></svg>
         <span>Live Portal ↗</span>
       </a>
@@ -350,7 +350,7 @@ export function renderAdmin() {
       </div>
 
       <div class="admin-nav-section admin-nav-bottom-section">
-        <a class="admin-website-link" href="/" target="_blank" rel="noopener">
+        <a class="admin-website-link" href="https://www.trikonet.com/" target="_blank" rel="noopener">
           <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4h6m0 0v6m0-6L7 13"/><path d="M14 11v5a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5"/></svg>
           <span class="collapse-label">View website ↗</span>
         </a>

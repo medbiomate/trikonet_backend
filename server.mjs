@@ -1,3 +1,4 @@
+import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
 const publicResponses=createPublicResponseCache();
 import {createSupportContact} from './support-contact.mjs';
@@ -347,6 +348,10 @@ async function wordpressRecords(type, params, adminOptions = null) {
     values.push(slug);
   }
 
+  if (params.get('id')) {
+    where.push('ID = ?');
+    values.push(params.get('id'));
+  }
   const query = (params.get('q') || '').trim();
   const location = (params.get('location') || '').trim();
   const category = (params.get('category') || '').trim();
@@ -1928,9 +1933,10 @@ const server = http.createServer(async (req, res) => {
         job.employerSlug=company.slug;job.employerUrl=`/employer/${company.slug}`;
       }
       let existingIndex = findJobIndex(db.jobs, job);
-      if (existingIndex < 0 && (job.originalSlug || job.id)) {
+      const importLookup = jobImportLookup(job);
+      if (existingIndex < 0 && importLookup) {
         let records;
-        const params = new URLSearchParams(job.originalSlug ? {slug:job.originalSlug,per_page:'1'} : {id:String(job.id),per_page:'1'});
+        const params = importLookup;
         try { records = await wordpressRecords('job_listing',params,{excludedSlugs:[]}); }
         catch(error) { if(error.code !== 'ER_NO_SUCH_TABLE') throw error; await loadMemoryStore(); records = fallbackRecords('job_listing',params); }
         if (records[0]) { db.jobs.push(records[0]); existingIndex = db.jobs.length - 1; }

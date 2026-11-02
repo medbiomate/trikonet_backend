@@ -6695,3 +6695,20 @@ main.detail-page {
   .detail-exact .detail-hero .detail-action-group > .detail-resume-promo { display: block; }
   .detail-exact .detail-hero .detail-title > .mobile-top-resume { display: block; width: 100%; max-width: 320px; margin: 10px auto 0; text-align: right; }
 }
+
+/* Desktop flex bases become vertical space when the job hero stacks. */
+@media (max-width: 850px) {
+  .detail-exact .detail-hero:not(.employer-hero) .detail-hero-inner {
+    flex-wrap: nowrap;
+    height: auto;
+    min-height: 0;
+  }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-title,
+  .detail-exact .detail-hero:not(.employer-hero) .detail-action-group {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-logo {
+    flex: 0 1 auto;
+  }
+}

@@ -3022,7 +3022,7 @@ function fitEmployerLogos() {
     }
     if (!sourceImage.naturalWidth) return;
     const ratio = sourceImage.naturalWidth / sourceImage.naturalHeight;
-    if (ratio >= .95 && ratio <= 1.05) return;
+    if (ratio >= .95 && ratio <= 1.05 && !sourceImage.classList.contains('detail-logo')) return;
     if (sourceImage.dataset.trimAttempted === 'true') return;
     sourceImage.dataset.trimAttempted = 'true';
     const probe = new Image();
@@ -3031,7 +3031,7 @@ function fitEmployerLogos() {
       try {
         // Already-square uploads keep their original artwork and framing.
         const sourceRatio = probe.naturalWidth / probe.naturalHeight;
-        if (sourceRatio >= .95 && sourceRatio <= 1.05) return;
+        if (sourceRatio >= .95 && sourceRatio <= 1.05 && !sourceImage.classList.contains('detail-logo')) return;
         const maxSample = 320;
         const scale = Math.min(1, maxSample / Math.max(probe.naturalWidth, probe.naturalHeight));
         const canvas = document.createElement('canvas');
@@ -3088,7 +3088,7 @@ function fitEmployerLogos() {
     probe.src = logoUrl.hostname === 'media.trikonet.com'
       ? `/logo-source?src=${encodeURIComponent(logoUrl.href)}` : originalSource;
   };
-  document.querySelectorAll('.emp-profile-logo-img, .nurse-card-logo img, .featured-company-logo-wrap img').forEach(fitImage);
+  document.querySelectorAll('.emp-profile-logo-img, .nurse-card-logo img, .featured-company-logo-wrap img, .detail-logo').forEach(fitImage);
 }
 
 function render() {

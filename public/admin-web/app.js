@@ -1,6 +1,6 @@
 import {withOptionalBudget} from './optional-work.js';
 import {renderHomeCategories, defaultTopCategories} from './home-categories.js';
-import {initMobileEmployerFollow, initMobileApplyAfterCompany} from './mobile-job-actions.js?v=20261102-scroll-direction';
+import {initMobileEmployerFollow, initMobileApplyAfterCompany} from './mobile-job-actions.js?v=20261102-stable-scroll';
 import {initSearchCategoryPickers} from './category-picker.js?v=20261031-both-2';
 import {recentEmployerPage} from './recent-employers.js';
 import {createJobLogoResolver} from './job-employer-logo.js';

@@ -433,9 +433,7 @@ export function renderJobDetail(record, employer, path, orgJobs = [], relatedJob
         </div>
         <div class="detail-action-group">
         <button class="detail-report-job-btn detail-report-corner-btn" type="button" id="openJobReportBtn" aria-label="Report this job" title="Report this job"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg></button>
-        <div class="detail-actions">
-          ${applicationAction(record,m)}
-        </div>
+
         </div>
       </div>
     </section>
@@ -451,6 +449,9 @@ export function renderJobDetail(record, employer, path, orgJobs = [], relatedJob
           <span>Read more</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
+        <section class="job-apply-box" aria-label="Apply for this job">
+          <div class="detail-actions">${applicationAction(record,m)}</div>
+        </section>
         ${(record.local ? (record.tags || []) : (record.tags || [])).length ? `
           <div class="detail-tags-row">
             <span class="detail-tags-label">Tags:</span>

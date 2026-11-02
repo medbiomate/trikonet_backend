@@ -1,5 +1,5 @@
 import {renderHomeCategories, defaultTopCategories} from './home-categories.js';
-import {initMobileJobActions, initMobileEmployerFollow} from './mobile-job-actions.js?v=20261102-follow-scroll';
+import {initMobileEmployerFollow} from './mobile-job-actions.js?v=20261102-apply-box';
 import {initSearchCategoryPickers} from './category-picker.js?v=20261031-both-2';
 import {recentEmployerPage} from './recent-employers.js';
 import {createJobLogoResolver} from './job-employer-logo.js';
@@ -3188,7 +3188,7 @@ if (['/login','/signin','/sign-in','/login-register','/register','/signup','/sig
 // Detail renderers are only needed on job and employer pages. Fetch them
 // alongside page data instead of blocking every page's module startup.
 if (path.startsWith('/job/') || path.startsWith('/employer/')) {
-  initialLoads.push(import('./detail-pages.js?v=20261102-follow-scroll').then(module => {
+  initialLoads.push(import('./detail-pages.js?v=20261102-apply-box').then(module => {
     renderJobDetail = module.renderJobDetail;
     renderEmployerDetail = module.renderEmployerDetail;
   }));
@@ -3260,7 +3260,6 @@ if(!seoPagePayload && (path.startsWith('/category/') || path==='/jobs')){
   }
 }
 fitEmployerLogos();
-initMobileJobActions();
 initMobileEmployerFollow();
 // Do not wait for the browser's long DNS timeout before using the durable
 // backup. A ready CDN image always wins; only pending images are retried.

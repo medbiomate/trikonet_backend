@@ -1,5 +1,5 @@
 import {renderHomeCategories, defaultTopCategories} from './home-categories.js';
-import {initMobileJobActions} from './mobile-job-actions.js?v=20261102-1';
+import {initMobileJobActions} from './mobile-job-actions.js?v=20261102-scroll-only';
 import {initSearchCategoryPickers} from './category-picker.js?v=20261031-both-2';
 import {recentEmployerPage} from './recent-employers.js';
 import {createJobLogoResolver} from './job-employer-logo.js';

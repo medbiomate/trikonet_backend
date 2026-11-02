@@ -6715,8 +6715,9 @@ main.detail-page {
 
 .mobile-job-action-slot { display: contents; }
 @media (max-width: 850px) {
-  .detail-exact .mobile-job-action-slot { display: block; width: 100%; margin-top: 16px; }
+  .detail-exact .mobile-job-action-slot { display: contents; }
   .detail-exact .detail-hero:not(.employer-hero) .detail-actions:not(.is-scroll-docked) {
+    display: none !important;
     position: static !important;
     inset: auto !important;
     padding: 0 !important;

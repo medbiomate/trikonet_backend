@@ -14,9 +14,10 @@ export function initMobileJobActions(root = document) {
     const mobile = media.matches;
     if (mobile && slot.parentElement !== title) title.append(slot);
     if (!mobile && slot.parentElement !== originalParent) originalParent.append(slot);
-    const docked = mobile && slot.getBoundingClientRect().bottom <= 0;
+    // Show only after the reader has passed the header by a short distance.
+    const docked = mobile && hero.getBoundingClientRect().bottom <= -80;
     actions.classList.toggle('is-scroll-docked', docked);
-    slot.style.minHeight = mobile ? `${actions.getBoundingClientRect().height}px` : '';
+    slot.style.minHeight = '';
   };
   let queued = false;
   const schedule = () => {

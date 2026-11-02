@@ -3671,7 +3671,7 @@ const applicationCount=document.querySelector('.job-application-count');
 const applicationSlug=currentDetailJob?.slug;
 const showApplicationCount=result=>{
   if(!applicationCount||!Number.isSafeInteger(result.count)||result.count<0)return;
-  applicationCount.textContent=result.count>0?`${result.count.toLocaleString()} ${result.count===1?'signed-in person has':'signed-in people have'} opened the application through Trikonet.`:'Application tracking starts from this update.';
+  applicationCount.textContent=result.count>0?`${result.count.toLocaleString()} ${result.count===1?'signed-in person has':'signed-in people have'} opened the application through Trikonet.`:'Activity counts application opens, not completed submissions.';
   applicationCount.hidden=false;
 };
 if(applicationCount&&applicationSlug)fetch(`/api/job-application-starts?slug=${encodeURIComponent(applicationSlug)}`,{signal:AbortSignal.timeout(3000)}).then(response=>response.ok?response.json():null).then(result=>{if(result)showApplicationCount(result)}).catch(()=>{});

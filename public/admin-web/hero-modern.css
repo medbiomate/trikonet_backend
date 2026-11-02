@@ -6821,3 +6821,32 @@ main.detail-page {
     box-sizing: border-box;
   }
 }
+
+/* High-contrast application card with the site's red brand palette. */
+.detail-exact .job-apply-box {
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  border: 1px solid #a90008;
+  border-radius: 22px;
+  background: radial-gradient(ellipse at 100% 0%, rgba(255,255,255,.12), transparent 65%), linear-gradient(135deg, #870008, #bd0813);
+  box-shadow: 0 12px 30px rgba(132,0,10,.16);
+}
+.detail-exact .job-apply-box .job-apply-box-icon { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 14px; }
+.detail-exact .job-apply-box .job-apply-box-eyebrow { color: #ffe4e6; font-size: 10px; letter-spacing: .14em; }
+.detail-exact .job-apply-box h2 { color: #fff; font-size: 26px; letter-spacing: -.025em; }
+.detail-exact .job-apply-box .job-apply-box-hint { color: #ffe9eb; margin: 18px 0 24px; }
+.detail-exact .job-apply-box .detail-actions:not(.is-company-passed) .apply {
+  background: #fff !important; color: #a9000b !important; border-color: #fff !important;
+  border-radius: 14px !important; min-height: 56px;
+  box-shadow: 0 4px 12px rgba(57,0,5,.14); font-size: 18px;
+}
+.detail-exact .job-apply-box .detail-actions:not(.is-company-passed) .apply:hover { background: #fff0f1 !important; }
+.detail-exact .job-apply-box .detail-actions:not(.is-company-passed) .apply:focus-visible { outline-color: #fff; }
+.detail-exact .job-apply-box .job-application-count { color: #ffe4e6; margin-top: 18px; font-size: 11px; }
+.detail-exact .job-apply-box .application-unavailable,
+.detail-exact .job-apply-box .walk-in-details { color: #fff; }
+@media (max-width: 850px) {
+  .detail-exact .job-apply-box { padding: 24px 20px; }
+  .detail-exact .job-apply-box h2 { font-size: 24px; }
+}

@@ -8,7 +8,7 @@ const resolveJobLogos = createJobLogoResolver((...args) => fetch(...args));
 import {renderEmployerDirectory} from './employer-directory.js?v=20261031-recent-companies';
 import {isClosedJob} from './job-availability.js';
 import {renderHomeHero} from './home-hero.js';
-import {initDisplayAds} from './display-ads.js?v=20261102-viewability';
+import {initDisplayAds} from './display-ads.js?v=20261102-before-apply';
 import { protectJobNavigation, waitForJobNavigationIdle } from './job-navigation.js?v=20261102-early-1';
 import { loadContentRecord } from './content-record.js?v=20261022-employer-alias';
 import { renderSiteHeader } from './site-header.js';

@@ -74,7 +74,7 @@ function initJobDetailAd() {
   placement.innerHTML = '<div class="job-detail-ad-label" style="text-align:center;font:11px/1.5 system-ui;color:#64748b;margin-bottom:8px">Advertisement</div><ins class="adsbygoogle" style="display:block;min-height:250px" data-ad-client="ca-pub-4310822705633659" data-ad-slot="9017818388" data-ad-format="auto" data-full-width-responsive="true"></ins>';
   // On mobile, place the first ad between the job header and overview.
   placement.style.cssText = 'display:block;width:100%;min-width:0;clear:both;';
-  const company = description.querySelector('.detail-about-company-card');
+  const company = description.querySelector('.job-apply-box') || description.querySelector('.detail-about-company-card');
   const share = description.querySelector('.share');
   const overview = main.querySelector('.overview');
   if (window.matchMedia('(max-width: 850px)').matches && overview) {
@@ -90,7 +90,7 @@ function initJobCompanyAd() {
   // Desktop already has its description ad in this position.
   if (!window.matchMedia('(max-width: 850px)').matches) return;
   const main = document.querySelector('.detail-page.detail-exact:not(.employer-detail-page)');
-  const company = main?.querySelector('.job-description .detail-about-company-card');
+  const company = main?.querySelector('.job-description .job-apply-box') || main?.querySelector('.job-description .detail-about-company-card');
   if (!company || main.querySelector('[data-trikonet-job-company-ad]')) return;
   const placement = document.createElement('aside');
   placement.className = 'site-ad';

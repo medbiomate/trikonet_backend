@@ -6753,3 +6753,20 @@ main.detail-page {
   .detail-exact .detail-hero:not(.employer-hero) .detail-actions .apply { flex: 1 1 100%; width: 100%; }
   .detail-exact .detail-hero:not(.employer-hero) .detail-action-group > .detail-report-job-btn { top: 0 !important; right: 0 !important; }
 }
+
+@media (max-width: 850px) {
+  .emp-profile-header-card .emp-follow-dock { display: none; }
+  .emp-profile-header-card .emp-follow-dock.is-scroll-docked {
+    display: block;
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 1000;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(255,255,255,.97);
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -8px 24px rgba(15,23,42,.10);
+    box-sizing: border-box;
+  }
+  .emp-profile-header-card .emp-follow-dock .emp-follow-btn { width: 100%; margin: 0; min-height: 48px; }
+  .emp-profile-page { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+}

@@ -791,7 +791,7 @@ export function renderEmployerDetail(record, path, jobs = []) {
         </div>
 
         <div class="emp-profile-header-actions">
-          <button type="button" class="emp-follow-btn" data-slug="${esc(record.slug)}">+ Follow</button>
+          <div class="emp-follow-dock"><button type="button" class="emp-follow-btn" data-slug="${esc(record.slug)}">+ Follow</button></div>
           <button type="button" class="emp-profile-claim-link" id="empOpenClaimBtn" data-slug="${esc(record.slug)}" data-name="${esc(title)}">Own this company? <strong>Claim profile</strong></button>
         </div>
       </section>

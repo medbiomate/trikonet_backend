@@ -63,9 +63,8 @@ function initJobDetailAd() {
   const main = document.querySelector('.detail-page.detail-exact:not(.employer-detail-page)');
   const grid = main?.querySelector('.detail-grid:not(.employer-detail-grid)');
   if (!grid || main.querySelector('[data-trikonet-job-detail-ad]')) return;
-  const mobile = window.matchMedia('(max-width: 850px)').matches;
-  const heading = main.querySelector('.job-description .job-desc-heading');
-  if (!mobile && !heading) return;
+  const description = main.querySelector('.job-description');
+  if (!description) return;
   const placement = document.createElement('aside');
   placement.className = 'site-ad';
   placement.dataset.trikonetJobDetailAd = '';
@@ -73,12 +72,14 @@ function initJobDetailAd() {
   placement.style.cssText = 'width:calc(100% - 32px);max-width:1100px;min-width:0;clear:both;';
   placement.setAttribute('aria-label', 'Advertisement');
   placement.innerHTML = '<div class="job-detail-ad-label" style="text-align:center;font:11px/1.5 system-ui;color:#64748b;margin-bottom:8px">Advertisement</div><ins class="adsbygoogle" style="display:block;min-height:250px" data-ad-client="ca-pub-4310822705633659" data-ad-slot="9017818388" data-ad-format="auto" data-full-width-responsive="true"></ins>';
-  if (mobile) grid.before(placement);
-  else {
-    placement.style.cssText = 'display:block;width:100%;min-width:0;margin:24px 0 32px;clear:both;';
-    heading.after(placement);
-  }
-  initializeAd(placement.querySelector('ins'));
+  // Keep overview and role details ahead of the first manual ad.
+  placement.style.cssText = 'display:block;width:100%;min-width:0;clear:both;';
+  const company = description.querySelector('.detail-about-company-card');
+  const share = description.querySelector('.share');
+  if (company) company.before(placement);
+  else if (share) share.before(placement);
+  else description.append(placement);
+  initializeAd(placement.querySelector('ins'), true);
 }
 
 function initAdditionalFeedAd() {
@@ -162,6 +163,19 @@ function initializeAd(ad, lazy = false) {
     }, { rootMargin: '300px' });
     viewport.observe(ad);
     return;
+  }
+  // Release only our placeholder minimum after the network fills the slot.
+  // The ad provider continues to control the actual creative dimensions.
+  if (typeof MutationObserver !== 'undefined') {
+    const status = new MutationObserver(() => {
+      if (ad.getAttribute('data-ad-status') === 'filled') {
+        ad.style.minHeight = '0px';
+        status.disconnect();
+      } else if (ad.getAttribute('data-ad-status') === 'unfilled') {
+        status.disconnect();
+      }
+    });
+    status.observe(ad, { attributes: true, attributeFilter: ['data-ad-status'] });
   }
   // Request only once, once the responsive container has a measurable width.
   const resize = new ResizeObserver(() => {

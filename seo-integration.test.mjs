@@ -5,8 +5,10 @@ import http from 'node:http';
 import {createSeoRepository} from './seo-job-pages.mjs';
 import {handleSeoRequest} from './seo-api.mjs';
 
-test('MySQL persistence, API permissions, threshold, sitemap and draft routing',async()=>{
-  const db=await mysql.createConnection({socketPath:'/tmp/mysql.sock',user:process.env.USER,database:'trikonet_html_test'});
+test('MySQL persistence, API permissions, threshold, sitemap and draft routing',{skip:!process.env.TEST_MYSQL_SOCKET},async()=>{
+  const socket=process.env.TEST_MYSQL_SOCKET;assert.ok(socket.startsWith('/tmp/trikonet-audit-mysql.'),'Use an isolated fixture socket');
+  const db=await mysql.createConnection({socketPath:socket,user:'root'});
+  const database='trikonet_seo_fixture_'+process.pid;await db.query(`CREATE DATABASE ${database}`);await db.query(`USE ${database}`);
   const table='seo_job_pages_test_'+Date.now();
   const pool={query:(sql,args)=>db.query(sql.replaceAll('seo_job_pages',table),args)};
   let jobs=Array.from({length:9},(_,i)=>({slug:`seo-test-${i}`,title:`Nurse ${i}`,status:'publish',categories:['Nurse'],locations:['Dubai']}));
@@ -25,6 +27,8 @@ test('MySQL persistence, API permissions, threshold, sitemap and draft routing',
     assert.equal((await call('/api/admin/seo-job-pages/main-categories','POST',{category:'Nurse',slug:'nurse-jobs'})).status,200);
     assert.equal((await (await call('/api/admin/seo-job-pages')).json()).length,0);
     jobs.push({...jobs[0],slug:'seo-test-9'});
+    // Recreate the repository to represent the next catalogue refresh, without waiting its TTL.
+    repo=createSeoRepository(pool,async()=>({jobs:[]}),load);
     let pages=await (await call('/api/admin/seo-job-pages')).json();assert.equal(pages.length,1);const id=pages[0].id;
     const publicPage=await (await call('/api/seo-job-pages/nurse-jobs-in-dubai')).json();assert.equal(publicPage.total,10);assert.equal(publicPage.jobs.length,10);
     assert.match(await (await call('/sitemap-seo-job-pages.xml')).text(),/nurse-jobs-in-dubai/);
@@ -37,8 +41,9 @@ test('MySQL persistence, API permissions, threshold, sitemap and draft routing',
     pages=await (await call('/api/admin/seo-job-pages')).json();assert.equal(pages[0].status,'Draft');assert.equal(pages[0].seoTitle,'My title');
     await call('/api/admin/seo-job-pages/bulk','POST',{ids:[id],action:'publish'});
     jobs=jobs.slice(0,8);
+    repo=createSeoRepository(pool,async()=>({jobs:[]}),load);
     pages=await (await call('/api/admin/seo-job-pages')).json();assert.equal(pages[0].status,'Published');assert.equal(pages[0].activeJobCount,8);
     await call('/api/admin/seo-job-pages/bulk','POST',{ids:[id],action:'auto'});
     pages=await (await call('/api/admin/seo-job-pages')).json();assert.equal(pages[0].eligibilityStatus,'Below Threshold');
-  }finally{await new Promise(resolve=>server.close(resolve));await db.query(`DROP TABLE ${table}`);await db.end();}
+  }finally{await new Promise(resolve=>server.close(resolve));await db.query(`DROP DATABASE IF EXISTS ${database}`);await db.end();}
 });

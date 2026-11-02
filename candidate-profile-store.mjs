@@ -5,11 +5,13 @@ export async function candidateProfileRequest(pool,method,userId,body={}){
  const connection=await pool.getConnection();const writing=method!=='GET';
  try{
   if(writing)await connection.beginTransaction();
-  const [rows]=await connection.query("SELECT JSON_EXTRACT(payload,'$.users') AS users FROM trikonet_app_state WHERE state_key='main' LIMIT 1"+(writing?' FOR UPDATE':''));
-  const raw=rows[0]?.users,users=typeof raw==='string'?JSON.parse(raw):raw;
-  const index=Array.isArray(users)?users.findIndex(user=>String(user.id)===String(userId)):-1;
-  if(index<0){if(writing)await connection.rollback();return[404,{error:'Account not found'}]}
-  const user=users[index];
+  // Keep the row lock for writes, but transfer only the selected account.
+  const [rows]=await connection.query(`SELECT CAST(JSON_EXTRACT(s.payload,CONCAT('$.users[',u.position-1,']')) AS CHAR) AS account,u.position-1 AS account_index
+    FROM trikonet_app_state s,JSON_TABLE(s.payload,'$.users[*]' COLUMNS(position FOR ORDINALITY,id VARCHAR(191) PATH '$.id')) u
+    WHERE s.state_key='main' AND BINARY u.id=BINARY ? ORDER BY u.position LIMIT 1`+(writing?' FOR UPDATE':''),[String(userId)]);
+  if(!rows.length){if(writing)await connection.rollback();return[404,{error:'Account not found'}]}
+  const index=Number(rows[0].account_index);
+  const user=typeof rows[0].account==='string'?JSON.parse(rows[0].account):rows[0].account;
   if(writing){
    applyAccountProfile(user,body,updateCandidateProfile);grantProfileCompletionReward(user);
    const path=`$.users[${index}]`;

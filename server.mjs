@@ -146,6 +146,11 @@ async function numericJobId(job) {
 }
 const mediaStore = createMediaStore(wpDb);
 const jobViews = createJobViews(wpDb);
+let jobPresenceReady;
+function ensureJobPresence(){
+  return jobPresenceReady ||= wpDb.query('CREATE TABLE IF NOT EXISTS trikonet_job_presence (slug VARCHAR(191) NOT NULL, user_id VARCHAR(191) NOT NULL, name VARCHAR(191) NOT NULL, expires_at BIGINT NOT NULL, PRIMARY KEY(slug,user_id)) ENGINE=InnoDB').catch(error=>{jobPresenceReady=null;throw error;});
+}
+
 
 // In-memory dataset cache for complete database resilience
 const memoryStore = {
@@ -924,6 +929,7 @@ const server = http.createServer(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
+    res.setHeader('X-Trikonet-Release','performance-20261102-2');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -1002,7 +1008,7 @@ const server = http.createServer(async (req, res) => {
     const admin = await currentAdminSession(req);
     if (!admin) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
     try {
-      await wpDb.query('CREATE TABLE IF NOT EXISTS trikonet_job_presence (slug VARCHAR(191) NOT NULL, user_id VARCHAR(191) NOT NULL, name VARCHAR(191) NOT NULL, expires_at BIGINT NOT NULL, PRIMARY KEY(slug,user_id)) ENGINE=InnoDB');
+      await ensureJobPresence();
       if (req.method === 'POST') {
         const body = await readJsonBody(req);
         const slug = String(body.slug || '');

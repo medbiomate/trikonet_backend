@@ -6730,3 +6730,25 @@ main.detail-page {
     inset: auto 0 0 !important;
   }
 }
+
+/* Compact reporting control above the job details; Apply remains primary. */
+.detail-exact .detail-hero:not(.employer-hero) .detail-hero-inner { position: relative; }
+.detail-exact .detail-hero:not(.employer-hero) .detail-action-group > .detail-report-job-btn {
+  position: absolute !important;
+  top: -20px !important;
+  right: 16px !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 8px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.detail-exact .detail-hero:not(.employer-hero) .detail-report-job-btn svg { width: 16px !important; height: 16px !important; }
+@media (max-width: 850px) {
+  .detail-exact .detail-hero:not(.employer-hero) .detail-action-group { margin: 0 !important; gap: 0; }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-actions .apply { flex: 1 1 100%; width: 100%; }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-action-group > .detail-report-job-btn { top: 0 !important; right: 0 !important; }
+}

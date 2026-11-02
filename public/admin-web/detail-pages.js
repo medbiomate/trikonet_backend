@@ -432,12 +432,10 @@ export function renderJobDetail(record, employer, path, orgJobs = [], relatedJob
           ${type ? `<span class="detail-pill">${esc(type)}</span>` : ''}
         </div>
         <div class="detail-action-group">
-        <button class="detail-report-job-btn detail-report-corner-btn" type="button" id="openJobReportBtn" aria-label="Report this job"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg><span>Report this job</span></button>
+        <button class="detail-report-job-btn detail-report-corner-btn" type="button" id="openJobReportBtn" aria-label="Report this job" title="Report this job"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg></button>
         <div class="detail-actions">
           ${applicationAction(record,m)}
-          <button class="save" type="button" aria-label="Save job"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
         </div>
-          <a class="detail-resume-promo" href="/resume-builder"><span class="detail-resume-promo-link">Build a free resume <span aria-hidden="true">→</span></span></a>
         </div>
       </div>
     </section>

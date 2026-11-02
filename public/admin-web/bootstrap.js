@@ -1,4 +1,4 @@
-import {initJobNavigation} from './job-navigation.js?v=20261102-first-tap';
+import {initJobNavigation} from './job-navigation.js?v=20261102-early-1';
 initJobNavigation();
 globalThis.window?.dispatchEvent?.(new Event('trikonet:navigation-ready'));
 // A failed module or stalled request must never leave the full-page loader open.
@@ -32,4 +32,4 @@ const timeout = setTimeout(() => {
   // Keep initialization alive; only a rejected module should replace the page.
   // Slow authentication or a busy server is not a failed editor.
 }, 12000);
-import('./app.js?v=20261102-home-10').catch(showLoadingRecovery).finally(() => clearTimeout(timeout));
+import('./app.js?v=20261102-tap-11').catch(showLoadingRecovery).finally(() => clearTimeout(timeout));

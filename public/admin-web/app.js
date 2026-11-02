@@ -8,7 +8,7 @@ import {renderEmployerDirectory} from './employer-directory.js?v=20261031-recent
 import {isClosedJob} from './job-availability.js';
 import {renderHomeHero} from './home-hero.js';
 import {initDisplayAds} from './display-ads.js?v=20261102-company-ad';
-import { protectJobNavigation } from './job-navigation.js?v=20261102-first-tap';
+import { protectJobNavigation, waitForJobNavigationIdle } from './job-navigation.js?v=20261102-early-1';
 import { loadContentRecord } from './content-record.js?v=20261022-employer-alias';
 import { renderSiteHeader } from './site-header.js';
 import { renderSiteFooter } from './site-footer.js';
@@ -3214,6 +3214,8 @@ await Promise.all(initialLoads);
 // Published article data comes from the backend. The admin screen also keeps
 // local draft/mock records, but those must never replace database content on
 // the public site.
+// Do not detach the link while Safari is completing the user's first tap.
+await waitForJobNavigationIdle();
 document.querySelector('#app').innerHTML=render();
 document.querySelector('#app').removeAttribute('data-server-rendered');
 protectJobNavigation();

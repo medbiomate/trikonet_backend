@@ -1540,3 +1540,17 @@ mark.wp-highlight, mark { background: #fef08a; color: inherit; padding: 1px 4px;
 @media (max-width: 850px) {
   .site-ad { margin: 20px auto; padding: 0; }
 }
+
+/* Make the whole job card a native link before client initialization. */
+.nurse-job-card .nurse-job-title-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.nurse-job-card a:not(.nurse-job-title-link),
+.nurse-job-card button,
+.nurse-job-card input,
+.nurse-job-card select,
+.nurse-job-card textarea { position: relative; z-index: 2; }

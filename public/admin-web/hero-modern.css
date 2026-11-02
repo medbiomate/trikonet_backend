@@ -6786,3 +6786,23 @@ main.detail-page {
   width: 100% !important; flex: 1 1 auto !important; border-radius: 0 !important;
   min-height: 48px; text-align: center;
 }
+
+/* Clear application card, kept in the normal reading flow. */
+.detail-exact .job-apply-box {
+  margin: 28px 0; padding: 24px; border: 1px solid #efc8ca;
+  border-top: 4px solid #b00008; border-radius: 4px;
+  background: linear-gradient(135deg, #fff8f8, #fff);
+  box-shadow: 0 8px 24px rgba(110, 20, 28, .06);
+}
+.job-apply-box-heading { display: flex; align-items: center; gap: 14px; }
+.job-apply-box-icon { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; background: #fee9ea; color: #b00008; border-radius: 10px; }
+.job-apply-box-eyebrow { display: block; color: #9b111b; font-size: 10px; font-weight: 800; letter-spacing: .12em; line-height: 1.5; }
+.detail-exact .job-apply-box h2 { margin: 3px 0 0; font-size: 23px; line-height: 1.25; font-weight: 800; color: #172033; }
+.detail-exact .job-apply-box .job-apply-box-hint { margin: 16px 0 20px; color: #566174; font-size: 14px; line-height: 1.6; }
+.detail-exact .job-apply-box .apply { min-height: 54px; border-radius: 4px !important; font-size: 17px; font-weight: 750; box-shadow: 0 5px 12px rgba(176,0,8,.15); }
+.detail-exact .job-apply-box .apply::after { content: '→'; margin-left: 12px; }
+.detail-exact .job-apply-box .apply:focus-visible { outline: 3px solid #172033; outline-offset: 4px; }
+@media(max-width: 850px) {
+  .detail-exact .job-apply-box { padding: 20px; }
+  .detail-exact .job-apply-box h2 { font-size: 22px; }
+}

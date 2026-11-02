@@ -17,6 +17,19 @@ function applicationAction(record,m){
   if(!usable)return '<p class="application-unavailable" role="status">Application details are unavailable. Please verify this vacancy on the employer’s official careers website.</p>';
   return `<a class="primary apply" href="${esc(href)}"${method === 'By Email' ? '' : ' target="_blank"'} rel="noopener noreferrer nofollow">${label}</a>`;
 }
+function applicationBox(record, metas) {
+  const action = applicationAction(record, metas);
+  const canApply = action.includes('class="primary apply"');
+  const heading = canApply ? 'Ready to apply?' : 'Application information';
+  return `<section class="job-apply-box" aria-label="Apply for this job">
+    <div class="job-apply-box-heading">
+      <span class="job-apply-box-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v3h4v-3"/></svg></span>
+      <div><span class="job-apply-box-eyebrow">YOUR NEXT STEP</span><h2>${heading}</h2></div>
+    </div>
+    ${canApply ? '<p class="job-apply-box-hint">Review the requirements, then send your application to the employer.</p>' : ''}
+    <div class="detail-actions">${action}</div>
+  </section>`;
+}
 const bateelJobs = [
   ['Corporate Accounting Manager','corporate-accounting-manager','Accountant, Accounting or Finance','Dubai'],
   ['Human Resources Business Partner','human-resources-business-partner-9','Human Resource','Dubai'],
@@ -449,9 +462,7 @@ export function renderJobDetail(record, employer, path, orgJobs = [], relatedJob
           <span>Read more</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <section class="job-apply-box" aria-label="Apply for this job">
-          <div class="detail-actions">${applicationAction(record,m)}</div>
-        </section>
+        ${applicationBox(record,m)}
         ${(record.local ? (record.tags || []) : (record.tags || [])).length ? `
           <div class="detail-tags-row">
             <span class="detail-tags-label">Tags:</span>

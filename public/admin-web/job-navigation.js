@@ -13,6 +13,7 @@ export function protectJobNavigation(root = document) {
 // Register before advertising scripts can intercept a plain job-link click.
 // Keep modified clicks, downloads and new-tab links under browser control.
 export function initJobNavigation(root = document, navigate = href => location.assign(href)) {
+  let lastTouchNavigation = null;
   const onClick = event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest?.('a[href]');
@@ -29,13 +30,41 @@ export function initJobNavigation(root = document, navigate = href => location.a
     destination.setAttribute('data-google-vignette', 'false');
     destination.setAttribute('aria-busy', 'true');
     destination.classList.add('job-navigation-pending');
+    if (event.type === 'click' && lastTouchNavigation?.href === url.href && Date.now() - lastTouchNavigation.time < 1000) return;
     navigate(url.href);
+    return url.href;
   };
+  // Touch intent survives a listing redraw between pointer-down and click.
+  // Never cancel pointer-down: users must still be able to scroll/select.
+  let touch = null;
+  const onPointerDown = event => {
+    touch = event.pointerType === 'touch' || event.pointerType === 'pen'
+      ? { id: event.pointerId, x: event.clientX, y: event.clientY, target: event.target } : null;
+  };
+  const onPointerMove = event => {
+    if (touch && (Math.abs(event.clientX - touch.x) > 10 || Math.abs(event.clientY - touch.y) > 10)) touch = null;
+  };
+  const onPointerCancel = () => { touch = null; };
+  const onPointerUp = event => {
+    const start = touch; touch = null;
+    if (!start || start.id !== event.pointerId || event.defaultPrevented ||
+      Math.abs(event.clientX - start.x) > 10 || Math.abs(event.clientY - start.y) > 10) return;
+    const href = onClick({ button: 0, target: start.target,
+      preventDefault: () => event.preventDefault(),
+      stopImmediatePropagation: () => event.stopImmediatePropagation() });
+    if (href) lastTouchNavigation = { href, time: Date.now() }; 
+  };
+  root.addEventListener('pointerdown', onPointerDown, true);
+  root.addEventListener('pointermove', onPointerMove, true);
+  root.addEventListener('pointercancel', onPointerCancel, true);
+  root.addEventListener('pointerup', onPointerUp, true);
   root.addEventListener('click', onClick, true);
   globalThis.addEventListener?.('pageshow', () => {
     root.querySelectorAll('.job-navigation-pending').forEach(link => {
       link.removeAttribute('aria-busy');link.classList.remove('job-navigation-pending');
     });
   });
-  return () => root.removeEventListener('click', onClick, true);
+  return () => {
+    for (const [name, handler] of [['click', onClick], ['pointerdown', onPointerDown], ['pointermove', onPointerMove], ['pointercancel', onPointerCancel], ['pointerup', onPointerUp]]) root.removeEventListener(name, handler, true);
+  };
 }

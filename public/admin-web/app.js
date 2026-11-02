@@ -7,7 +7,7 @@ import {renderEmployerDirectory} from './employer-directory.js?v=20261031-recent
 import {isClosedJob} from './job-availability.js';
 import {renderHomeHero} from './home-hero.js';
 import {initDisplayAds} from './display-ads.js?v=20261102-content-first';
-import { protectJobNavigation } from './job-navigation.js?v=20261018-server-job-list';
+import { protectJobNavigation } from './job-navigation.js?v=20261102-first-tap';
 import { loadContentRecord } from './content-record.js?v=20261022-employer-alias';
 import { renderSiteHeader } from './site-header.js';
 import { renderSiteFooter } from './site-footer.js';

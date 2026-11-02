@@ -1,4 +1,4 @@
-import {initJobNavigation} from './job-navigation.js?v=20261018-server-job-list';
+import {initJobNavigation} from './job-navigation.js?v=20261102-first-tap';
 initJobNavigation();
 // A failed module or stalled request must never leave the full-page loader open.
 export function showLoadingRecovery(error) {
@@ -31,4 +31,4 @@ const timeout = setTimeout(() => {
   // Keep initialization alive; only a rejected module should replace the page.
   // Slow authentication or a busy server is not a failed editor.
 }, 12000);
-import('./app.js?v=20261102-mobile-5').catch(showLoadingRecovery).finally(() => clearTimeout(timeout));
+import('./app.js?v=20261102-mobile-6').catch(showLoadingRecovery).finally(() => clearTimeout(timeout));

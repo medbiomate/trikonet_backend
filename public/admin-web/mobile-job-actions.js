@@ -28,9 +28,12 @@ export function initMobileApplyAfterCompany(root = document) {
   const slot = document.createElement('div');
   slot.className = 'job-apply-action-slot';
   actions.before(slot); slot.append(actions);
+  const desktopActions = root.querySelector('.detail-hero .detail-action-group');
   let inlineHeight = actions.getBoundingClientRect().height;
   const detectDock = createApplyDockState(scrollY);
   const update = () => {
+    if (!media.matches && desktopActions && actions.parentElement !== desktopActions) desktopActions.append(actions);
+    if (media.matches && actions.parentElement !== slot) slot.append(actions);
     if (!actions.classList.contains('is-company-passed')) inlineHeight = actions.getBoundingClientRect().height;
     // Company details may arrive after the main job content.
     const company = root.querySelector('.job-description .detail-about-company-card');

@@ -72,11 +72,16 @@ function initJobDetailAd() {
   placement.style.cssText = 'width:calc(100% - 32px);max-width:1100px;min-width:0;clear:both;';
   placement.setAttribute('aria-label', 'Advertisement');
   placement.innerHTML = '<div class="job-detail-ad-label" style="text-align:center;font:11px/1.5 system-ui;color:#64748b;margin-bottom:8px">Advertisement</div><ins class="adsbygoogle" style="display:block;min-height:250px" data-ad-client="ca-pub-4310822705633659" data-ad-slot="9017818388" data-ad-format="auto" data-full-width-responsive="true"></ins>';
-  // Keep overview and role details ahead of the first manual ad.
+  // On mobile, keep the overview ahead of the first ad, without requiring
+  // a scroll through the entire description before the slot can be requested.
   placement.style.cssText = 'display:block;width:100%;min-width:0;clear:both;';
   const company = description.querySelector('.detail-about-company-card');
   const share = description.querySelector('.share');
-  if (company) company.before(placement);
+  const overview = main.querySelector('.overview');
+  if (window.matchMedia('(max-width: 850px)').matches && overview) {
+    placement.style.order = '-1';
+    overview.after(placement);
+  } else if (company) company.before(placement);
   else if (share) share.before(placement);
   else description.append(placement);
   initializeAd(placement.querySelector('ins'), true);

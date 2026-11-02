@@ -1,3 +1,4 @@
+import {readAdminLoginAccount} from './admin-login-account.mjs';
 import {adminPageRedirect} from './admin-page-access.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
@@ -942,7 +943,7 @@ const server = http.createServer(async (req, res) => {
     if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Administrator authentication required.'});
     try {
       await loadMemoryStore();
-      const db = await readLocalDb();
+      const db = await readCatalogueDb(['jobs','employers']);
       const slugs = [...new Set((requestUrl.searchParams.get('slugs') || '').split(',').filter(Boolean))].slice(0,100);
       const employers = new Map((memoryStore.employers || []).map(item => [item.slug,item]));
       for (const employer of db.employers || []) employers.set(employer.slug,employer);
@@ -1410,8 +1411,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readJsonBody(req);
       const identity = String(body.identity || '').trim().toLowerCase();
-      const db = await readLocalDb();
-      const user = (db.users || []).find(item => String(item.email || '').toLowerCase() === identity || String(item.username || '').toLowerCase() === identity);
+      const user = await readAdminLoginAccount(wpDb,ensurePersistentState,identity);
       const role = String(user?.role || '').toLowerCase();
 
       if (!user || user.status === 'inactive' || !['administrator', 'editor', 'content editor'].includes(role) || !passwordMatches(String(body.password || ''), user)) {

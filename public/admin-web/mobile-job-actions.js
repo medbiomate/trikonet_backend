@@ -28,11 +28,16 @@ export function initMobileApplyAfterCompany(root = document) {
   slot.className = 'job-apply-action-slot';
   actions.before(slot); slot.append(actions);
   let inlineHeight = actions.getBoundingClientRect().height;
+  let previousScrollY = scrollY;
+  let scrollingDown = false;
   const update = () => {
     if (!actions.classList.contains('is-company-passed')) inlineHeight = actions.getBoundingClientRect().height;
     // Company details may arrive after the main job content.
     const company = root.querySelector('.job-description .detail-about-company-card');
-    const docked = media.matches && !!company && company.getBoundingClientRect().bottom <= 0;
+    const currentScrollY = scrollY;
+    if (currentScrollY !== previousScrollY) scrollingDown = currentScrollY > previousScrollY;
+    previousScrollY = currentScrollY;
+    const docked = media.matches && scrollingDown && !!company && company.getBoundingClientRect().bottom <= 0;
     slot.style.minHeight = docked ? `${inlineHeight}px` : '';
     actions.classList.toggle('is-company-passed', docked);
   };

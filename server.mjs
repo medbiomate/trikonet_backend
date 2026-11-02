@@ -1,3 +1,4 @@
+import {createJobApplicationStarts} from './job-application-starts.mjs';
 import {readAdminLoginAccount} from './admin-login-account.mjs';
 import {adminPageRedirect} from './admin-page-access.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
@@ -146,6 +147,7 @@ async function numericJobId(job) {
 }
 const mediaStore = createMediaStore(wpDb);
 const jobViews = createJobViews(wpDb);
+const jobApplicationStarts = createJobApplicationStarts(wpDb);
 let jobPresenceReady;
 function ensureJobPresence(){
   return jobPresenceReady ||= wpDb.query('CREATE TABLE IF NOT EXISTS trikonet_job_presence (slug VARCHAR(191) NOT NULL, user_id VARCHAR(191) NOT NULL, name VARCHAR(191) NOT NULL, expires_at BIGINT NOT NULL, PRIMARY KEY(slug,user_id)) ENGINE=InnoDB').catch(error=>{jobPresenceReady=null;throw error;});
@@ -1024,6 +1026,20 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/') || path.startsWith('/admin')) res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
 
+  if (path === '/api/job-application-starts' && ['GET','POST'].includes(req.method)) {
+    try {
+      const body = req.method === 'POST' ? await readJsonBody(req) : {};
+      const slug = String(body.slug || requestUrl.searchParams.get('slug') || '');
+      if (!/^[a-z0-9][a-z0-9-]{0,190}$/.test(slug)) return sendJson(req,res,400,{error:'Invalid job slug.'});
+      if (req.method === 'POST') {
+        const session = currentSession(req);
+        if (!session) return sendJson(req,res,401,{error:'Sign in required.'});
+        await jobApplicationStarts.record(slug, session.userId);
+      }
+      res.setHeader('Cache-Control','no-store');
+      return sendJson(req,res,200,{count:await jobApplicationStarts.count(slug),metric:'signed_in_application_starts'});
+    } catch { return sendJson(req,res,503,{error:'Application activity unavailable.'}); }
+  }
   if (path === '/api/job-view' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);

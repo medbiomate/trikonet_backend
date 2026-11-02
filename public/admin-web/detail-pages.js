@@ -28,6 +28,7 @@ function applicationBox(record, metas) {
     </div>
     ${canApply ? '<p class="job-apply-box-hint">Review the requirements, then send your application to the employer.</p>' : ''}
     <div class="detail-actions">${action}</div>
+    ${canApply ? '<p class="job-application-count" aria-live="polite" hidden></p>' : ''}
   </section>`;
 }
 const bateelJobs = [

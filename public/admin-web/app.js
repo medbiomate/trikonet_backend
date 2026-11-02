@@ -3188,7 +3188,7 @@ if (['/login','/signin','/sign-in','/login-register','/register','/signup','/sig
 // Detail renderers are only needed on job and employer pages. Fetch them
 // alongside page data instead of blocking every page's module startup.
 if (path.startsWith('/job/') || path.startsWith('/employer/')) {
-  initialLoads.push(import('./detail-pages.js?v=20261102-apply-card').then(module => {
+  initialLoads.push(import('./detail-pages.js?v=20261102-rounded-apply').then(module => {
     renderJobDetail = module.renderJobDetail;
     renderEmployerDetail = module.renderEmployerDetail;
   }));
@@ -3660,8 +3660,19 @@ if(jobSaveButton&&currentJobView){
   });
 }
 const applyButton=document.querySelector('.detail-actions .apply');
+const applicationCount=document.querySelector('.job-application-count');
+const applicationSlug=currentDetailJob?.slug;
+const showApplicationCount=result=>{
+  if(!applicationCount||!Number.isSafeInteger(result.count)||result.count<0)return;
+  applicationCount.textContent=result.count>0?`${result.count.toLocaleString()} ${result.count===1?'signed-in person has':'signed-in people have'} opened the application through Trikonet.`:'Application tracking starts from this update.';
+  applicationCount.hidden=false;
+};
+if(applicationCount&&applicationSlug)fetch(`/api/job-application-starts?slug=${encodeURIComponent(applicationSlug)}`,{signal:AbortSignal.timeout(3000)}).then(response=>response.ok?response.json():null).then(result=>{if(result)showApplicationCount(result)}).catch(()=>{});
 if(applyButton&&currentJobView)applyButton.addEventListener('click',()=>{
-  if(currentUser)upsertMemberCollection('applied_jobs',{...currentJobView,appliedAt:new Date().toISOString()});
+  if(currentUser){
+    upsertMemberCollection('applied_jobs',{...currentJobView,appliedAt:new Date().toISOString()});
+    fetch('/api/job-application-starts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:applicationSlug}),keepalive:true}).then(response=>response.ok?response.json():null).then(result=>{if(result)showApplicationCount(result)}).catch(()=>{});
+  }
 });
 const hambBtn=document.querySelector('.hamb');
 hambBtn?.addEventListener('click',function(){

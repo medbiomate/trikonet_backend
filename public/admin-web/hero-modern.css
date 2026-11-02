@@ -6712,3 +6712,21 @@ main.detail-page {
     flex: 0 1 auto;
   }
 }
+
+.mobile-job-action-slot { display: contents; }
+@media (max-width: 850px) {
+  .detail-exact .mobile-job-action-slot { display: block; width: 100%; margin-top: 16px; }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-actions:not(.is-scroll-docked) {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  .detail-exact .detail-hero:not(.employer-hero) .detail-actions.is-scroll-docked {
+    position: fixed !important;
+    inset: auto 0 0 !important;
+  }
+}

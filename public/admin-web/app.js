@@ -6,7 +6,7 @@ import {renderEmployerDirectory} from './employer-directory.js?v=20261031-recent
 import {isClosedJob} from './job-availability.js';
 import {renderHomeHero} from './home-hero.js';
 import {initDisplayAds} from './display-ads.js?v=20261021-pagination';
-import { protectJobNavigation } from './job-navigation.js';
+import { protectJobNavigation } from './job-navigation.js?v=20261018-server-job-list';
 import { loadContentRecord } from './content-record.js?v=20261022-employer-alias';
 import { renderSiteHeader } from './site-header.js';
 import { renderSiteFooter } from './site-footer.js';
@@ -3008,10 +3008,16 @@ function isResumeBuilderPath(p) {
 }
 
 function fitEmployerLogos() {
-  document.querySelectorAll('.emp-profile-logo-img, .nurse-card-logo img, .featured-company-logo-wrap img').forEach(sourceImage => {
+  const fitImage = sourceImage => {
     // Keep offscreen lazy logos lazy; fit their whitespace only after loading.
     if (!sourceImage.complete) {
-      sourceImage.addEventListener('load', fitEmployerLogos, { once: true });
+      if (!sourceImage.dataset.logoFitWaiting) {
+        sourceImage.dataset.logoFitWaiting = 'true';
+        sourceImage.addEventListener('load', () => {
+          delete sourceImage.dataset.logoFitWaiting;
+          fitImage(sourceImage);
+        }, { once: true });
+      }
       return;
     }
     if (!sourceImage.naturalWidth) return;
@@ -3081,7 +3087,8 @@ function fitEmployerLogos() {
     const logoUrl = new URL(originalSource, location.href);
     probe.src = logoUrl.hostname === 'media.trikonet.com'
       ? `/logo-source?src=${encodeURIComponent(logoUrl.href)}` : originalSource;
-  });
+  };
+  document.querySelectorAll('.emp-profile-logo-img, .nurse-card-logo img, .featured-company-logo-wrap img').forEach(fitImage);
 }
 
 function render() {

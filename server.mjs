@@ -1893,9 +1893,9 @@ const server = http.createServer(async (req, res) => {
     return sendJson(req,res,200,jobs);
   }
   if (path === '/api/local/jobs' && req.method === 'GET') {
-    const db = await readCatalogueDb(['jobs']);
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
+    const db = await readCatalogueDb(['jobs']);
     const jobs = (adminView ? db.jobs : db.jobs.filter(isPublicRecord)).map(job => {
       const { recoveryDraft, logoBackup, ...listing } = job;
       return listing;
@@ -1906,9 +1906,9 @@ const server = http.createServer(async (req, res) => {
 
   if (path.startsWith('/api/local/jobs/') && req.method === 'GET') {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
-    const db = await readCatalogueDb(['jobs']);
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
+    const db = await readCatalogueDb(['jobs']);
     const match = findJobByPath(db.jobs, `/job/${slug}`);
     const job = match && (adminView || isPublicRecord(match)) ? match : null;
     return sendJson(req, res, job ? 200 : 404, job || { error: 'Job not found' });

@@ -2,6 +2,7 @@
 import { isPrivatePage } from './indexing-policy.js';
 
 export function initDisplayAds() {
+  if (location.hostname && !['trikonet.com','www.trikonet.com'].includes(location.hostname)) return;
   if (['/', '/index.html'].includes(location.pathname.replace(/\/+$/, '') || '/')) return;
   if (isPrivatePage(location.pathname, new URLSearchParams(location.search))) return;
   if (/^404\b|page not found/i.test(document.title)) return;
@@ -179,7 +180,7 @@ function initializeAd(ad, lazy = false) {
       if (!entries.some(entry => entry.isIntersecting)) return;
       viewport.disconnect();
       initializeAd(ad);
-    }, { rootMargin: '300px' });
+    }, { rootMargin: '600px 0px' });
     viewport.observe(ad);
     return;
   }
@@ -200,6 +201,10 @@ function initializeAd(ad, lazy = false) {
   const resize = new ResizeObserver(() => {
     if (!ad.isConnected || ad.getBoundingClientRect().width <= 0) return;
     resize.disconnect();
+    // Repeated layout/setup callbacks must never enqueue the same slot twice.
+    const requested = initializeAd.requested || (initializeAd.requested = new WeakSet());
+    if (requested.has(ad) || ad.getAttribute?.('data-adsbygoogle-status')) return;
+    requested.add(ad);
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch (error) {

@@ -1,3 +1,4 @@
+import {withOptionalBudget} from './optional-work.js';
 import {renderHomeCategories, defaultTopCategories} from './home-categories.js';
 import {initMobileEmployerFollow} from './mobile-job-actions.js?v=20261102-apply-box';
 import {initSearchCategoryPickers} from './category-picker.js?v=20261031-both-2';
@@ -309,7 +310,7 @@ async function loadAccount(){
     const response=await fetch('/api/auth/me', {signal:AbortSignal.timeout(path === '/' ? 1500 : 3000)});
     if(!response.ok)return;
     currentUser=(await response.json()).user;
-    if(currentUser && !['/','/jobs','/job-list','/job-openings','/nurse-jobs-in-uae'].includes(path) && !/^\/(?:job|category|job-location)\//.test(path)){
+    if(currentUser && /^\/(?:account|profile|saved-jobs|applied-jobs|followed-companies|login|signin|sign-in|register|signup|sign-up|login-register)(?:\/|$)/.test(path)){
       const profileResponse=await fetch('/api/candidate/profile', {signal:AbortSignal.timeout(path === '/' ? 1500 : 3000)});
       if(profileResponse.ok){
         const saved=await profileResponse.json();
@@ -3175,6 +3176,11 @@ function render() {
 if (!MEMBER_PATHS.includes(path)) loadCounts().catch(()=>{});
 const isCvAppRoute = /^\/(?:resume-library|resume-maker|resume-builder|ats-resume-builder|cv-builder|services\/resume-maker)\/?$/.test(path);
 let homeContentReady;
+let directoryTaxonomiesReady;
+function prepareDirectoryTaxonomies() {
+  directoryTaxonomiesReady = loadDirectoryTaxonomies();
+  return withOptionalBudget(directoryTaxonomiesReady, undefined, 150);
+}
 const accountReady=loadAccount();
 const initialLoads=isCvAppRoute || path.startsWith('/admin') ? [] : path==='/'?[]:[accountReady,loadSeoPages()];
 if(path==='/')void accountReady.catch(()=>{});
@@ -3195,8 +3201,8 @@ if (path.startsWith('/job/') || path.startsWith('/employer/')) {
 }
 if(isCvAppRoute || path.startsWith('/admin') || MEMBER_PATHS.includes(path)) { /* These screens load their own data. */ }
 else if(path==='/')homeContentReady=Promise.allSettled([loadTopEmployers(),loadConnectedContent()]);
-else if(path==='/jobs'||path==='/job-list'||path==='/job-openings'||path==='/nurse-jobs-in-uae'||path.startsWith('/category/')||path.startsWith('/job-location/'))initialLoads.push(loadLocalJobs(),loadDirectoryTaxonomies());
-else if(path==='/employers')initialLoads.push(loadLocalEmployers(),loadDirectoryTaxonomies());
+else if(path==='/jobs'||path==='/job-list'||path==='/job-openings'||path==='/nurse-jobs-in-uae'||path.startsWith('/category/')||path.startsWith('/job-location/'))initialLoads.push(loadLocalJobs(),prepareDirectoryTaxonomies());
+else if(path==='/employers')initialLoads.push(loadLocalEmployers(),prepareDirectoryTaxonomies());
 else if(path.startsWith('/job/'))initialLoads.push(loadWordPressRecord().then(() => {
   if (wpRecord && (wpRecord.autosaved || String(wpRecord.slug || '').startsWith('autosave-') || !['publish','published','active',''].includes(String(wpRecord.status || '').toLowerCase()))) wpRecord = null;
 }));
@@ -4753,6 +4759,18 @@ document.addEventListener('click',async event=>{
 
 // Reveal only after synchronous page setup and visible assets have settled.
 await revealPage();
+
+// Refresh only native filter links after optional taxonomy data arrives.
+// Keep visible results, search inputs and their listeners in place.
+if (directoryTaxonomiesReady) directoryTaxonomiesReady.then(async () => {
+  await waitForJobNavigationIdle();
+  const fresh = new DOMParser().parseFromString(render(), 'text/html');
+  for (const current of document.querySelectorAll('.jobs-filter-list')) {
+    const index = [...document.querySelectorAll('.jobs-filter-list')].indexOf(current);
+    const replacement = fresh.querySelectorAll('.jobs-filter-list')[index];
+    if (replacement && !current.contains(document.activeElement)) current.replaceChildren(...replacement.childNodes);
+  }
+}).catch(() => {});
 
 // Refresh only the data sections. Preserve the hero, search input, navigation
 // and their listeners while optional homepage requests finish in the background.

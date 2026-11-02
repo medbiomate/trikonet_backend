@@ -17,3 +17,33 @@ export function initMobileEmployerFollow(root = document) {
   media.addEventListener('change', schedule);
   update();
 }
+
+export function initMobileApplyAfterCompany(root = document) {
+  const card = root.querySelector('.job-apply-box');
+  const actions = card?.querySelector('.detail-actions');
+  if (!actions?.querySelector('.apply') || card.dataset.companyDockReady) return;
+  card.dataset.companyDockReady = 'true';
+  const media = matchMedia('(max-width: 850px)');
+  const slot = document.createElement('div');
+  slot.className = 'job-apply-action-slot';
+  actions.before(slot); slot.append(actions);
+  let inlineHeight = actions.getBoundingClientRect().height;
+  const update = () => {
+    if (!actions.classList.contains('is-company-passed')) inlineHeight = actions.getBoundingClientRect().height;
+    // Company details may arrive after the main job content.
+    const company = root.querySelector('.job-description .detail-about-company-card');
+    const docked = media.matches && !!company && company.getBoundingClientRect().bottom <= 0;
+    slot.style.minHeight = docked ? `${inlineHeight}px` : '';
+    actions.classList.toggle('is-company-passed', docked);
+  };
+  let queued = false;
+  const schedule = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; update(); });
+  };
+  addEventListener('scroll', schedule, { passive: true });
+  addEventListener('resize', schedule);
+  media.addEventListener('change', schedule);
+  update();
+}

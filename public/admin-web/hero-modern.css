@@ -6810,3 +6810,14 @@ main.detail-page {
 .detail-exact .job-apply-box { border-radius: 18px; }
 .detail-exact .job-apply-box .apply { border-radius: 12px !important; }
 .detail-exact .job-apply-box .job-application-count { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: #64748b; text-align: center; }
+
+@media (max-width: 850px) {
+  .detail-exact .job-apply-box .detail-actions.is-company-passed {
+    position: fixed !important; inset: auto 0 0 !important; z-index: 1000;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom)) !important;
+    background: rgba(255,255,255,.97) !important;
+    border-top: 1px solid #e2e8f0 !important;
+    box-shadow: 0 -8px 24px rgba(15,23,42,.10) !important;
+    box-sizing: border-box;
+  }
+}

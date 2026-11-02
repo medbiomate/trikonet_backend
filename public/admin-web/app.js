@@ -1,6 +1,6 @@
 import {withOptionalBudget} from './optional-work.js';
 import {renderHomeCategories, defaultTopCategories} from './home-categories.js';
-import {initMobileEmployerFollow} from './mobile-job-actions.js?v=20261102-apply-box';
+import {initMobileEmployerFollow, initMobileApplyAfterCompany} from './mobile-job-actions.js?v=20261102-after-company';
 import {initSearchCategoryPickers} from './category-picker.js?v=20261031-both-2';
 import {recentEmployerPage} from './recent-employers.js';
 import {createJobLogoResolver} from './job-employer-logo.js';
@@ -3267,6 +3267,7 @@ if(!seoPagePayload && (path.startsWith('/category/') || path==='/jobs')){
 }
 fitEmployerLogos();
 initMobileEmployerFollow();
+initMobileApplyAfterCompany();
 // Do not wait for the browser's long DNS timeout before using the durable
 // backup. A ready CDN image always wins; only pending images are retried.
 document.querySelectorAll('.featured-company-logo-wrap img[data-backup]').forEach(image=>{

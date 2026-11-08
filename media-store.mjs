@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { readFile } from 'node:fs/promises';
+import {boundedResponseBytes} from './bounded-response.mjs';
+import {mapLimited} from './map-limited.mjs';
 
 export function createMediaStore(pool, options = {}) {
   let ready;
@@ -18,7 +20,7 @@ export function createMediaStore(pool, options = {}) {
   let uploadsReady;
   const ensureUploads=()=>uploadsReady ||= pool.query(`CREATE TABLE IF NOT EXISTS trikonet_uploaded_public_media (checksum CHAR(64) PRIMARY KEY, public_url VARCHAR(512) NOT NULL) ENGINE=InnoDB`).catch(error=>{uploadsReady=null;throw error;});
   async function publish(value,label='image') {
-    if (Array.isArray(value)) return Promise.all(value.map(item=>publish(item,label)));
+    if (Array.isArray(value)) return mapLimited(value,item=>publish(item,label));
     if(value && typeof value==='object') {
       const result={};
       for(const [key,item] of Object.entries(value))result[key]=key==='logoBackup'?item:await publish(item,`${label}-${key}`);
@@ -90,8 +92,7 @@ export function createMediaStore(pool, options = {}) {
       if(!['www.trikonet.com','trikonet.com','dev.trikonet.com'].includes(parsed.hostname))throw Error('Untrusted media source');
       const response=await fetch(url,{signal:AbortSignal.timeout(20000),redirect:'error'});
       if(!response.ok)throw Error(`Image source returned ${response.status}`);
-      const bytes=Buffer.from(await response.arrayBuffer());
-      if(bytes.length>10*1024*1024)throw Error('Image too large');
+      const bytes=await boundedResponseBytes(response,10*1024*1024);
       const stored=await normalize(`data:${row.post_mime_type};base64,${bytes.toString('base64')}`,row.post_name||`image-${id}`);
       let location=stored;
       try{location=await publishAttachment(row,bytes)||stored;}catch(error){console.error(`Public image ${id} retained on origin:`,error.message);}
@@ -120,7 +121,7 @@ export function createMediaStore(pool, options = {}) {
       await pool.query('INSERT IGNORE INTO trikonet_media (id,filename,mime,bytes) VALUES (?,?,?,?)',[id,filename,match[1],bytes]);
       return `https://api.trikonet.com/media/images/${id}/${filename}`;
     }
-    if(Array.isArray(value))return Promise.all(value.map(item=>normalize(item,label)));
+    if(Array.isArray(value))return mapLimited(value,item=>normalize(item,label));
     if(value && typeof value==='object'){
       const title=value.slug || value.name || value.title?.rendered || (typeof value.title==='string'?value.title:label);
       const result={};

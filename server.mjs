@@ -5,6 +5,7 @@ import {publicPageRedirect} from './public-page-redirect.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
 import {createPublicRequestGate} from './public-request-gate.mjs';
+import {createResilientHandler} from './http-resilience.mjs';
 const publicRequests=createPublicRequestGate();
 const publicResponses=createPublicResponseCache();
 import {createSupportContact} from './support-contact.mjs';
@@ -134,6 +135,7 @@ const dbConfig = process.env.TRIKONET_DB_HOST
 const wpDb = retryDisconnectedReads(mysql.createPool({
   ...dbConfig,
   maxIdle: 2,
+  queueLimit: 100,
   idleTimeout: 30_000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
@@ -883,7 +885,7 @@ const passwordLoginSecurity=createPasswordLoginSecurity(wpDb);
 const passwordReset=createPasswordReset({readLocalDb,writeLocalDb,passwordHash,sessions,sendEmail:sendPasswordResetEmail,onReset:email=>passwordLoginSecurity.clear(email)});
 
 let startupReady;
-const server = http.createServer(async (req, res) => {
+const requestHandler = createResilientHandler(async (req, res) => {
   try {
   await startupReady;
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -941,7 +943,7 @@ const server = http.createServer(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','public-request-gate-20261108');
+    res.setHeader('X-Trikonet-Release','reliability-20261108');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -2255,6 +2257,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Bind first; requests wait for initialization rather than reading partial data.
+const server = http.createServer({requestTimeout:120000,headersTimeout:60000},requestHandler);
 startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   await loadMemoryStore();
   await editorIndexes.ensure();
@@ -2315,7 +2318,7 @@ void accountDeletion.sweep().catch(error=>console.error('Account deletion worker
 function logResourceUsage() {
   const {rss,heapUsed,heapTotal,external}=process.memoryUsage();
   const mib=bytes=>Math.round(bytes/1048576);
-  console.log(JSON.stringify({event:'resource_usage',pid:process.pid,uptimeSeconds:Math.round(process.uptime()),rssMiB:mib(rss),heapUsedMiB:mib(heapUsed),heapTotalMiB:mib(heapTotal),externalMiB:mib(external)}));
+  console.log(JSON.stringify({event:'resource_usage',pid:process.pid,uptimeSeconds:Math.round(process.uptime()),rssMiB:mib(rss),heapUsedMiB:mib(heapUsed),heapTotalMiB:mib(heapTotal),externalMiB:mib(external),...requestHandler.metrics()}));
 }
 logResourceUsage();
 setInterval(logResourceUsage,60000).unref();

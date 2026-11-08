@@ -1,6 +1,7 @@
 import {createJobApplicationStarts} from './job-application-starts.mjs';
 import {readAdminLoginAccount} from './admin-login-account.mjs';
 import {adminPageRedirect} from './admin-page-access.mjs';
+import {publicPageRedirect} from './public-page-redirect.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
 const publicResponses=createPublicResponseCache();
@@ -884,6 +885,11 @@ const server = http.createServer(async (req, res) => {
   await startupReady;
   const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const path = decodeURIComponent(requestUrl.pathname);
+  const publicDestination = publicPageRedirect(req.method, requestUrl);
+  if (publicDestination) {
+    res.writeHead(301, {Location: publicDestination, 'Cache-Control': 'no-cache'});
+    return res.end();
+  }
   if (['GET','HEAD'].includes(req.method) && (path === '/' || path === '/admin' || path.startsWith('/admin/') || ['/admin-login','/admin-portal','/trikonet-admin-access'].includes(path))) {
     const isPage=path==='/'||path==='/admin'||!extname(path);
     if(isPage){

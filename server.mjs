@@ -4,6 +4,8 @@ import {adminPageRedirect} from './admin-page-access.mjs';
 import {publicPageRedirect} from './public-page-redirect.mjs';
 import {jobImportLookup} from './job-import-lookup.mjs';
 import {publicResponseKey,createPublicResponseCache} from './public-response-cache.mjs';
+import {createPublicRequestGate} from './public-request-gate.mjs';
+const publicRequests=createPublicRequestGate();
 const publicResponses=createPublicResponseCache();
 import {createSupportContact} from './support-contact.mjs';
 import {createAdminUserStore} from './admin-user-store.mjs';
@@ -786,6 +788,7 @@ async function sendJson(req, res, status, value) {
   headers['Vary'] = [headers['Vary'], 'Accept-Encoding'].filter(Boolean).join(', ');
   headers['Content-Length'] = body.length;
   if(status===200)publicResponses.set(publicResponseKey(req),body,headers);
+  publicRequests.complete(res,status,body,headers);
   res.writeHead(status, headers);
   res.end(body);
 }
@@ -901,6 +904,7 @@ const server = http.createServer(async (req, res) => {
   if(!['GET','HEAD','OPTIONS'].includes(req.method))publicResponses.clear();
   const publicKey=publicResponseKey(req),cachedPublic=publicKey&&publicResponses.get(publicKey);
   if(cachedPublic){res.writeHead(200,cachedPublic.headers);return res.end(cachedPublic.body);}
+  if(publicKey && await publicRequests.waitOrOwn(publicKey,res))return;
   const legacyImage=path.match(/^\/uploads\/(?:employers|media)\/(\d+)\.[a-z]+$/i);
   if(legacyImage && ['GET','HEAD'].includes(req.method)){
     try{const location=await mediaStore.attachment(Number(legacyImage[1]));res.writeHead(302,{Location:location});return res.end();}
@@ -937,7 +941,7 @@ const server = http.createServer(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','performance-20261102-2');
+    res.setHeader('X-Trikonet-Release','public-request-gate-20261108');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();

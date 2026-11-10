@@ -953,7 +953,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','editor-integrity-20261110');
+    res.setHeader('X-Trikonet-Release','editor-integrity-20261110-2');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -2023,7 +2023,9 @@ const requestHandler = createResilientHandler(async (req, res) => {
       rememberEmployerAddress(db,savedJob);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
       await editorState.write(db,{readKeys:needsCompany?['jobs','employers']:['jobs'],validate(current,merged){
-        if (!(merged.jobs || current.jobs || []).some(item=>item.id===savedJob.id && item.slug===savedJob.slug && item.status===savedJob.status)) throw Object.assign(new Error('This job changed while you were saving. Reopen it and try again.'),{status:409});
+        const jobs = merged.jobs || current.jobs || [];
+        if (!jobs.some(item=>item.id===savedJob.id && item.slug===savedJob.slug && item.status===savedJob.status)) throw Object.assign(new Error('This job changed while you were saving. Reopen it and try again.'),{status:409});
+        if (existingJob?.slug!==savedJob.slug && uniqueJobSlug(savedJob.slug,jobs,savedJob.id)!==savedJob.slug) throw Object.assign(new Error('Another job just reserved this URL. Save again to pick an available URL.'),{status:409});
         if (needsCompany && !resolvePublishedCompany(savedJob,merged.employers || current.employers || [],memoryStore.employers || [])) throw unavailableCompany();
       }});
       googleIndexing.enqueue(existingJob,savedJob).catch(()=>console.error('Google Indexing queue temporarily unavailable'));

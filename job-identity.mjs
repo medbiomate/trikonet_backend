@@ -4,7 +4,9 @@ export function findJobIndex(jobs, record) {
     const index = jobs.findIndex(job => String(job.id) === String(record.id));
     if (index >= 0) return index;
   }
-  const slug = record.originalSlug || record.sourceSlug || record.slug;
+  // A new editor record has an ID even before its first save. A proposed
+  // slug is not an editing identity when that ID is unknown.
+  const slug = record.originalSlug || record.sourceSlug || (!record.id && record.slug);
   return slug ? jobs.findIndex(job => job.slug === slug) : -1;
 }
 

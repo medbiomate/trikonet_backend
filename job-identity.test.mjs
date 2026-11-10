@@ -29,3 +29,11 @@ test('published updates reset all publication fields to current India date',()=>
  for(const key of ['publishedDate','datePosted','postedDate','date'])assert.equal(job[key],'2026-10-02');
  assert.equal(refreshPublicationDate({status:'draft',datePosted:'2020-01-01'},'2026-10-01').datePosted,'2020-01-01');
 });
+
+test('a new stable ID cannot overwrite a job with the proposed slug',()=>{
+ const jobs=[{id:'original',slug:'nurse',title:'Original listing'}];
+ assert.equal(findJobIndex(jobs,{id:'new',slug:'nurse'}),-1);
+ assert.throws(()=>saveJobRecord(jobs,{id:'new',slug:'nurse',title:'New listing'},()=> 'unused','today'),/another job/);
+ assert.equal(jobs[0].title,'Original listing');
+ assert.equal(findJobIndex(jobs,{id:'legacy',originalSlug:'nurse'}),0);
+});

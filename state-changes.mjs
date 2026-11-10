@@ -16,7 +16,7 @@ export function mergeStateChanges(current,before,next){
         // A publish can race its first autosave, which shares the stable ID.
         // Promote the draft; a late autosave must never demote a saved job.
         const incoming=outgoing.get(id);
-        if(incoming && !old.has(id) && item.status==='draft' && ['publish','published','active'].includes(incoming.status))return structuredClone(incoming);
+        if(incoming && !old.has(id) && item.status==='draft' && (['publish','published','active'].includes(incoming.status) || (item.slug?.startsWith('autosave-employer-') && !incoming.autosaved)))return structuredClone(incoming);
         return item;
       });
       const present=new Set(current.map(item=>String(item.id)));

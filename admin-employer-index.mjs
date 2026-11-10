@@ -85,5 +85,10 @@ export function createAdminEmployerIndex(pool,loadImported,ensureState){
    return {jobs:rows.map(row=>JSON.parse(row.card)),total,page,perPage:size,counts,creators,day:filter.day};
   }catch(error){await connection.rollback();throw error;}finally{connection.release();}
  }
- return {ensure,sync,page};
+ async function hiddenSlugs(){
+  await ensure();
+  const [rows]=await pool.query(`SELECT slug FROM ${table} WHERE status IN ('trash','deleted')`);
+  return rows.map(row=>row.slug);
+ }
+ return {ensure,sync,page,hiddenSlugs};
 }

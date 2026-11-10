@@ -1,4 +1,4 @@
-export const employerNameKey = value => String(value || '').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
+export const employerNameKey = value => String(value || '').replace(/&amp;|&#38;|&#x26;/gi,'&').replace(/&nbsp;|&#160;|&#xa0;/gi,' ').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export const isEmployerSnapshot = e => Boolean(e.autosaved || String(e.slug || '').startsWith('autosave-'));
 // Repair only exact-name recovery copies. Preserve originals for recovery;
 // independently saved companies are never merged solely because names match.

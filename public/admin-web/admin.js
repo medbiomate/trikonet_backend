@@ -10,7 +10,7 @@ import {fillAppProfile,readAppProfile} from './admin-app-profile.js?v=20261018-r
 import { createJobPageCache } from './admin-job-cache.js?v=20261021-day-scoped';
 import {candidateProfileView} from './candidate-profile-view.js';
 import { signalAdminSessionChange } from './admin-session.js?v=20261021-fast-admin-1';
-import { createFormRecovery } from './admin-recovery.js?v=20261031-manual-job-save';
+import { createFormRecovery } from './admin-recovery.js?v=20261110-company-save';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 import { initSeoAdmin } from './seo-admin.js?v=1';
 const defaults = {
@@ -8521,8 +8521,10 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
     event.target.value = normalizeWebsiteUrl(event.target.value);
   });
 
+  let employerSavePending = false;
   employerForm.addEventListener('submit', async e => {
     e.preventDefault();
+    if (employerSavePending) return;
     const missing = [];
     if (!document.querySelector('#employer-checklist-categories input:checked')) missing.push('category');
     if (!document.querySelector('#employer-checklist-locations input:checked')) missing.push('location');
@@ -8537,42 +8539,44 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
       showAdminNotice(message);
       return;
     }
-    await employerRecovery.preparePublish();
-    e.preventDefault();
-    if (employerStatusState) employerStatusState.textContent = 'Saving…';
+    employerSavePending = true;
     const saveBtn = document.getElementById('save-employer-btn');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving…';
-    }
-    const split = v => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
-    const employer = {
-      title: document.getElementById('employer-gutenberg-title')?.value.trim() || '',
-      description: description.trim(),
-      originalSlug: employerForm.originalSlug.value,
-      slug: (document.getElementById('field-employer-slug')?.value || '').trim() || (document.getElementById('employer-gutenberg-title')?.value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-      status: document.getElementById('field-employer-status')?.value || 'publish',
-      featured: !!document.getElementById('field-employer-featured')?.checked,
-      coverPhoto: document.getElementById('field-employer-cover')?.value.trim() || '',
-      email: document.getElementById('field-employer-email')?.value.trim() || '',
-      phone: document.getElementById('field-employer-phone')?.value.trim() || '',
-      website: normalizeWebsiteUrl(document.getElementById('field-employer-website')?.value),
-      foundedDate: document.getElementById('field-employer-founded')?.value.trim() || '',
-      companySize: document.getElementById('field-employer-size')?.value.trim() || '',
-      profilePhotos: split(document.getElementById('field-employer-photos')?.value),
-      address: document.getElementById('field-employer-address')?.value.trim() || '',
-      layoutType: employerForm.elements.layoutType?.value || 'default',
-      logo: (document.getElementById('field-employer-logo-val')?.value || '').trim(),
-      categories: [...(document.getElementById('employer-checklist-categories')?.querySelectorAll('input:checked') || [])].map(x => x.value),
-      locations: [...(document.getElementById('employer-checklist-locations')?.querySelectorAll('input:checked') || [])].map(x => x.value),
-      socials: collectEmployerSocials(),
-      local: true
-    };
-
     let employerSaveSucceeded = false;
     try {
+      await employerRecovery.preparePublish();
+      if (employerStatusState) employerStatusState.textContent = 'Saving…';
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+      }
+      const split = v => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+      const employer = {
+        title: document.getElementById('employer-gutenberg-title')?.value.trim() || '',
+        description: description.trim(),
+        originalSlug: employerForm.originalSlug.value,
+        draftId: employerRecovery.draftId,
+        slug: (document.getElementById('field-employer-slug')?.value || '').trim() || (document.getElementById('employer-gutenberg-title')?.value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+        status: document.getElementById('field-employer-status')?.value || 'publish',
+        featured: !!document.getElementById('field-employer-featured')?.checked,
+        coverPhoto: document.getElementById('field-employer-cover')?.value.trim() || '',
+        email: document.getElementById('field-employer-email')?.value.trim() || '',
+        phone: document.getElementById('field-employer-phone')?.value.trim() || '',
+        website: normalizeWebsiteUrl(document.getElementById('field-employer-website')?.value),
+        foundedDate: document.getElementById('field-employer-founded')?.value.trim() || '',
+        companySize: document.getElementById('field-employer-size')?.value.trim() || '',
+        profilePhotos: split(document.getElementById('field-employer-photos')?.value),
+        address: document.getElementById('field-employer-address')?.value.trim() || '',
+        layoutType: employerForm.elements.layoutType?.value || 'default',
+        logo: (document.getElementById('field-employer-logo-val')?.value || '').trim(),
+        categories: [...(document.getElementById('employer-checklist-categories')?.querySelectorAll('input:checked') || [])].map(x => x.value),
+        locations: [...(document.getElementById('employer-checklist-locations')?.querySelectorAll('input:checked') || [])].map(x => x.value),
+        socials: collectEmployerSocials(),
+        local: true
+      };
+
       const res = await fetch('/api/local/employers', {
         method: 'POST',
+        signal: AbortSignal.timeout(30000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(employer)
       });
@@ -8593,7 +8597,7 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
       showAdminNotice(`Employer “${saved.title || employer.title}” ${statusLabel} successfully.`);
       employerSaveSucceeded = true;
       updateEmployerPreview();
-      renderEmployerRows();
+      void loadEmployerPage();
       populateEmployerDropdown();
 
       // If created as part of the "Add Company" flow from Job Editor, return and auto-select
@@ -8620,10 +8624,11 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
         }
       }
     } catch (err) {
-      const message = err?.message || 'Could not save the employer.';
+      const message = err?.name === 'TimeoutError' ? 'The server is taking too long. Your changes are still here. Check the Companies list before retrying.' : err?.message || 'Could not save the employer.';
       if (employerStatusState) employerStatusState.textContent = message;
       showAdminNotice(message, 'error');
     } finally {
+      employerSavePending = false;
       employerRecovery.resume();
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -8633,17 +8638,32 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
     }
   });
 
-  // Move to trash
+  async function trashEmployer(slug) {
+    try {
+      const response = await fetch(`/api/local/employers/${encodeURIComponent(slug)}`, { method: 'DELETE', signal: AbortSignal.timeout(30000) });
+      const result = await response.json();
+      if (!response.ok || result.deleted !== true) throw new Error(result.error || 'Could not move the company to Trash.');
+      localEmployers = localEmployers.filter(item => item.slug !== slug);
+      remoteEmployers = remoteEmployers.filter(item => item.slug !== slug);
+      employerJobCounts.delete(slug);
+      populateEmployerDropdown();
+      void loadEmployerPage();
+      showAdminNotice('Company moved to Trash.');
+      return true;
+    } catch (error) {
+      showAdminNotice(error.message || 'Could not move the company to Trash.', 'error');
+      return false;
+    }
+  }
+
   document.querySelector('#employer-delete-btn')?.addEventListener('click', async () => {
-    const slug = employerForm.originalSlug.value || document.getElementById('field-employer-slug')?.value;
+    const slug = employerForm.originalSlug.value;
     const title = document.getElementById('employer-gutenberg-title')?.value || 'this employer';
-    if (!slug || !confirm(`Move "${title}" to trash?`)) return;
-    await fetch(`/api/local/employers/${encodeURIComponent(slug)}`, { method: 'DELETE' });
-    localEmployers = localEmployers.filter(x => x.slug !== slug);
-    fillEmployer({});
-    renderEmployerRows();
-    location.hash = 'employers';
-    showAdminNotice(`Employer "${title}" moved to Trash successfully.`);
+    if (employerSavePending || !slug || !confirm(`Move "${title}" to Trash?`)) return;
+    if (await trashEmployer(slug)) {
+      fillEmployer({});
+      location.hash = 'employers';
+    }
   });
 
   // Taxonomy Hierarchy Helper
@@ -9054,11 +9074,8 @@ ${!x.autosaved && !String(x.slug || '').startsWith('autosave-') && ['publish','p
     if (empDelBtn) {
       e.preventDefault();
       const slug = empDelBtn.dataset.employerDelete;
-      if (!confirm(`Delete employer “${slug}”?`)) return;
-      await fetch(`/api/local/employers/${encodeURIComponent(slug)}`, { method: 'DELETE' });
-      localEmployers = localEmployers.filter(x => x.slug !== slug);
-      remoteEmployers = remoteEmployers.filter(x => x.slug !== slug);
-      renderEmployerRows();
+      if (!confirm(`Move "${slug}" to Trash?`)) return;
+      await trashEmployer(slug);
     }
   });
 

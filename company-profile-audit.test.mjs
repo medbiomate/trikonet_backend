@@ -53,3 +53,18 @@ test('company cannot disappear while published jobs use its slug, old URL or nam
  const jobs=[{status:'publish',employerSlug:'new-profile'},{status:'publish',employerUrl:'https://www.trikonet.com/employer/old-profile'},{status:'publish',company:'Insights Psychology DMCC'},{status:'draft',employerSlug:'new-profile'},{status:'publish',company:'Unrelated'}];
  assert.equal(publishedCompanyDependents(company,jobs).length,3);
 });
+
+test('job publishing can resolve a legacy company URL even with duplicate names',()=>{
+ const company={slug:'city-clinic',title:'City Clinic',status:'publish'};
+ const other={...company,slug:'another-clinic'};
+ const listing={company:company.title,metas:{_job_employer_url:`https://trikonet.com/employer/${company.slug}/?from=old`}};
+ assert.equal(resolvePublishedCompany(listing,[company,other]),company);
+ assert.equal(resolvePublishedCompany(listing,[{...company,status:'trash'},other]),null);
+});
+test('explicit references to another duplicate do not block cleanup',()=>{
+ const company={slug:'city-clinic',title:'City Clinic'};
+ const linkedElsewhere={company:company.title,employerSlug:'another-clinic',status:'publish'};
+ const nameOnly={company:company.title,status:'publish'};
+ assert.deepEqual(publishedCompanyDependents(company,[linkedElsewhere,nameOnly],{matchName:false}),[]);
+ assert.deepEqual(publishedCompanyDependents(company,[linkedElsewhere,nameOnly]),[nameOnly]);
+});

@@ -66,16 +66,32 @@ export function repairCompanyProfiles(db,imported,admin,now,createId){
  }
  return {recovered,relinked,remaining:auditCompanyProfiles(db,imported).map(({name,slug,reason})=>({name,slug,reason}))};
 }
+function linkedCompanySlug(job) {
+ const url = String(job.employerUrl || job.metas?._job_employer_url || '');
+ const match = url.split(/[?#]/)[0].match(/\/employer\/([^/]+)\/?$/);
+ try { return job.employerSlug || (match ? decodeURIComponent(match[1]) : ''); }
+ catch { return job.employerSlug || ''; }
+}
+
 export function resolvePublishedCompany(job,local,imported=[]){
  const effective=new Map(imported.map(e=>[e.slug,e]));for(const e of local)effective.set(e.slug,e);
- const companies=[...effective.values()].filter(isPublicRecord);
- const exact=companies.find(e=>e.slug===job.employerSlug||(e.urlAliases||[]).includes(`/employer/${job.employerSlug}`));
- if(exact)return exact;
- const matches=companies.filter(e=>employerNameKey(title(e))===employerNameKey(job.company));
+ const companies=[...effective.values()];
+ const slug=linkedCompanySlug(job);
+ const exact=companies.find(e=>slug && (e.slug===slug||(e.urlAliases||[]).includes(`/employer/${slug}`)));
+ if(exact)return isPublicRecord(exact)?exact:null;
+ const key=employerNameKey(job.company||job.metas?._job_employer_name);
+ const matches=companies.filter(e=>key&&isPublicRecord(e)&&employerNameKey(title(e))===key);
  return matches.length===1?matches[0]:null;
 }
 
-export function publishedCompanyDependents(company,jobs=[]){
+export function publishedCompanyDependents(company,jobs=[],{matchName=true}={}){
  const slugs=new Set([company.slug,...(company.urlAliases||[]).map(path=>path.replace(/\/$/,'').split('/').pop())]);
- return jobs.filter(job=>isPublicRecord(job)&&(slugs.has(job.employerSlug)||slugs.has(String(job.employerUrl||job.metas?._job_employer_url||'').replace(/\/$/,'').split('/').pop())||employerNameKey(job.company||job.metas?._job_employer_name)===employerNameKey(title(company))));
+ const key=employerNameKey(title(company));
+ return jobs.filter(job=>{
+  if(!isPublicRecord(job))return false;
+  const slug=linkedCompanySlug(job), importedId=job.metas?._job_employer_posted_by;
+  if(slug)return slugs.has(slug);
+  if(importedId && company.id)return String(importedId)===String(company.id);
+  return matchName && key && employerNameKey(job.company||job.metas?._job_employer_name)===key;
+ });
 }

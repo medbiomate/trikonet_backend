@@ -131,6 +131,7 @@ export function createFormRecovery(form, type, account) {
       notice.append(restore);
     },
     saved(job) { if (type === 'job') { setJobId(job.id); sourceSlug = job.slug; } },
+    get draftId() { return draftId; },
     async preparePublish() { paused=true;generation++;clearTimeout(timer);autosaveController?.abort(); },
     pause() { paused = true; clearTimeout(timer); },
     resume() { paused = false; if (dirty) save(); },

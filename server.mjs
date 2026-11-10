@@ -12,7 +12,7 @@ import {createSupportContact} from './support-contact.mjs';
 import {createAdminUserStore} from './admin-user-store.mjs';
 import {auditCompanyProfiles,repairCompanyProfiles,normalizedCompanyDraft,resolvePublishedCompany,publishedCompanyDependents} from './company-profile-audit.mjs';
 const companyRepairTokens = new Map();
-import {employerIdentity} from './employer-identity.mjs';
+import {assertUniqueCompany,employerIdentity,isTrashedCompany} from './employer-identity.mjs';
 import {findJobByPath} from './job-url-lookup.mjs';
 import {employerOptions} from './employer-options.mjs';
 import {trashJobRecord} from './job-trash.mjs';
@@ -213,7 +213,7 @@ async function populateMemoryStore() {
 }
 // Load imported datasets after listen() so large JSON parsing cannot delay binding.
 
-function fallbackRecords(type, params) {
+function fallbackRecords(type, params, hiddenSlugs = []) {
   const limit = Math.min(Math.max(Number(params.get('per_page')) || 10, 1), 5000);
   const page = Math.max(Number(params.get('page')) || 1, 1);
   const slug = params.get('slug');
@@ -230,7 +230,7 @@ function fallbackRecords(type, params) {
   else if (type === 'posts') list = memoryStore.posts || [];
   else return [];
 
-  const excluded=new Set((params.get('exclude_slugs')||'').split(',').filter(Boolean));
+  const excluded=new Set([...hiddenSlugs,...(params.get('exclude_slugs')||'').split(',').filter(Boolean)]);
   let filtered = list.filter(item=>isPublicRecord(item)&&!excluded.has(item.slug));
   if(params.get('id'))filtered=filtered.filter(item=>Number(item.id)===Number(params.get('id')));
 
@@ -289,7 +289,7 @@ function fallbackRecords(type, params) {
   return newestFirst(filtered).slice(offset, offset + limit);
 }
 
-function fallbackCount(type, params) {
+function fallbackCount(type, params, hiddenSlugs = []) {
   const query = (params.get('q') || '').trim().toLowerCase();
   const location = (params.get('location') || '').trim();
   const category = (params.get('category') || '').trim();
@@ -297,9 +297,10 @@ function fallbackCount(type, params) {
 
   let list = type === 'employer' ? (memoryStore.employers || []) : (memoryStore.jobs || []);
   if (!query && (!location || location === 'Country or City' || location === 'City or postcode') && (!category || category === 'All Categories') && !jobType) {
-    return list.length;
+    const hidden = new Set(hiddenSlugs);
+    return list.filter(item=>isPublicRecord(item) && !hidden.has(item.slug)).length;
   }
-  return fallbackRecords(type === 'employer' ? 'employer' : 'job_listing', params).length;
+  return fallbackRecords(type === 'employer' ? 'employer' : 'job_listing', params, hiddenSlugs).length;
 }
 
 // Taxonomy mappings for WordPress meta
@@ -334,7 +335,7 @@ async function employerLogoMap(ids) {
   );
 }
 
-async function wordpressRecords(type, params, adminOptions = null) {
+async function wordpressRecords(type, params, adminOptions = null, hiddenSlugs = []) {
   const postType = {
     job_listing: 'job_listing',
     employer: 'employer',
@@ -354,7 +355,7 @@ async function wordpressRecords(type, params, adminOptions = null) {
   const where = ['post_type = ?'];
   const values = [postType];
 
-  const excludedPublicSlugs=(params.get('exclude_slugs')||'').split(',').filter(Boolean).slice(0,1000);
+  const excludedPublicSlugs=[...hiddenSlugs,...(params.get('exclude_slugs')||'').split(',').filter(Boolean).slice(0,1000)];
   if(excludedPublicSlugs.length){where.push(`post_name NOT IN (${excludedPublicSlugs.map(()=>'?').join(',')})`);values.push(...excludedPublicSlugs);}
   if (type === 'media') where.push("post_mime_type LIKE 'image/%'");
   if (slug) {
@@ -559,11 +560,16 @@ async function wordpressRecords(type, params, adminOptions = null) {
     ? records.map(summarizePost) : records;
 }
 
-async function wordpressCount(type, params, adminOptions = null) {
+async function wordpressCount(type, params, adminOptions = null, hiddenSlugs = []) {
   const postType = type === 'employer' ? 'employer' : 'job_listing';
   const where = ['post_type = ?'];
   if (!adminOptions) where.push("post_status = 'publish'");
   const values = [postType];
+  if (hiddenSlugs.length) {
+    where.push(`post_name NOT IN (${hiddenSlugs.map(()=>'?').join(',')})`);
+    values.push(...hiddenSlugs);
+  }
+
 
   const query = (params.get('q') || '').trim();
   const location = (params.get('location') || '').trim();
@@ -644,6 +650,10 @@ async function ensurePersistentState() {
 }
 
 const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
+async function hiddenEmployerSlugs(type) {
+  if (type !== 'employer') return [];
+  return adminEmployerIndex.hiddenSlugs();
+}
 
 const adminJobIndex=createAdminJobIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.jobs||[];},ensurePersistentState);
 const adminEmployerIndex=createAdminEmployerIndex(wpDb,async()=>{await loadMemoryStore();return memoryStore.employers||[];},ensurePersistentState);
@@ -943,7 +953,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','reliability-20261108');
+    res.setHeader('X-Trikonet-Release','editor-integrity-20261110');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -1012,8 +1022,8 @@ const requestHandler = createResilientHandler(async (req, res) => {
       await loadMemoryStore();
       const db = await readCatalogueDb();
       const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
-      const employer = (db.employers || []).find(item => item.slug === slug && isPublicRecord(item)) || (memoryStore.employers || []).find(item => item.slug === slug && isPublicRecord(item));
-      if (!employer) return sendJson(req,res,404,{error:'Employer not found'});
+      const employer = (db.employers || []).find(item => item.slug === slug) || (memoryStore.employers || []).find(item => item.slug === slug);
+      if (!isPublicRecord(employer)) return sendJson(req,res,404,{error:'Employer not found'});
       return sendJson(req,res,200,employerJobPage(memoryStore.jobs || [],db.jobs || [],employer,requestUrl.searchParams.get('page')));
     } catch { return sendJson(req,res,503,{error:'Unable to load employer jobs.'}); }
   }
@@ -1095,7 +1105,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const slug=decodeURIComponent(path.slice('/api/admin/employer-record/'.length));
     const db=await readCatalogueDb(['employers']);await loadMemoryStore();
     const record=db.employers.find(e=>e.slug===slug)||memoryStore.employers.find(e=>e.slug===slug);
-    return sendJson(req,res,record?200:404,record?normalizedCompanyDraft(record):{error:'Company not found'});
+    return record && !isTrashedCompany(record) ? sendJson(req,res,200,normalizedCompanyDraft(record)) : sendJson(req,res,404,{error:'Company not found'});
   }
   if(path==='/admin/company-profile-repair' && ['GET','POST'].includes(req.method)){
     const admin=await currentAdminSession(req);
@@ -1184,13 +1194,15 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   // API: WordPress count
   if (path === '/api/wp/count' && req.method === 'GET') {
+    const type = requestUrl.searchParams.get('type');
+    const hidden = await hiddenEmployerSlugs(type);
     try {
       return sendJson(req, res, 200, {
-        total: await wordpressCount(requestUrl.searchParams.get('type'), requestUrl.searchParams)
+        total: await wordpressCount(type, requestUrl.searchParams, null, hidden)
       });
     } catch {
       return sendJson(req, res, 200, {
-        total: fallbackCount(requestUrl.searchParams.get('type'), requestUrl.searchParams)
+        total: fallbackCount(type, requestUrl.searchParams, hidden)
       });
     }
   }
@@ -1876,6 +1888,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
         return sendJson(req,res,200,{id,slug,status:saved.status});
       }
       const slug = `autosave-${body.type}-${body.draftId}`;
+      if (list.some(item=>item.id===body.draftId && !isEmployerSnapshot(item))) return sendJson(req,res,200,{skipped:true});
       const index = list.findIndex(item => item.slug === slug);
       const now = new Date().toISOString();
       const saved = { ...record, id: body.draftId, requestedSlug: record.slug || '', createdBy: jobCreator(index >= 0 ? list[index] : null, admin), slug, originalSlug: '', status: 'draft', local: true, autosaved: true,
@@ -1883,9 +1896,11 @@ const requestHandler = createResilientHandler(async (req, res) => {
         createdAt: index >= 0 ? list[index].createdAt : now, date: now, publishedDate: now };
       if (index >= 0 && String(list[index].autosaveOwner) !== String(admin.userId)) return sendJson(req,res,403,{error:'Draft access denied.'});
       if (index >= 0) list[index] = saved; else list.unshift(saved);
-      await writeLocalDb(db);
+      await editorState.write(db,{validate(current){
+        if ((current.employers || []).some(item=>item.id===body.draftId && !isEmployerSnapshot(item))) throw Object.assign(new Error('Draft was already saved.'),{status:409});
+      }});
       return sendJson(req,res,200,{slug,status:'draft'});
-    } catch(error) {console.error(JSON.stringify({event:'admin_autosave_failed',code:error.code||error.name,message:String(error.message||'').slice(0,220)}));return sendJson(req,res,503,{error:'Server draft sync failed. Your device recovery copy is retained.'}); }
+    } catch(error) {if(error.status===409)return sendJson(req,res,200,{skipped:true});console.error(JSON.stringify({event:'admin_autosave_failed',code:error.code||error.name,message:String(error.message||'').slice(0,220)}));return sendJson(req,res,503,{error:'Server draft sync failed. Your device recovery copy is retained.'}); }
   }
 
   if(path==='/api/admin/google-indexing-status'&&req.method==='GET'){
@@ -1969,10 +1984,12 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const db = await editorState.read();
-      if (['publish','published','active'].includes(job.status) && (job.employerSlug || job.employerUrl || job.company || job.metas?._job_employer_name)) {
+      const needsCompany = ['publish','published','active'].includes(job.status) && (job.employerSlug || job.employerUrl || job.company || job.metas?._job_employer_name);
+      const unavailableCompany = ()=>Object.assign(new Error('Select a published company before publishing this job. The selected company is unavailable.'),{status:409,fields:['employerSlug']});
+      if (needsCompany) {
         await loadMemoryStore();
         const company=resolvePublishedCompany(job,db.employers,memoryStore.employers||[]);
-        if(!company)return sendJson(req,res,409,{error:'Save and publish the employer profile before publishing this job. Its company profile is not publicly available.',fields:['employerSlug']});
+        if(!company)throw unavailableCompany();
         job.employerSlug=company.slug;job.employerUrl=`/employer/${company.slug}`;
       }
       let existingIndex = findJobIndex(db.jobs, job);
@@ -2005,14 +2022,18 @@ const requestHandler = createResilientHandler(async (req, res) => {
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       rememberEmployerAddress(db,savedJob);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
-      await writeLocalDb(db);
+      await editorState.write(db,{readKeys:needsCompany?['jobs','employers']:['jobs'],validate(current,merged){
+        if (!(merged.jobs || current.jobs || []).some(item=>item.id===savedJob.id && item.slug===savedJob.slug && item.status===savedJob.status)) throw Object.assign(new Error('This job changed while you were saving. Reopen it and try again.'),{status:409});
+        if (needsCompany && !resolvePublishedCompany(savedJob,merged.employers || current.employers || [],memoryStore.employers || [])) throw unavailableCompany();
+      }});
       googleIndexing.enqueue(existingJob,savedJob).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
       seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
       emsSync.queue(savedJob, emsJobOperator(savedJob, db.users || [])).then(() => emsSync.flush())
         .catch(error => console.error('EMS sync queue failed:', error.message));
       return sendJson(req, res, 200, savedJob);
     } catch (error) {
-      return sendJson(req, res, 400, { error: error.message });
+      if (!error.status) console.error(JSON.stringify({event:'admin_job_save_failed',code:error.code||error.name}));
+      return sendJson(req, res, error.status || (error.code ? 503 : 400), { error:error.code?'Unable to save the job. Please retry.':error.message, fields:error.fields });
     }
   }
 
@@ -2067,22 +2088,28 @@ const requestHandler = createResilientHandler(async (req, res) => {
       if (!String(employer.description || '').replace(/<[^>]*>/g,'').replace(/&nbsp;|&#160;/gi,' ').trim()) missing.push('description');
       if (typeof employer.logo !== 'string' || !employer.logo.trim()) missing.push('logo');
       if (missing.length) return sendJson(req,res,400,{error:`Company ${missing.join(', ')} required before saving.`, fields:missing});
-      employer.slug = employer.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       employer.updatedAt = new Date().toISOString();
       employer.createdAt = employer.createdAt || employer.updatedAt;
       employer.local = true;
 
       const db = await editorState.read();
       await loadMemoryStore();
-      const {index, existing, slug: requestedSlug, snapshot} = employerIdentity(employer, db.employers, memoryStore.employers || []);
-      const previousCompany = existing || (memoryStore.employers || []).find(item=>item.slug===employer.originalSlug);
-      if (previousCompany && isPublicRecord(previousCompany) && !isPublicRecord(employer) && publishedCompanyDependents(previousCompany,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before unpublishing the company.'});
+      const imported = memoryStore.employers || [];
+      const {index, existing, slug: requestedSlug, snapshot} = employerIdentity(employer, db.employers, imported);
+      if (snapshot && existing.autosaveOwner && String(existing.autosaveOwner)!==String(admin.userId) && admin.role!=='Administrator') {
+        return sendJson(req,res,403,{error:'This recovery draft belongs to another editor.'});
+      }
+      const importedOriginal = imported.find(item=>item.slug===employer.originalSlug);
+      const previousCompany = existing && !snapshot ? existing : importedOriginal;
+      if (isTrashedCompany(previousCompany)) return sendJson(req,res,409,{error:'This company has been moved to Trash.'});
+      if (importedOriginal && requestedSlug !== importedOriginal.slug) return sendJson(req,res,409,{error:'Keep the existing URL when editing an imported company.'});
       employer.slug = requestedSlug;
       if (snapshot) { delete employer.autosaved; delete employer.autosaveOwner; delete employer.sourceSlug; delete employer.requestedSlug; }
-      const duplicate = db.employers.find(item => !isEmployerSnapshot(item) && item !== existing && employerNameKey(item.title) === employerNameKey(employer.title));
-      if (duplicate) return sendJson(req,res,409,{error:'A company with this name already exists. Select or edit the existing company.',existingSlug:duplicate.slug});
       const nowIso = employer.updatedAt;
-      employer.id = existing?.id || crypto.randomUUID();
+      const draftId = /^[a-f0-9-]{36}$/.test(employer.draftId || '') ? employer.draftId : null;
+      delete employer.draftId;
+      employer.id = existing?.id || importedOriginal?.id || draftId || crypto.randomUUID();
+      assertUniqueCompany(employer, db.employers, imported, previousCompany);
       if (existing?.urlAliases) employer.urlAliases = [...new Set([...(existing.urlAliases || []),...(employer.urlAliases || [])])];
       if (existing && !snapshot && existing.slug !== employer.slug) employer.urlAliases = [...new Set([...(employer.urlAliases || []), `/employer/${existing.slug}`])];
       employer.createdAt = existing ? existing.createdAt : nowIso;
@@ -2096,25 +2123,57 @@ const requestHandler = createResilientHandler(async (req, res) => {
       if (index >= 0) db.employers[index] = employer;
       else db.employers.unshift(employer);
 
-      await writeLocalDb(db);
+      await editorState.write(db,{readKeys:previousCompany && !isPublicRecord(employer) ? ['jobs'] : [],validate(current,merged){
+        if (previousCompany && isPublicRecord(previousCompany) && !isPublicRecord(employer)) {
+          const jobs = new Map((memoryStore.jobs || []).map(item=>[item.slug,item]));
+          for (const item of current.jobs || []) jobs.set(item.slug,item);
+          if (publishedCompanyDependents(previousCompany,[...jobs.values()]).length) throw Object.assign(new Error('This company has published jobs. Unpublish or reassign those jobs before unpublishing the company.'),{status:409});
+        }
+        assertUniqueCompany(employer, merged.employers || current.employers, imported, previousCompany);
+        const saved = merged.employers?.find(item=>item.id===employer.id);
+        if (!saved || saved.slug!==employer.slug || isTrashedCompany(saved)) throw Object.assign(new Error('This company changed while you were saving. Reopen the editor and try again.'),{status:409});
+      }});
       emsSync.queue(employer, employer.createdBy, 'company').then(() => emsSync.flush())
         .catch(error => console.error('EMS employer sync queue failed:', error.message));
       return sendJson(req, res, 200, employer);
     } catch (error) {
-      return sendJson(req, res, error.status || 400, { error: error.message });
+      return sendJson(req, res, error.status || 400, { error: error.message, existingSlug:error.existingSlug });
     }
   }
 
   if (path.startsWith('/api/local/employers/') && req.method === 'DELETE') {
     if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
-    const db = await editorState.read();
-    const company = db.employers.find(item=>item.slug===slug);
-    if(company && publishedCompanyDependents(company,db.jobs).length) return sendJson(req,res,409,{error:'This company has published jobs. Unpublish or reassign those jobs before deleting the company.'});
-    const before = db.employers.length;
-    db.employers = db.employers.filter(item => item.slug !== slug);
-    await writeLocalDb(db);
-    return sendJson(req, res, before === db.employers.length ? 404 : 200, { deleted: before !== db.employers.length });
+    try {
+      const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
+      const db = await editorState.read(['employers']);
+      await loadMemoryStore();
+      const imported = memoryStore.employers || [];
+      const localCompany = db.employers.find(item=>item.slug===slug);
+      const company = localCompany || imported.find(item=>item.slug===slug);
+      if (!company) return sendJson(req,res,404,{error:'Company not found.'});
+      if (isTrashedCompany(company)) return sendJson(req,res,200,{deleted:true});
+      const trashed = {...company,id:company.id || crypto.randomUUID(),status:'trash',local:true};
+      if (localCompany) db.employers[db.employers.indexOf(localCompany)] = trashed;
+      else db.employers.push(trashed);
+      await editorState.write(db,{readKeys:['jobs'],validate(current,merged){
+        const companies = new Map(imported.map(item=>[item.slug,item]));
+        for (const item of current.employers || []) companies.set(item.slug,item);
+        const currentCompany = companies.get(slug) || company;
+        const name = item=>employerNameKey(item.title?.rendered ?? item.title);
+        const hasOtherCompany = [...companies.values()].some(item=>item.slug!==slug && isPublicRecord(item) && name(item)===name(currentCompany));
+        const jobs = new Map((memoryStore.jobs || []).map(item=>[item.slug,item]));
+        for (const item of current.jobs || []) jobs.set(item.slug,item);
+        if (publishedCompanyDependents(currentCompany,[...jobs.values()],{matchName:!hasOtherCompany}).length) {
+          throw Object.assign(new Error('This company has published jobs linked to it. Reassign or unpublish those jobs before deleting it.'),{status:409});
+        }
+        if (!merged.employers?.some(item=>item.slug===slug && isTrashedCompany(item))) {
+          throw Object.assign(new Error('This company changed while you were deleting it. Refresh and try again.'),{status:409});
+        }
+      }});
+      return sendJson(req,res,200,{deleted:true});
+    } catch(error) {
+      return sendJson(req,res,error.status||503,{error:error.status?error.message:'Unable to move the company to Trash. Please try again.'});
+    }
   }
 
   // API: Taxonomies
@@ -2193,10 +2252,11 @@ const requestHandler = createResilientHandler(async (req, res) => {
       res.writeHead(404);
       return res.end('Not found');
     }
+    const hidden = await hiddenEmployerSlugs(type);
     try {
-      return sendJson(req, res, 200, await wordpressRecords(type, requestUrl.searchParams));
+      return sendJson(req, res, 200, await wordpressRecords(type, requestUrl.searchParams, null, hidden));
     } catch {
-      const records = fallbackRecords(type, requestUrl.searchParams);
+      const records = fallbackRecords(type, requestUrl.searchParams, hidden);
       return sendJson(req, res, 200, records);
     }
   }

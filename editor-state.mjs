@@ -15,7 +15,7 @@ export function createEditorState(pool,ensure,media,index){
   for(const key of keys)state[key] ||= ['jobs','employers'].includes(key)?[]:{};
   snapshots.set(state,{keys,before:structuredClone(state)});return state;
  }
- async function write(state){
+ async function write(state,{validate,readKeys=[]}={}){
   const snapshot=snapshots.get(state);if(!snapshot)return false;
   const next=await prepareStateMedia(state,snapshot.before,media);
   const changed=snapshot.keys.filter(key=>JSON.stringify(next[key])!==JSON.stringify(snapshot.before[key]));
@@ -23,7 +23,7 @@ export function createEditorState(pool,ensure,media,index){
   const connection=await pool.getConnection();
   try{
    await connection.beginTransaction();
-   const [rows]=await connection.query(`SELECT CAST(JSON_OBJECT(${projection(changed)}) AS CHAR) payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE`);
+   const [rows]=await connection.query(`SELECT CAST(JSON_OBJECT(${projection([...new Set([...changed,...readKeys])])}) AS CHAR) payload FROM trikonet_app_state WHERE state_key='main' FOR UPDATE`);
    if(!rows[0])throw Error('Editor storage unavailable');
    const current=JSON.parse(rows[0].payload);
    let mergedJobs,mergedEmployers;
@@ -34,6 +34,7 @@ export function createEditorState(pool,ensure,media,index){
     if(key==='employers')mergedEmployers=merged;
     values.push(`$.${key}`,JSON.stringify(merged));return '?,JSON_EXTRACT(?,\'$\')';
    });
+   if(validate)validate(current,{jobs:mergedJobs,employers:mergedEmployers});
    await connection.query(`UPDATE trikonet_app_state SET payload=JSON_SET(payload,${updates.join(',')}),updated_at=CURRENT_TIMESTAMP WHERE state_key='main'`,values);
    if(index&&mergedJobs)await index.sync(connection,current.jobs||[],mergedJobs);
    if(index?.syncEmployers&&mergedEmployers)await index.syncEmployers(connection,current.employers||[],mergedEmployers);

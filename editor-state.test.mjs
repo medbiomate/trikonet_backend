@@ -41,3 +41,23 @@ test('late autosave cannot demote a published job through scoped writes',async()
 test('private state scopes are rejected and unrelated writers fall through',async()=>{
  const f=fixture();await assert.rejects(f.store.read(['users']),/Invalid/);assert.equal(await f.store.write({users:[]}),false);
 });
+
+test('validation sees current related records and aborts before persisting',async()=>{
+ const f=fixture(),db=await f.store.read();
+ db.employers.push({id:'candidate',slug:'clinic',title:'City Clinic'});
+ f.state.jobs.push({id:'new-job',employerSlug:'clinic',status:'publish'});
+ await assert.rejects(f.store.write(db,{readKeys:['jobs'],validate(current,merged){
+  assert.equal(current.jobs[0].id,'new-job');
+  assert.equal(merged.employers[0].slug,'clinic');
+  throw Error('blocked under lock');
+ }}),/blocked under lock/);
+ assert.equal(f.failed,true);
+ assert.deepEqual(f.state.employers,[]);
+});
+test('explicit company draft promotes a recovery copy inserted during save',async()=>{
+ const f=fixture(),db=await f.store.read();
+ f.state.employers.push({id:'one',slug:'autosave-employer-one',status:'draft',autosaved:true});
+ db.employers.push({id:'one',slug:'clinic',status:'draft'});
+ await f.store.write(db);
+ assert.deepEqual(f.state.employers,[{id:'one',slug:'clinic',status:'draft'}]);
+});

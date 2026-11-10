@@ -22,6 +22,6 @@ export async function publicDirectory(local, params, fetchRemote) {
  .sort((a,b)=>score(b)-score(a)||time(b)-time(a)||(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0));
  const page=Math.max(1,Math.floor(Number(params.get('page'))||1));
  const size=Math.min(30,Math.max(1,Math.floor(Number(params.get('per_page'))||10)));
- const jobs=await publicJobPage(filtered,page,size,fetchRemote,visible.map(job=>job.slug));
+ const jobs=await publicJobPage(filtered,page,size,fetchRemote,local.filter(job=>isPublicRecord(job)||['trash','deleted'].includes(job.status)).flatMap(job=>[job.slug,...(job.urlAliases || []).map(path=>path.split('/').pop())]));
  return jobs.map(job=>summarizeJob(job));
 }

@@ -1,3 +1,4 @@
+import {publicEmployerDirectory} from './public-employer-directory.mjs';
 import {createJobApplicationStarts} from './job-application-starts.mjs';
 import {readAdminLoginAccount} from './admin-login-account.mjs';
 import {adminPageRedirect} from './admin-page-access.mjs';
@@ -953,7 +954,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','editor-integrity-20261110-2');
+    res.setHeader('X-Trikonet-Release','public-directory-20261110');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -1927,6 +1928,21 @@ const requestHandler = createResilientHandler(async (req, res) => {
     if (!job || !isPublicRecord(job)) return sendJson(req,res,404,{error:'Job not found'});
     return sendJson(req,res,200,{slug:job.slug,publicPath:publicJobPath(job),job});
   }
+  if (path === '/api/public/employers' && req.method === 'GET') {
+    await loadMemoryStore();
+    const db = await readCatalogueDb(['jobs','employers']);
+    const jobs = new Map((memoryStore.jobs || []).map(job=>[job.slug,job]));
+    for (const job of db.jobs) jobs.set(job.slug,job);
+    const companiesById = new Map((memoryStore.employers || []).map(item=>[String(item.id),item.slug]));
+    const counts = new Map();
+    for (const job of jobs.values()) {
+      if (!isPublicRecord(job) || !isActiveJob(job)) continue;
+      const slug = job.employerSlug || companiesById.get(String(job.metas?._job_employer_posted_by));
+      if (slug) counts.set(slug,(counts.get(slug)||0)+1);
+    }
+    return sendJson(req,res,200,publicEmployerDirectory(memoryStore.employers || [],db.employers,counts,requestUrl.searchParams));
+  }
+
   if (path === '/api/public/jobs' && req.method === 'GET') {
     const db=await readCatalogueDb(['jobs']);
     const jobs=await publicDirectory(db.jobs,requestUrl.searchParams,async(page,size,excluded)=>{

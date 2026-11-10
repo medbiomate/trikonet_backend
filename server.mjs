@@ -722,12 +722,12 @@ async function loadSeoRecords() {
       if (taxonomies[field] && !taxonomies[field].some(item => item.id === t.id)) taxonomies[field].push({id:t.id,name:t.name,slug:t.slug});
     });
     metas.forEach(m => { const job=jobs.get(Number(m.post_id)); if (job) job.metas[m.meta_key]=m.meta_value; });
-    const local=await readCatalogueDb();
+    const local=await readCatalogueDb(['taxonomies']);
     for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
     return {jobs:[...jobs.values()],taxonomies};
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') throw error;
-    const local=await readCatalogueDb();
+    const local=await readCatalogueDb(['taxonomies']);
     const taxonomies={categories:[...(memoryStore.taxonomies?.categories || [])],locations:[...(memoryStore.taxonomies?.locations || [])]};
     for (const field of ['categories','locations']) for (const term of local.taxonomies?.[field] || []) if (!taxonomies[field].some(item=>item.name.toLowerCase()===term.name.toLowerCase())) taxonomies[field].push(term);
     return {jobs:memoryStore.jobs || [],taxonomies};

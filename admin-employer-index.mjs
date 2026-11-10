@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {indexSourceHash} from './index-source-hash.mjs';
 import {jobDay,selectedDay} from './admin-job-filters.mjs';
 const table='trikonet_admin_employer_index';
 const text=value=>String(value?.rendered??value??'');
@@ -41,15 +41,16 @@ export function createAdminEmployerIndex(pool,loadImported,ensureState){
    await pool.query(`CREATE TABLE IF NOT EXISTS ${table} (slug VARCHAR(255) PRIMARY KEY,status VARCHAR(16) NOT NULL,job_day DATE NULL,posted_ms BIGINT NOT NULL,creator_id VARCHAR(191) NOT NULL,creator_email VARCHAR(320) NOT NULL,creator_name VARCHAR(191) NOT NULL,is_local BOOLEAN NOT NULL,search_text TEXT NOT NULL,categories JSON NOT NULL,types JSON NOT NULL,card LONGTEXT NOT NULL,INDEX day_status_order(job_day,status,posted_ms),INDEX day_creator_order(job_day,creator_id,posted_ms),INDEX status_order(status,posted_ms),INDEX creator_order(creator_id,posted_ms)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
    await pool.query('CREATE TABLE IF NOT EXISTS trikonet_admin_employer_index_meta (id INT PRIMARY KEY,source_hash CHAR(64) NOT NULL) ENGINE=InnoDB');
    const source=await loadImported();imported=new Map(source.filter(j=>j.slug).map(j=>[j.slug,{...j,local:false}]));
-   const sourceHash=createHash('sha256').update('schema-v1').update(JSON.stringify(source.map(indexEmployer))).digest('hex');
+   const sourceHash=indexSourceHash(source,indexEmployer);
    const connection=await pool.getConnection();
    try{
     // Same lock order as job writers: state first, then index. Readers see an
     // atomic catalogue; a job saved during initialization cannot disappear.
     await connection.beginTransaction();
-    const [rows]=await connection.query("SELECT CAST(JSON_EXTRACT(payload,'$.employers') AS CHAR) jobs FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
+    await connection.query("SELECT state_key FROM trikonet_app_state WHERE state_key='main' FOR UPDATE");
     const [meta]=await connection.query('SELECT source_hash FROM trikonet_admin_employer_index_meta WHERE id=1');
     if(meta[0]?.source_hash===sourceHash){await connection.commit();return;}
+    const [rows]=await connection.query("SELECT CAST(JSON_EXTRACT(payload,'$.employers') AS CHAR) jobs FROM trikonet_app_state WHERE state_key='main'");
     const local=JSON.parse(rows[0]?.jobs||'[]');const effective=new Map(imported);
     for(const job of local)effective.set(job.slug,{...job,local:true});
     await connection.query(`DELETE FROM ${table}`);

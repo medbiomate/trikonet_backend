@@ -1021,7 +1021,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
     try {
       await loadMemoryStore();
-      const db = await readCatalogueDb();
+      const db = await readCatalogueDb(['jobs','employers']);
       const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
       const employer = (db.employers || []).find(item => item.slug === slug) || (memoryStore.employers || []).find(item => item.slug === slug);
       if (!isPublicRecord(employer)) return sendJson(req,res,404,{error:'Employer not found'});
@@ -1935,10 +1935,10 @@ const requestHandler = createResilientHandler(async (req, res) => {
     for (const job of db.jobs) jobs.set(job.slug,job);
     const companiesById = new Map((memoryStore.employers || []).map(item=>[String(item.id),item.slug]));
     const counts = new Map();
+    const now = new Date();
     for (const job of jobs.values()) {
-      if (!isPublicRecord(job) || !isActiveJob(job)) continue;
       const slug = job.employerSlug || companiesById.get(String(job.metas?._job_employer_posted_by));
-      if (slug) counts.set(slug,(counts.get(slug)||0)+1);
+      if (slug && isActiveJob(job,now)) counts.set(slug,(counts.get(slug)||0)+1);
     }
     return sendJson(req,res,200,publicEmployerDirectory(memoryStore.employers || [],db.employers,counts,requestUrl.searchParams));
   }

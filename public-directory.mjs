@@ -13,11 +13,14 @@ export async function publicDirectory(local, params, fetchRemote) {
  const time=job=>{if(timeCache.has(job))return timeCache.get(job);const value=Date.parse(job.publishedDate||job.postedDate||job.datePosted||job.date||job.createdAt||'')||0;timeCache.set(job,value);return value;};
  const visible=local.filter(isPublicRecord);
  const filtered=uniqueJobs(visible.filter(job=>{
-   // Keep only numeric ranks, not every normalized description, during sorting.
-   const searchText=q?text(job):'';
-   const matches=(!q||words.every(word=>searchText.includes(word)))&&(!location||location==='country or city'||(job.locations||[]).some(v=>plain(v)===location))&&(!category||category==='all categories'||(job.categories||[]).some(v=>plain(v).includes(category)))&&(!type||(job.types||[]).some(v=>plain(v)===type));
-   if(matches)score(job,searchText);
-   return matches;
+   // Check structured fields before normalizing the full job description.
+   if (location && location !== 'country or city' && !(job.locations || []).some(value => plain(value) === location)) return false;
+   if (category && category !== 'all categories' && !(job.categories || []).some(value => plain(value).includes(category))) return false;
+   if (type && !(job.types || []).some(value => plain(value) === type)) return false;
+   const searchText = q ? text(job) : '';
+   if (q && !words.every(word => searchText.includes(word))) return false;
+   score(job,searchText);
+   return true;
  }))
  .sort((a,b)=>score(b)-score(a)||time(b)-time(a)||(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0));
  const page=Math.max(1,Math.floor(Number(params.get('page'))||1));

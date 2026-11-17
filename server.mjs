@@ -143,10 +143,11 @@ const wpDb = retryDisconnectedReads(mysql.createPool({
 }));
 const emsSync = createEmsSync(wpDb);
 const googleIndexing=createGoogleIndexing({pool:wpDb});
+let jobUrlTableReady;
 async function numericJobId(job) {
   if (job?.urlJobId) return job.urlJobId;
   if (/^[1-9]\d*$/.test(String(job?.id || ''))) return String(job.id);
-  await wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_job_url_ids (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, record_id VARCHAR(100) NOT NULL UNIQUE) ENGINE=InnoDB AUTO_INCREMENT=1000000000`);
+  await (jobUrlTableReady ||= wpDb.query(`CREATE TABLE IF NOT EXISTS trikonet_job_url_ids (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, record_id VARCHAR(100) NOT NULL UNIQUE) ENGINE=InnoDB AUTO_INCREMENT=1000000000`).catch(error => { jobUrlTableReady = undefined; throw error; }));
   await wpDb.query('INSERT IGNORE INTO trikonet_job_url_ids (record_id) VALUES (?)', [String(job.id)]);
   const [rows] = await wpDb.query('SELECT id FROM trikonet_job_url_ids WHERE record_id=?', [String(job.id)]);
   return String(rows[0].id);
@@ -954,7 +955,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {
-    res.setHeader('X-Trikonet-Release','public-directory-20261110');
+    res.setHeader('X-Trikonet-Release','job-publish-load-20261117');
     let storage = 'json-fallback';
     try {
       await ensurePersistentState();
@@ -1980,6 +1981,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   }
 
   if (path === '/api/local/jobs' && (req.method === 'POST' || req.method === 'PUT')) {
+    const started = performance.now();
     try {
       const admin=await currentAdminSession(req);
       if(!admin)return sendJson(req,res,401,{error:'Sign in to save jobs.'});
@@ -1999,12 +2001,16 @@ const requestHandler = createResilientHandler(async (req, res) => {
       if(job.deadline||job.expiryDate){job.deadline=job.deadline||job.expiryDate;job.expiryDate=job.expiryDate||job.deadline;}
 
       const formattedDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      const db = await editorState.read();
       const needsCompany = ['publish','published','active'].includes(job.status) && (job.employerSlug || job.employerUrl || job.company || job.metas?._job_employer_name);
+      const [db, companyState] = await Promise.all([
+        editorState.read(['jobs','jobRecoveryById','employerJobAddresses']),
+        needsCompany ? readCatalogueDb(['employers']) : Promise.resolve(null)
+      ]);
+      const readDone = performance.now();
       const unavailableCompany = ()=>Object.assign(new Error('Select a published company before publishing this job. The selected company is unavailable.'),{status:409,fields:['employerSlug']});
       if (needsCompany) {
         await loadMemoryStore();
-        const company=resolvePublishedCompany(job,db.employers,memoryStore.employers||[]);
+        const company=resolvePublishedCompany(job,companyState.employers,memoryStore.employers||[]);
         if(!company)throw unavailableCompany();
         job.employerSlug=company.slug;job.employerUrl=`/employer/${company.slug}`;
       }
@@ -2038,6 +2044,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
       const savedJob = saveJobRecord(db.jobs, refreshPublicationDate(job,nowIso), () => crypto.randomUUID(), nowIso);
       rememberEmployerAddress(db,savedJob);
       if (db.jobRecoveryById) delete db.jobRecoveryById[String(savedJob.id)];
+      const writeStarted = performance.now();
       await editorState.write(db,{readKeys:needsCompany?['jobs','employers']:['jobs'],validate(current,merged){
         const jobs = merged.jobs || current.jobs || [];
         if (!jobs.some(item=>item.id===savedJob.id && item.slug===savedJob.slug && item.status===savedJob.status)) throw Object.assign(new Error('This job changed while you were saving. Reopen it and try again.'),{status:409});
@@ -2045,7 +2052,8 @@ const requestHandler = createResilientHandler(async (req, res) => {
         if (needsCompany && !resolvePublishedCompany(savedJob,merged.employers || current.employers || [],memoryStore.employers || [])) throw unavailableCompany();
       }});
       googleIndexing.enqueue(existingJob,savedJob).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
-      seoRepository.list(true).catch(error=>console.error('SEO refresh after job save failed:',error.message));
+      seoRepository.invalidateJobs();
+      console.log(JSON.stringify({event:'admin_job_save_timing',totalMs:Math.round(performance.now()-started),readMs:Math.round(readDone-started),writeMs:Math.round(performance.now()-writeStarted)}));
       emsSync.queue(savedJob, emsJobOperator(savedJob, db.users || [])).then(() => emsSync.flush())
         .catch(error => console.error('EMS sync queue failed:', error.message));
       return sendJson(req, res, 200, savedJob);
@@ -2069,7 +2077,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
       });
       if (!removedJob) return sendJson(req,res,404,{error:'Job not found.'});
       googleIndexing.enqueue(removedJob,null).catch(()=>console.error('Google Indexing queue temporarily unavailable'));
-      seoRepository.list(true).catch(error=>console.error('SEO refresh after job removal failed:',error.message));
+      seoRepository.invalidateJobs();
       return sendJson(req,res,200,{deleted:true});
     } catch(error) { return sendJson(req,res,500,{error:'Unable to move job to Trash.'}); }
   }

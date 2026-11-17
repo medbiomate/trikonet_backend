@@ -89,6 +89,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   let recordsCache;
   let recordsCacheUntil=0;
   let recordsRefresh;
+  let jobsRevision = 0;
   const queue = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
   async function ensure() {
     ready ||= pool.query(`CREATE TABLE IF NOT EXISTS seo_job_pages (id VARCHAR(64) PRIMARY KEY, slug VARCHAR(191) UNIQUE NOT NULL, page_type VARCHAR(32) NOT NULL, payload LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(error => { ready = null; throw error; });
@@ -99,7 +100,14 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   async function counts() {
     if(recordsCache && Date.now()<recordsCacheUntil)return recordsCache;
     if(recordsRefresh)return recordsRefresh;
-    recordsRefresh=calculateCounts().then(value=>{recordsCache=value;recordsCacheUntil=Date.now()+60000;return value;}).finally(()=>{recordsRefresh=null;});
+    const revision = jobsRevision;
+    recordsRefresh = calculateCounts().then(value => {
+      if (revision === jobsRevision) {
+        recordsCache = value;
+        recordsCacheUntil = Date.now()+60000;
+      }
+      return value;
+    }).finally(() => { recordsRefresh = null; });
     return recordsRefresh;
   }
   async function calculateCounts() {
@@ -155,9 +163,19 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       return directoryCache;
   }
   return {
+    // Publishing invalidates job results. The coordinated worker refreshes the
+    // persisted landing pages in batches on its regular schedule.
+    invalidateJobs() {
+      jobsRevision++;
+      recordsCacheUntil = 0;
+      directoryCacheUntil = 0;
+    },
     directory: async () => {
       if(directoryCache && Date.now()<directoryCacheUntil)return directoryCache;
-      if(!directoryRefresh)directoryRefresh=refreshDirectory().finally(()=>{directoryRefresh=null;});
+      if(!directoryRefresh){
+        const revision = jobsRevision;
+        directoryRefresh=refreshDirectory().finally(()=>{directoryRefresh=null;if(revision!==jobsRevision)directoryCacheUntil=0;});
+      }
       if(directoryCache){directoryRefresh.catch(error=>console.warn('Category refresh failed:',error.message));return directoryCache;}
       return directoryRefresh;
     },

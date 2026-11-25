@@ -17,3 +17,5 @@ test('public-key signatures bind the exact body and cannot fall back to HMAC',()
  const {publicKey,privateKey}=generateKeyPairSync('ed25519');const pinned={publicKey:publicKey.export({format:'der',type:'spki'}).subarray(-32).toString('hex')};const stamp=String(Date.now()),raw='{"job":"signed"}',signature='ed25519='+sign(null,Buffer.from(stamp+'.'+raw),privateKey).toString('hex');
  assert.equal(validSignature(pinned,raw,stamp,signature),true);assert.equal(validSignature(pinned,raw+' ',stamp,signature),false);assert.equal(validSignature(pinned,raw,stamp,'sha256='+'a'.repeat(64)),false);
 });
+
+test('existing Trikonet media logos are accepted',()=>{assert.doesNotThrow(()=>validatePayload(payload({job:{...payload().job,logo:'https://media.trikonet.com/existing-logo.webp'}}),config));});

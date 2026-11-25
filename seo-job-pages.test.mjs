@@ -64,3 +64,26 @@ test('durable repository merges local and imported jobs once and preserves manua
   assert.equal(current.activeJobCount,10);
   assert.equal((await renamed.jobs(current)).length,10);
 });
+test('visitors get the previous job counts while a refresh runs; forced syncs wait for fresh counts',async()=>{
+  const table=new Map();const pool={async query(sql,args){if(sql.startsWith('CREATE'))return [[]];if(sql.startsWith('SELECT'))return [[...table.values()].map(payload=>({payload:JSON.stringify(payload)}))];if(sql.startsWith('INSERT')){table.set(args[0],JSON.parse(args[3]));return [[]];}throw Error(sql);}};
+  let count=10,loads=0,release=()=>{};
+  const job=i=>({slug:'job-'+i,status:'publish',categories:['Nurse'],locations:['Dubai']});
+  const source=async()=>{loads++;const jobs=Array.from({length:count},(_,i)=>job(i));if(loads>1)await new Promise(resolve=>release=resolve);return {jobs,taxonomies:{categories:[{id:1,name:'Nurse'}],locations:[{id:2,name:'Dubai'}]}};};
+  const repo=createSeoRepository(pool,async()=>({jobs:[]}),source);
+  const legacy=await repo.resolveDestination('nurse-in-dubai');
+  assert.equal((await repo.jobs(legacy)).length,10);
+  repo.invalidateJobs();count=12;
+  assert.equal((await repo.jobs(legacy)).length,10,'stale counts are served without waiting');
+  release();await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal((await repo.jobs(legacy)).length,12,'the background refresh replaces them');
+});
+test('public page reads resync in the background after the first sync',async()=>{
+  const table=new Map();let selects=0;const pool={async query(sql,args){if(sql.startsWith('CREATE'))return [[]];if(sql.startsWith('SELECT')){selects++;return [[...table.values()].map(payload=>({payload:JSON.stringify(payload)}))];}if(sql.startsWith('INSERT')){table.set(args[0],JSON.parse(args[3]));return [[]];}throw Error(sql);}};
+  const jobs=Array.from({length:10},(_,i)=>({slug:'job-'+i,status:'publish',categories:['Nurse'],locations:['Dubai']}));
+  const repo=createSeoRepository(pool,async()=>({jobs:[]}),async()=>({jobs,taxonomies:{categories:[{id:1,name:'Nurse'}],locations:[{id:2,name:'Dubai'}]}}));
+  await repo.createMain(main);
+  const first=await repo.published();
+  assert.ok(first.some(page=>page.pageType==='category_location'),'first public read waits for a sync');
+  const again=await repo.published();
+  assert.deepEqual(again.map(page=>page.slug).sort(),first.map(page=>page.slug).sort());
+});

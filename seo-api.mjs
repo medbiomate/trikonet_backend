@@ -24,7 +24,7 @@ export async function handleSeoRequest(req,res,path,requestUrl,{seoRepository,cu
   }
   if (path === '/api/seo-job-pages' || path.startsWith('/api/seo-job-pages/')) {
     try {
-      const list=await seoRepository.list();
+      const list=await (seoRepository.published ? seoRepository.published() : seoRepository.list());
       if (path==='/api/seo-job-pages') return sendJson(req,res,200,list.filter(indexable).map(p=>({slug:p.slug,title:p.title,category:p.category,location:p.location,pageType:p.pageType})));
       const slug=slugify(decodeURIComponent(path.slice('/api/seo-job-pages/'.length)));
       let page=list.find(p=>p.slug===slug);

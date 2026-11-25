@@ -89,6 +89,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   let recordsCache;
   let recordsCacheUntil=0;
   let recordsRefresh;
+  let backgroundSync;
   let jobsRevision = 0;
   const queue = fn => { const result = serial.then(fn); serial = result.catch(() => {}); return result; };
   async function ensure() {
@@ -97,17 +98,21 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   }
   async function rows() { await ensure(); const [list] = await pool.query('SELECT payload FROM seo_job_pages'); return list.map(row => JSON.parse(row.payload)); }
   async function save(page) { await ensure(); await pool.query('INSERT INTO seo_job_pages (id,slug,page_type,payload) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE slug=VALUES(slug),payload=VALUES(payload)', [page.id,page.slug,page.pageType,JSON.stringify(page)]); }
-  async function counts() {
+  // Rebuilding counts reads every job, so visitors get the previous result while a
+  // refresh runs. Only the first load and forced syncs wait for fresh counts.
+  async function counts({ wait = false } = {}) {
     if(recordsCache && Date.now()<recordsCacheUntil)return recordsCache;
-    if(recordsRefresh)return recordsRefresh;
-    const revision = jobsRevision;
-    recordsRefresh = calculateCounts().then(value => {
-      if (revision === jobsRevision) {
-        recordsCache = value;
-        recordsCacheUntil = Date.now()+60000;
-      }
-      return value;
-    }).finally(() => { recordsRefresh = null; });
+    if(!recordsRefresh){
+      const revision = jobsRevision;
+      recordsRefresh = calculateCounts().then(value => {
+        if (revision === jobsRevision) {
+          recordsCache = value;
+          recordsCacheUntil = Date.now()+60000;
+        }
+        return value;
+      }).finally(() => { recordsRefresh = null; });
+    }
+    if(recordsCache && !wait){recordsRefresh.catch(error=>console.warn('SEO job refresh failed:',error.message));return recordsCache;}
     return recordsRefresh;
   }
   async function calculateCounts() {
@@ -132,7 +137,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
   async function syncUnlocked(force = false) {
     let list = await rows();
     if (!force && Date.now() - lastSync < 60000) return list;
-    const { result,taxonomies } = await counts();
+    const { result,taxonomies } = await counts({ wait: force });
     const mains = list.filter(p => p.pageType === 'main_category');
     // Every existing taxonomy already has a /category/:slug page. Use it as
     // the source for destination generation without creating duplicate mains.
@@ -180,6 +185,14 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       return directoryRefresh;
     },
     list: (force = false) => queue(() => {if(force)recordsCacheUntil=0;return syncUnlocked(force);}),
+    // Public pages read the saved records and resync in the background once a minute.
+    published: async () => {
+      if (Date.now() - lastSync < 60000) return rows();
+      backgroundSync ||= queue(() => syncUnlocked()).finally(() => { backgroundSync = null; });
+      if (!lastSync) return backgroundSync;
+      backgroundSync.catch(error => console.warn('SEO page sync failed:', error.message));
+      return rows();
+    },
     resolveDestination: async slug => {
       const {taxonomies}=await counts();
       const suffix=['UAE',...UAE_LOCATIONS].find(name=>slug.endsWith(`-in-${slugify(name)}`));

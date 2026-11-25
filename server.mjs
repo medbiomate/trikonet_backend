@@ -659,6 +659,7 @@ async function ensurePersistentState() {
 }
 
 const readCatalogueDb = createCatalogueReader(wpDb, ensurePersistentState);
+const topEmployersCache = new WeakMap();
 async function hiddenEmployerSlugs(type) {
   if (type !== 'employer') return [];
   return adminEmployerIndex.hiddenSlugs();
@@ -1038,7 +1039,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   if (path.startsWith('/api/employer-jobs/') && req.method === 'GET') {
     try {
       await loadMemoryStore();
-      const db = await readCatalogueDb(['jobs','employers']);
+      const db = await readCatalogueDb.shared(['jobs','employers']);
       const slug = decodeURIComponent(path.slice('/api/employer-jobs/'.length));
       const employer = (db.employers || []).find(item => item.slug === slug) || (memoryStore.employers || []).find(item => item.slug === slug);
       if (!isPublicRecord(employer)) return sendJson(req,res,404,{error:'Employer not found'});
@@ -1932,7 +1933,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const requested = requestUrl.searchParams.get('path') || '';
     const match = requested.match(/^\/(job|jobs)\/([a-z0-9_-]+)\/?$/i);
     if (!match) return sendJson(req,res,404,{error:'Job not found'});
-    const db = await readCatalogueDb(['jobs']);
+    const db = await readCatalogueDb.shared(['jobs']);
     const suffix = match[2].match(/-(\d+)$/)?.[1];
     let job = findJobByPath(db.jobs, requested);
     if (!job && match[1] === 'jobs' && suffix) job = db.jobs.find(item => String(item.urlJobId) === suffix);
@@ -1947,7 +1948,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   }
   if (path === '/api/public/employers' && req.method === 'GET') {
     await loadMemoryStore();
-    const db = await readCatalogueDb(['jobs','employers']);
+    const db = await readCatalogueDb.shared(['jobs','employers']);
     const jobs = new Map((memoryStore.jobs || []).map(job=>[job.slug,job]));
     for (const job of db.jobs) jobs.set(job.slug,job);
     const companiesById = new Map((memoryStore.employers || []).map(item=>[String(item.id),item.slug]));
@@ -1961,7 +1962,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   }
 
   if (path === '/api/public/jobs' && req.method === 'GET') {
-    const db=await readCatalogueDb(['jobs']);
+    const db=await readCatalogueDb.shared(['jobs']);
     const jobs=await publicDirectory(db.jobs,requestUrl.searchParams,async(page,size,excluded)=>{
       const params=new URLSearchParams(requestUrl.searchParams);
       params.set('page',String(page));params.set('per_page',String(size));params.set('exclude_slugs',excluded.join(','));
@@ -1977,7 +1978,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   if (path === '/api/local/jobs' && req.method === 'GET') {
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
-    const db = await readCatalogueDb(['jobs']);
+    const db = adminView ? await readCatalogueDb(['jobs']) : await readCatalogueDb.shared(['jobs']);
     const jobs = (adminView ? db.jobs : db.jobs.filter(isPublicRecord)).map(job => {
       const { recoveryDraft, logoBackup, ...listing } = job;
       return listing;
@@ -1990,7 +1991,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const slug = decodeURIComponent(path.slice('/api/local/jobs/'.length));
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage jobs.'});
-    const db = await readCatalogueDb(['jobs']);
+    const db = adminView ? await readCatalogueDb(['jobs']) : await readCatalogueDb.shared(['jobs']);
     const match = findJobByPath(db.jobs, `/job/${slug}`);
     const job = match && (adminView || isPublicRecord(match)) ? match : null;
     return sendJson(req, res, job ? 200 : 404, job || { error: 'Job not found' });
@@ -2102,7 +2103,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   if (path === '/api/local/employers' && req.method === 'GET') {
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb(['employers']);
+    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb.shared(['employers']);
     return sendJson(req, res, 200, adminView ? db.employers : db.employers.filter(isPublicRecord));
   }
 
@@ -2110,7 +2111,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const slug = decodeURIComponent(path.slice('/api/local/employers/'.length));
     const adminView = requestUrl.searchParams.get('admin') === '1';
     if (adminView && !await currentAdminSession(req)) return sendJson(req,res,401,{error:'Sign in to manage employers.'});
-    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb(['employers']);
+    const db = adminView ? await editorState.read(['employers']) : await readCatalogueDb.shared(['employers']);
     const employer = db.employers.find(item => (item.slug === slug || (item.urlAliases || []).includes(`/employer/${slug}`)) && (adminView || isPublicRecord(item)));
     return sendJson(req, res, employer ? 200 : 404, employer || { error: 'Employer not found' });
   }
@@ -2262,7 +2263,12 @@ const requestHandler = createResilientHandler(async (req, res) => {
 
   if(path==='/api/wp/top-employers' && req.method==='GET'){
     await loadMemoryStore();
-    const local=await readCatalogueDb();
+    const local=await readCatalogueDb.shared(['jobs','employers']);
+    const min=Math.max(20,Number(requestUrl.searchParams.get('min_jobs'))||20);
+    const limit=Math.min(50,Math.max(1,Number(requestUrl.searchParams.get('limit'))||20));
+    // One ranking per catalogue snapshot and query; logo lookups refresh every 10 minutes.
+    const topKey=`${min}:${limit}`,topCached=topEmployersCache.get(local)?.get(topKey);
+    if(topCached&&Date.now()-topCached.at<600_000)return sendJson(req,res,200,topCached.records);
     const jobs=new Map((memoryStore.jobs||[]).map(job=>[job.slug,job]));
     for(const job of local.jobs||[])jobs.set(job.slug,job);
     const counts=new Map();
@@ -2274,8 +2280,6 @@ const requestHandler = createResilientHandler(async (req, res) => {
     }
     const employers=new Map((memoryStore.employers||[]).map(employer=>[employer.slug,employer]));
     for(const employer of local.employers||[])employers.set(employer.slug,employer);
-    const min=Math.max(20,Number(requestUrl.searchParams.get('min_jobs'))||20);
-    const limit=Math.min(50,Math.max(1,Number(requestUrl.searchParams.get('limit'))||20));
     const records=[...employers.values()].filter(e=>['publish','published'].includes(e.status||'publish')).map(e=>{
       const metas={...e.metas};
       metas._employer_logo ||= e.logo||'';
@@ -2283,6 +2287,8 @@ const requestHandler = createResilientHandler(async (req, res) => {
       return {...e,title:typeof e.title==='string'?{rendered:e.title}:e.title,metas};
     }).filter(e=>e.metas._employer_open_jobs>=min).sort((a,b)=>b.metas._employer_open_jobs-a.metas._employer_open_jobs||a.slug.localeCompare(b.slug)).slice(0,limit);
     await Promise.all(records.map(async record=>{record.logoBackup=await mediaStore.origin(record.metas._employer_logo).catch(()=>'');}));
+    if(!topEmployersCache.has(local))topEmployersCache.set(local,new Map());
+    topEmployersCache.get(local).set(topKey,{at:Date.now(),records});
     return sendJson(req,res,200,records);
   }
 
@@ -2370,6 +2376,8 @@ startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
   }
 });
 startupReady.then(registerSeoDefaults).catch(error=>console.error('Startup initialization failed:',error.message));
+// Build the catalogue snapshot and search index before the first visitor searches.
+startupReady.then(async()=>{const db=await readCatalogueDb.shared(['jobs']);await publicDirectory(db.jobs,new URLSearchParams({q:'warm'}),async()=>[]);await readCatalogueDb.shared(['jobs','employers']);}).catch(error=>console.error('Catalogue warm-up failed:',error.message));
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);

@@ -1,3 +1,18 @@
+import {handleWordPressEmployers} from './wordpress-employers.mjs';
+import {handleWordPressBridge} from './wordpress-bridge.mjs';
+import {handleWordPressSso} from './wordpress-sso.mjs';
+import {createWordPressLock} from './wordpress-config.mjs';
+import {normalizeJobEmployer} from './job-employer.mjs';
+import {handleWordPressEmployers} from './wordpress-employers.mjs';
+import {handleWordPressBridge} from './wordpress-bridge.mjs';
+import {handleWordPressSso} from './wordpress-sso.mjs';
+import {createWordPressLock} from './wordpress-config.mjs';
+import {normalizeJobEmployer} from './job-employer.mjs';
+import {handleWordPressEmployers} from './wordpress-employers.mjs';
+import {handleWordPressBridge} from './wordpress-bridge.mjs';
+import {handleWordPressSso} from './wordpress-sso.mjs';
+import {createWordPressLock} from './wordpress-config.mjs';
+import {normalizeJobEmployer} from './job-employer.mjs';
 import {publicEmployerDirectory} from './public-employer-directory.mjs';
 import {createJobApplicationStarts} from './job-application-starts.mjs';
 import {readAdminLoginAccount} from './admin-login-account.mjs';
@@ -141,6 +156,9 @@ const wpDb = retryDisconnectedReads(mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
 }));
+const acquireWordPressSave=createWordPressLock(wpDb);
+const acquireWordPressSave=createWordPressLock(wpDb);
+const acquireWordPressSave=createWordPressLock(wpDb);
 const emsSync = createEmsSync(wpDb);
 const googleIndexing=createGoogleIndexing({pool:wpDb});
 let jobUrlTableReady;
@@ -952,6 +970,30 @@ const requestHandler = createResilientHandler(async (req, res) => {
     res.writeHead(204, headers);
     return res.end();
   }
+
+  if(await handleWordPressEmployers(req,res,requestUrl,{sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,loadMemoryStore,memoryStore}))return;
+  if(await handleWordPressBridge(req,res,requestUrl,{
+    sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,
+    loadMemoryStore,memoryStore,bindJobEmployer:normalizeJobEmployer,applyJobUrl,numericJobId,uniqueJobSlug,
+    afterSave:async(previous,job)=>{googleIndexing.enqueue(previous,job).catch(()=>{});seoRepository.invalidateJobs?.();}
+  }))return;
+  if(await handleWordPressSso(req,res,requestUrl,{sendJson,wpDb,currentSession,accountDeletion,cookieValue,sessions,getSessionCookieHeader}))return;
+
+  if(await handleWordPressEmployers(req,res,requestUrl,{sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,loadMemoryStore,memoryStore}))return;
+  if(await handleWordPressBridge(req,res,requestUrl,{
+    sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,
+    loadMemoryStore,memoryStore,bindJobEmployer:normalizeJobEmployer,applyJobUrl,numericJobId,uniqueJobSlug,
+    afterSave:async(previous,job)=>{googleIndexing.enqueue(previous,job).catch(()=>{});seoRepository.invalidateJobs?.();}
+  }))return;
+  if(await handleWordPressSso(req,res,requestUrl,{sendJson,wpDb,currentSession,accountDeletion,cookieValue,sessions,getSessionCookieHeader}))return;
+
+  if(await handleWordPressEmployers(req,res,requestUrl,{sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,loadMemoryStore,memoryStore}))return;
+  if(await handleWordPressBridge(req,res,requestUrl,{
+    sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,
+    loadMemoryStore,memoryStore,bindJobEmployer:normalizeJobEmployer,applyJobUrl,numericJobId,uniqueJobSlug,
+    afterSave:async(previous,job)=>{googleIndexing.enqueue(previous,job).catch(()=>{});seoRepository.invalidateJobs?.();}
+  }))return;
+  if(await handleWordPressSso(req,res,requestUrl,{sendJson,wpDb,currentSession,accountDeletion,cookieValue,sessions,getSessionCookieHeader}))return;
 
   // Health check endpoint
   if (path === '/api/health' && req.method === 'GET') {

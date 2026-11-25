@@ -13,16 +13,7 @@ test('rejects malformed taxonomy fields without writing',async()=>{const h=harne
 test('imported job without explicit mapping does not collide on WordPress numeric ID',async()=>{const h=harness();h.ctx.memoryStore.jobs=[{id:123,slug:'registered-nurse',title:'Other catalogue job'}];await h.send(payload());assert.notEqual(h.db.jobs[0].id,123);});
 test('cannot adopt a record owned by another publisher',async()=>{const h=harness();h.db.jobs.push({id:'other-site',wordpressSource:{siteId:'other',postId:999,version:1}});const r=await h.send(payload({recordId:'other-site'}));assert.equal(r.status,400);assert.equal(h.writes,0);});
 import {generateKeyPairSync,sign} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
-import {fileURLToPath} from 'node:url';
 test('public-key signatures bind the exact body and cannot fall back to HMAC',()=>{
  const {publicKey,privateKey}=generateKeyPairSync('ed25519');const pinned={publicKey:publicKey.export({format:'der',type:'spki'}).subarray(-32).toString('hex')};const stamp=String(Date.now()),raw='{"job":"signed"}',signature='ed25519='+sign(null,Buffer.from(stamp+'.'+raw),privateKey).toString('hex');
  assert.equal(validSignature(pinned,raw,stamp,signature),true);assert.equal(validSignature(pinned,raw+' ',stamp,signature),false);assert.equal(validSignature(pinned,raw,stamp,'sha256='+'a'.repeat(64)),false);
-});
-test('PHP Sodium and Node verify the same publisher signature',()=>{
- const {publicKey,privateKey}=generateKeyPairSync('ed25519'),seed=privateKey.export({format:'der',type:'pkcs8'}).subarray(-32).toString('hex'),pinned={publicKey:publicKey.export({format:'der',type:'spki'}).subarray(-32).toString('hex')};
- const stamp=String(Date.now()),raw='{"title":"Trikonet شركة"}';
- const plugin=process.env.TRIKONET_WP_PLUGIN||fileURLToPath(new URL('../wordpress-integration/trikonet-connect/trikonet-connect.php',import.meta.url));
- const code=`define('ABSPATH','/tmp/');function add_action(...$args){}function add_filter(...$args){}function register_activation_hook(...$args){}function register_deactivation_hook(...$args){}require $argv[1];$data=json_decode(stream_get_contents(STDIN),true);echo tk_connect_signature($data['raw'],$data['stamp'],['signingMode'=>'ed25519','secret'=>$data['seed']]);`;
- const signature=execFileSync('php',['-r',code,plugin],{input:JSON.stringify({raw,stamp,seed}),encoding:'utf8'}).trim();assert.equal(validSignature(pinned,raw,stamp,signature),true);
 });

@@ -179,3 +179,16 @@ Validation: `node --test admin-job-index.test.mjs` runs unit checks. Setting
 15,000-job database integration test. It creates and drops its own uniquely
 named test database. Runtime `admin_jobs_indexed_page` logs and the
 `Server-Timing: jobs` header report query duration without account details.
+
+## WordPress connection
+
+The separate Trikonet WordPress preview uses the same candidate accounts and app
+catalogue. Signed integration routes handle jobs, employers and read-only staff
+candidate administration; single-use tickets connect Google sign-in. The public
+verification key and exact trusted source are pinned in `wordpress-publisher.json`.
+No private signing key is committed. Optional operator configurations can use
+`TRIKONET_WORDPRESS_CONFIG` or `TRIKONET_WORDPRESS_CONNECTION_JSON` instead.
+
+Run `node --test wordpress-bridge.test.mjs wordpress-employers.test.mjs
+wordpress-sso.test.mjs wordpress-candidates.test.mjs`. The PHP interoperability
+fixture belongs to the WordPress workspace, not this backend-only repository.

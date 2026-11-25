@@ -14,12 +14,12 @@ export function createWordPressCandidates({getConfig=readWordPressConfig}={}){re
   if(body.action==='detail'&&(typeof body.id!=='string'||!body.id||body.id.length>191))return reply(400,{error:'Invalid candidate identity.'});
   await ctx.accountDeletion.ensure();
   const page=Math.max(1,Math.floor(Number(body.page)||1)),limit=30,search=String(body.query||'').trim().slice(0,200);
-  const projection=`JSON_TABLE(s.payload,'$.users[*]' COLUMNS(id VARCHAR(191) PATH '$.id',name VARCHAR(255) PATH '$.name',email VARCHAR(255) PATH '$.email',role VARCHAR(100) PATH '$.role',createdAt VARCHAR(100) PATH '$.createdAt',profile JSON PATH '$.profile')) j`;
+  const projection=`JSON_TABLE(s.payload,'$.users[*]' COLUMNS(id VARCHAR(191) PATH '$.id',name VARCHAR(255) PATH '$.name',email VARCHAR(255) PATH '$.email',role VARCHAR(100) PATH '$.role',createdAt VARCHAR(100) PATH '$.createdAt',idx FOR ORDINALITY)) j`;
   let where="s.state_key='main' AND LOWER(COALESCE(j.role,'')) IN ('','candidate','subscriber','job seeker','jobseeker') AND NOT EXISTS(SELECT 1 FROM trikonet_account_deletions d WHERE d.user_id=j.id)";
   const values=[];
   if(body.action==='detail'){where+=' AND j.id=?';values.push(body.id);}
   else if(search){where+=" AND (LOWER(j.name) LIKE LOWER(?) OR LOWER(j.email) LIKE LOWER(?))";const literal=search.replace(/[\\%_]/g,'\\$&');values.push('%'+literal+'%','%'+literal+'%');}
-  const columns=body.action==='detail'?'j.id,j.name,j.email,j.createdAt,j.profile':'j.id,j.name,j.email,j.createdAt';
+  const columns=body.action==='detail'?"j.id,j.name,j.email,j.createdAt,JSON_EXTRACT(s.payload,CONCAT('$.users[',j.idx-1,'].profile')) AS profile":'j.id,j.name,j.email,j.createdAt';
   const [rows]=await ctx.wpDb.query(`SELECT ${columns} FROM trikonet_app_state s JOIN ${projection} ON TRUE WHERE ${where} ORDER BY j.createdAt DESC LIMIT ? OFFSET ?`,[...values,body.action==='detail'?1:limit,body.action==='detail'?0:(page-1)*limit]);
   if(body.action==='detail'){
    if(!rows[0])return reply(404,{error:'Candidate not found.'});

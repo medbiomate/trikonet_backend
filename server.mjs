@@ -1,3 +1,4 @@
+import {handleWordPressCandidates} from './wordpress-candidates.mjs';
 import {handleWordPressEmployers} from './wordpress-employers.mjs';
 import {handleWordPressBridge} from './wordpress-bridge.mjs';
 import {handleWordPressSso} from './wordpress-sso.mjs';
@@ -959,6 +960,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     return res.end();
   }
 
+  if(await handleWordPressCandidates(req,res,requestUrl,{sendJson,wpDb,accountDeletion}))return;
   if(await handleWordPressEmployers(req,res,requestUrl,{sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,loadMemoryStore,memoryStore}))return;
   if(await handleWordPressBridge(req,res,requestUrl,{
     sendJson,acquireJobSave:acquireWordPressSave,readLocalDb:()=>editorState.read(),writeLocalDb,

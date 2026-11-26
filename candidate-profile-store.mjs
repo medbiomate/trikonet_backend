@@ -15,7 +15,8 @@ export async function candidateProfileRequest(pool,method,userId,body={}){
   if(writing){
    applyAccountProfile(user,body,updateCandidateProfile);grantProfileCompletionReward(user);
    const path=`$.users[${index}]`;
-   await connection.query("UPDATE trikonet_app_state SET payload=JSON_SET(payload,?,JSON_EXTRACT(?,'$')),updated_at=CURRENT_TIMESTAMP WHERE state_key='main'",[path,JSON.stringify(user)]);
+   // updated_at versions the public job catalogue; a profile edit leaves it as is.
+   await connection.query("UPDATE trikonet_app_state SET payload=JSON_SET(payload,?,JSON_EXTRACT(?,'$')),updated_at=updated_at WHERE state_key='main'",[path,JSON.stringify(user)]);
    await connection.commit();
   }
   const profile={...user.profile,name:user.profile?.name||user.name,email:user.email,accountId:user.id};

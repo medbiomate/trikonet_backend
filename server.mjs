@@ -59,6 +59,7 @@ import { summarizeJob } from './job-summary.mjs';
 import {createAdmobRewards} from './admob-rewards.mjs';
 import {createGeminiRecommendations} from './gemini-recommendations.mjs';
 import {candidateFile} from './candidate-file.mjs';
+import {createCandidateStateStore} from './candidate-state-store.mjs';
 import {accountView,applyAccountProfile,createEmailChange} from './account-identity.mjs';
 import {updateCandidateProfile,calculateCandidateCompletion,grantProfileCompletionReward} from './candidate-profile.mjs';
 import { createCompanyReviews } from './company-reviews.mjs';
@@ -836,6 +837,12 @@ async function sendJson(req, res, status, value) {
 const sessions = await createPersistentSessions(wpDb);
 const appleChallenges=createPersistentAppleChallenges(wpDb);
 const accountDeletion=createAccountDeletion({pool:wpDb,sessions,beforeErase:revokeAppleAccount});
+// Same rule readLocalDb() applies when it drops deleted accounts.
+const candidateState=createCandidateStateStore(wpDb,{ensure:ensurePersistentState,isDeleted:async userId=>{
+  await accountDeletion.ensure();
+  const [rows]=await wpDb.query('SELECT 1 FROM trikonet_account_deletions WHERE user_id=? AND (status=? OR delete_after<=?) LIMIT 1',[String(userId),'deleted',Date.now()]);
+  return rows.length>0;
+}});
 function registerSeoDefaults() {
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
 seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
@@ -893,7 +900,8 @@ function getSessionCookieHeader(req, token, maxAge = 604800) {
 
 const jobEmailAlerts=createJobEmailAlerts({pool:wpDb,readUsers:createAlertUserReader(wpDb,()=>accountDeletion.ensure()),loadJobs:async()=>{
   const {jobs}=await loadSeoRecords();
-  const local=await readCatalogueDb(['jobs','employers']);
+  // Read-only here: the shared snapshot avoids parsing a private copy every run.
+  const local=await readCatalogueDb.shared(['jobs','employers']);
   const merged=new Map((memoryStore.jobs || []).map(job=>[String(job.id||job.slug),job]));
   for(const job of jobs)merged.set(String(job.id||job.slug),job);
   for(const job of local.jobs || [])merged.set(String(job.id||job.slug),job);
@@ -1010,14 +1018,16 @@ const requestHandler = createResilientHandler(async (req, res) => {
     if (!await currentAdminSession(req)) return sendJson(req,res,401,{error:'Administrator authentication required.'});
     try {
       await loadMemoryStore();
-      const db = await readCatalogueDb(['jobs','employers']);
+      const db = await readCatalogueDb.shared(['jobs','employers']);
       const slugs = [...new Set((requestUrl.searchParams.get('slugs') || '').split(',').filter(Boolean))].slice(0,100);
       const employers = new Map((memoryStore.employers || []).map(item => [item.slug,item]));
       for (const employer of db.employers || []) employers.set(employer.slug,employer);
+      // Merge once per request instead of once per company (up to 100 companies).
+      const merged = [...new Map([...(memoryStore.jobs || []), ...(db.jobs || [])].map(job => [job.slug, job])).values()];
       const counts = {};
       for (const slug of slugs) {
         const employer = employers.get(slug);
-        if (employer) counts[slug] = employerJobPage(memoryStore.jobs || [], db.jobs || [], employer).total;
+        if (employer) counts[slug] = employerJobPage(merged, [], employer).total;
       }
       return sendJson(req,res,200,counts);
     } catch { return sendJson(req,res,503,{error:'Unable to load employer job counts.'}); }
@@ -1329,7 +1339,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const session=currentSession(req);
     if(!session)return sendJson(req,res,401,{error:'Sign in to manage email alerts.'});
     try {
-      const user=(await readLocalDb()).users.find(user=>String(user.id)===String(session.userId));
+      const user=await candidateState.readAccount(session.userId);
       if(!user||!isCandidateAccount(user))return sendJson(req,res,403,{error:'Email alerts are available to job seekers.'});
       const body=req.method==='POST'?await readJsonBody(req,1000):{};
       if(req.method==='POST'&&typeof body.enabled!=='boolean')return sendJson(req,res,400,{error:'Enabled must be true or false.'});
@@ -1662,10 +1672,14 @@ const requestHandler = createResilientHandler(async (req, res) => {
     try{const [status,result]=await refineRecommendations(currentSession(req),await readJsonBody(req,100000));return sendJson(req,res,status,result)}catch{return sendJson(req,res,503,{error:'Recommendations are temporarily unavailable.'})}
   }
   if(path==='/api/candidate/resume'){
-    const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your resume.'});const db=await readLocalDb();const user=db.users.find(item=>String(item.id)===String(session.userId));if(!user)return sendJson(req,res,401,{error:'Account not found.'});
-    if(req.method==='GET')return sendJson(req,res,200,{success:true,resume:user.uploadedResume||null});
-    if(req.method==='POST'){try{user.uploadedResume=candidateFile(await readJsonBody(req,14_000_000));await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{success:true,resume:user.uploadedResume})}catch(error){return sendJson(req,res,400,{error:error.message})}}
-    if(req.method==='DELETE'){delete user.uploadedResume;await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{success:true})}
+    const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your resume.'});
+    // Only this account is read or written, not the whole app state.
+    if(req.method==='GET'){const user=await candidateState.readAccount(session.userId);if(!user)return sendJson(req,res,401,{error:'Account not found.'});return sendJson(req,res,200,{success:true,resume:user.uploadedResume||null});}
+    if(req.method==='POST'){let file;try{file=candidateFile(await readJsonBody(req,14_000_000));}catch(error){return sendJson(req,res,400,{error:error.message})}
+      const result=await candidateState.updateAccount(session.userId,user=>{user.uploadedResume=file;return {save:true};});
+      return result?sendJson(req,res,200,{success:true,resume:file}):sendJson(req,res,401,{error:'Account not found.'});}
+    if(req.method==='DELETE'){const result=await candidateState.updateAccount(session.userId,user=>{const had='uploadedResume' in user;delete user.uploadedResume;return {save:had};});
+      return result?sendJson(req,res,200,{success:true}):sendJson(req,res,401,{error:'Account not found.'});}
   }
   if(['/api/candidate/email/request','/api/candidate/email/verify'].includes(path)&&req.method==='POST'){
     try{const [status,data]=await emailChange(path.endsWith('/request')?'request':'verify',currentSession(req),await readJsonBody(req));return sendJson(req,res,status,data)}catch{return sendJson(req,res,503,{error:'Email verification is temporarily unavailable.'})}
@@ -1682,28 +1696,36 @@ const requestHandler = createResilientHandler(async (req, res) => {
   }
   if(['/api/candidate/profile','/api/candidate/activity'].includes(path)) {
     const session=currentSession(req);if(!session)return sendJson(req,res,401,{error:'Sign in to manage your profile.'});
-    const db=await readLocalDb();const user=(db.users || []).find(u=>String(u.id)===String(session.userId));
-    if(!user)return sendJson(req,res,404,{error:'Account not found'});
-    if(req.method==='GET')return sendJson(req,res,200,path.endsWith('/profile')?{profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email})}:user.memberActivity || {});
+    // Only this account is read or written, not the whole app state.
+    if(req.method==='GET'){
+      const user=await candidateState.readAccount(session.userId);
+      if(!user)return sendJson(req,res,404,{error:'Account not found'});
+      return sendJson(req,res,200,path.endsWith('/profile')?{profile:{...user.profile,name:user.name,email:user.email,accountId:user.id},completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email})}:user.memberActivity || {});
+    }
     if(['POST','PUT'].includes(req.method)) {
       try {
         const body=await readJsonBody(req);
-        if(path.endsWith('/activity')){
-          user.memberActivity ||= {};
-          for(const kind of ['saved_jobs','applied_jobs','followed_companies','templates','recentSearches'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
-          if(body.behaviour&&typeof body.behaviour==='object')user.memberActivity.behaviour=body.behaviour;
-        } else {
-          applyAccountProfile(user,body,updateCandidateProfile);
-        }
-        grantProfileCompletionReward(user);await writeLocalDb(db,{skipMedia:true});return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
+        const result=await candidateState.updateAccount(session.userId,user=>{
+          if(path.endsWith('/activity')){
+            user.memberActivity ||= {};
+            for(const kind of ['saved_jobs','applied_jobs','followed_companies','templates','recentSearches'])if(Array.isArray(body[kind]))user.memberActivity[kind]=body[kind].slice(0,200);
+            if(body.behaviour&&typeof body.behaviour==='object')user.memberActivity.behaviour=body.behaviour;
+          } else {
+            applyAccountProfile(user,body,updateCandidateProfile);
+          }
+          grantProfileCompletionReward(user);
+          return {save:true};
+        });
+        if(!result)return sendJson(req,res,404,{error:'Account not found'});
+        const user=result.user;
+        return sendJson(req,res,200,{profile:user.profile,completionPercentage:calculateCandidateCompletion({...user.profile,name:user.name,email:user.email}),activity:user.memberActivity,saved:true});
       }catch(error){return sendJson(req,res,400,{error:error.message});}
     }
   }
   if (path === '/api/resumes' && req.method === 'GET') {
     const session = currentSession(req);
     if (!session) return sendJson(req, res, 401, { error: 'Sign in to access your résumé library.' });
-    const db = await readLocalDb();
-    const resumes = db.resumes.filter(item => item.userId === session.userId).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    const resumes = (await candidateState.readField('resumes')).filter(item => item.userId === session.userId).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     return sendJson(req, res, 200, { resumes, limit: MAX_RESUMES_PER_USER });
   }
 
@@ -1716,17 +1738,19 @@ const requestHandler = createResilientHandler(async (req, res) => {
       const state = body.state && typeof body.state === 'object' ? body.state : null;
       if (!id || !state) return sendJson(req, res, 400, { error: 'A valid résumé is required.' });
       if (dataUrlBytes(state.photo) > MAX_PROFILE_PHOTO_BYTES) return sendJson(req, res, 413, { error: 'Profile photo must be smaller than 100 KB.' });
-      const db = await readLocalDb();
-      const existingIndex = db.resumes.findIndex(item => item.id === id && item.userId === session.userId);
-      if (existingIndex < 0 && db.resumes.filter(item => item.userId === session.userId).length >= MAX_RESUMES_PER_USER) {
-        return sendJson(req, res, 409, { error: `You can save up to ${MAX_RESUMES_PER_USER} résumés. Delete one before creating another.` });
+      const saved = await candidateState.updateField('resumes', list => {
+      const existingIndex = list.findIndex(item => item.id === id && item.userId === session.userId);
+      if (existingIndex < 0 && list.filter(item => item.userId === session.userId).length >= MAX_RESUMES_PER_USER) {
+        return { full: true };
       }
       const now = Date.now();
-      const existing = existingIndex >= 0 ? db.resumes[existingIndex] : null;
+      const existing = existingIndex >= 0 ? list[existingIndex] : null;
       const resume = { id, userId: session.userId, name: String(body.name || 'My professional résumé').slice(0, 120), template: String(body.template || 'classic').slice(0, 40), state, previewImage: dataUrlBytes(body.previewImage) <= MAX_PROFILE_PHOTO_BYTES ? String(body.previewImage || '') : '', createdAt: existing?.createdAt || now, updatedAt: now };
-      if (existingIndex >= 0) db.resumes[existingIndex] = resume; else db.resumes.push(resume);
-      await writeLocalDb(db,{skipMedia:true});
-      return sendJson(req, res, existingIndex >= 0 ? 200 : 201, { resume, limit: MAX_RESUMES_PER_USER });
+      if (existingIndex >= 0) list[existingIndex] = resume; else list.push(resume);
+      return { list, save: true, resume, updated: existingIndex >= 0 };
+      });
+      if (saved.full) return sendJson(req, res, 409, { error: `You can save up to ${MAX_RESUMES_PER_USER} résumés. Delete one before creating another.` });
+      return sendJson(req, res, saved.updated ? 200 : 201, { resume: saved.resume, limit: MAX_RESUMES_PER_USER });
     } catch (error) {
       return sendJson(req, res, error.message === 'Request too large' ? 413 : 400, { error: error.message || 'Unable to save résumé.' });
     }
@@ -1736,11 +1760,11 @@ const requestHandler = createResilientHandler(async (req, res) => {
     const session = currentSession(req);
     if (!session) return sendJson(req, res, 401, { error: 'Sign in to delete a résumé.' });
     const id = path.slice('/api/resumes/'.length);
-    const db = await readLocalDb();
-    const before = db.resumes.length;
-    db.resumes = db.resumes.filter(item => !(item.id === id && item.userId === session.userId));
-    if (db.resumes.length === before) return sendJson(req, res, 404, { error: 'Résumé not found.' });
-    await writeLocalDb(db,{skipMedia:true});
+    const removed = await candidateState.updateField('resumes', list => {
+      const next = list.filter(item => !(item.id === id && item.userId === session.userId));
+      return { list: next, save: next.length !== list.length };
+    });
+    if (!removed.save) return sendJson(req, res, 404, { error: 'Résumé not found.' });
     return sendJson(req, res, 200, { ok: true });
   }
 

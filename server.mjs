@@ -761,7 +761,8 @@ async function loadSeoRecords() {
     return {jobs:memoryStore.jobs || [],taxonomies};
   }
 }
-const seoRepository = createSeoRepository(wpDb,readCatalogueDb,loadSeoRecords);
+// SEO counts only read the jobs; the shared snapshot avoids a private parse each minute.
+const seoRepository = createSeoRepository(wpDb,()=>readCatalogueDb.shared(['jobs']),loadSeoRecords);
 // Preserve the existing main category URL explicitly requested by the admin.
 // This migration is insert-only: never overwrite saved manual settings.
 const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});

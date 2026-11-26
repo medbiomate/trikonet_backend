@@ -96,8 +96,23 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     ready ||= pool.query(`CREATE TABLE IF NOT EXISTS seo_job_pages (id VARCHAR(64) PRIMARY KEY, slug VARCHAR(191) UNIQUE NOT NULL, page_type VARCHAR(32) NOT NULL, payload LONGTEXT NOT NULL, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).catch(error => { ready = null; throw error; });
     await ready;
   }
-  async function rows() { await ensure(); const [list] = await pool.query('SELECT payload FROM seo_job_pages'); return list.map(row => JSON.parse(row.payload)); }
-  async function save(page) { await ensure(); await pool.query('INSERT INTO seo_job_pages (id,slug,page_type,payload) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE slug=VALUES(slug),payload=VALUES(payload)', [page.id,page.slug,page.pageType,JSON.stringify(page)]); }
+  // Visitors read the saved pages from memory; the table is re-read in the background
+  // at most every 30 seconds. A save here drops the copy so the next read sees it.
+  let rowsCache = null, rowsAt = 0, rowsTask = null;
+  async function rows() {
+    await ensure();
+    const [list] = await pool.query('SELECT payload FROM seo_job_pages');
+    const parsed = list.map(row => JSON.parse(row.payload));
+    rowsCache = parsed; rowsAt = Date.now();
+    return structuredClone(parsed);
+  }
+  function cachedRows() {
+    if (rowsCache && Date.now() - rowsAt < 30000) return Promise.resolve(rowsCache);
+    rowsTask ||= rows().finally(() => { rowsTask = null; });
+    if (rowsCache) { rowsTask.catch(error => console.warn('SEO page read failed:', error.message)); return Promise.resolve(rowsCache); }
+    return rowsTask.then(() => rowsCache);
+  }
+  async function save(page) { await ensure(); await pool.query('INSERT INTO seo_job_pages (id,slug,page_type,payload) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE slug=VALUES(slug),payload=VALUES(payload)', [page.id,page.slug,page.pageType,JSON.stringify(page)]); rowsCache = null; }
   // Rebuilding counts reads every job, so visitors get the previous result while a
   // refresh runs. Only the first load and forced syncs wait for fresh counts.
   async function counts({ wait = false } = {}) {
@@ -143,7 +158,14 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     // the source for destination generation without creating duplicate mains.
     const sources=[...mains,...(taxonomies.categories || []).filter(term=>!mains.some(main=>key(main.category)===key(term.name))).map(term=>({category:term.name,categoryId:term.id || term.slug,slug:term.slug || slugify(term.name),status:'Published',locations:taxonomies.locations || []}))];
     const pages = reconcile(list.filter(p => p.pageType === 'category_location'),sources,result);
-    for (const page of pages) await save(page);
+    // Every sync re-stamps lastCheckedAt. Rewriting every page each minute kept the
+    // database busy, so only pages with a real change, or not checked today, are saved.
+    const before = new Map(list.map(p => [p.id, p]));
+    const stable = ({lastCheckedAt, lastQualifiedAt, ...rest}) => JSON.stringify(rest);
+    for (const page of pages) {
+      const old = before.get(page.id);
+      if (!old || stable(old) !== stable(page) || String(old.lastCheckedAt || '').slice(0,10) !== String(page.lastCheckedAt || '').slice(0,10)) await save(page);
+    }
     lastSync = Date.now();
     return [...mains,...pages];
   }
@@ -152,7 +174,7 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
       const active=jobs.filter(job=>isActiveJob(job));
       const categoryJobs=new Map();
       for(const job of active)for(const name of new Set(values(job,'categories','_job_category').map(key))){if(!categoryJobs.has(name))categoryJobs.set(name,[]);categoryJobs.get(name).push(job);}
-      const published=(await rows()).filter(indexable);
+      const published=(await cachedRows()).filter(indexable);
       const links=[];
       for(const category of taxonomies.categories || []) {
         const matching=categoryJobs.get(key(category.name)) || [];
@@ -187,16 +209,17 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     list: (force = false) => queue(() => {if(force)recordsCacheUntil=0;return syncUnlocked(force);}),
     // Public pages read the saved records and resync in the background once a minute.
     published: async () => {
-      if (Date.now() - lastSync < 60000) return rows();
+      if (Date.now() - lastSync < 60000) return cachedRows();
       backgroundSync ||= queue(() => syncUnlocked()).finally(() => { backgroundSync = null; });
       if (!lastSync) return backgroundSync;
       backgroundSync.catch(error => console.warn('SEO page sync failed:', error.message));
-      return rows();
+      return cachedRows();
     },
     resolveDestination: async slug => {
-      const {taxonomies}=await counts();
+      // Most pages (blog, categories) ask once on load; answer those without the job counts.
       const suffix=['UAE',...UAE_LOCATIONS].find(name=>slug.endsWith(`-in-${slugify(name)}`));
       if(!suffix)return null;
+      const {taxonomies}=await counts();
       const stem=slug.slice(0,-(`-in-${slugify(suffix)}`).length);
       const normal=value=>slugify(value).replace(/-jobs$/,'').replace(/-or-|-and-/g,'-');
       const category=taxonomies.categories?.find(term=>normal(term.slug || term.name)===normal(stem) || normal(term.name)===normal(stem));

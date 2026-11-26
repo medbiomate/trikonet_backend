@@ -87,3 +87,20 @@ test('public page reads resync in the background after the first sync',async()=>
   const again=await repo.published();
   assert.deepEqual(again.map(page=>page.slug).sort(),first.map(page=>page.slug).sort());
 });
+test('syncs save only changed pages and public reads reuse the saved list',async()=>{
+  const table=new Map();let selects=0,inserts=0;const pool={async query(sql,args){if(sql.startsWith('CREATE'))return [[]];if(sql.startsWith('SELECT')){selects++;return [[...table.values()].map(payload=>({payload:JSON.stringify(payload)}))];}if(sql.startsWith('INSERT')){inserts++;table.set(args[0],JSON.parse(args[3]));return [[]];}throw Error(sql);}};
+  const jobs=Array.from({length:10},(_,i)=>({slug:'job-'+i,status:'publish',categories:['Nurse'],locations:['Dubai']}));
+  const repo=createSeoRepository(pool,async()=>({jobs:[]}),async()=>({jobs,taxonomies:{categories:[{id:1,name:'Nurse'}],locations:[{id:2,name:'Dubai'}]}}));
+  await repo.createMain(main);await repo.list(true);
+  const saved=inserts;await repo.list(true);
+  assert.equal(inserts,saved,'an unchanged sync writes nothing');
+  await repo.published();const reads=selects;
+  for(let i=0;i<5;i++)await repo.published();
+  assert.equal(selects,reads,'public reads within 30 seconds use memory');
+});
+test('URLs that are not location destinations resolve without loading job counts',async()=>{
+  let loads=0;const repo=createSeoRepository({async query(){return [[]];}},async()=>({jobs:[]}),async()=>{loads++;return {jobs:[],taxonomies:{categories:[],locations:[]}};});
+  assert.equal(await repo.resolveDestination('blog'),null);
+  assert.equal(await repo.resolveDestination('healthcare'),null);
+  assert.equal(loads,0);
+});

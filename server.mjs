@@ -177,6 +177,24 @@ const memoryStore = {
 };
 
 let memoryStoreReady;
+// Open jobs per employer for the public company directory. Counting walks every job,
+// so the result is kept per catalogue snapshot for a minute (jobs also expire by date).
+const openJobCountCache = new WeakMap();
+function openJobCounts(db) {
+  const hit = openJobCountCache.get(db);
+  if (hit && Date.now() - hit.at < 60_000) return hit.counts;
+  const jobs = new Map((memoryStore.jobs || []).map(job=>[job.slug,job]));
+  for (const job of db.jobs) jobs.set(job.slug,job);
+  const companiesById = new Map((memoryStore.employers || []).map(item=>[String(item.id),item.slug]));
+  const counts = new Map();
+  const now = new Date();
+  for (const job of jobs.values()) {
+    const slug = job.employerSlug || companiesById.get(String(job.metas?._job_employer_posted_by));
+    if (slug && isActiveJob(job,now)) counts.set(slug,(counts.get(slug)||0)+1);
+  }
+  openJobCountCache.set(db, {counts, at: Date.now()});
+  return counts;
+}
 function loadMemoryStore() {
   return memoryStoreReady ||= populateMemoryStore();
 }
@@ -1949,16 +1967,7 @@ const requestHandler = createResilientHandler(async (req, res) => {
   if (path === '/api/public/employers' && req.method === 'GET') {
     await loadMemoryStore();
     const db = await readCatalogueDb.shared(['jobs','employers']);
-    const jobs = new Map((memoryStore.jobs || []).map(job=>[job.slug,job]));
-    for (const job of db.jobs) jobs.set(job.slug,job);
-    const companiesById = new Map((memoryStore.employers || []).map(item=>[String(item.id),item.slug]));
-    const counts = new Map();
-    const now = new Date();
-    for (const job of jobs.values()) {
-      const slug = job.employerSlug || companiesById.get(String(job.metas?._job_employer_posted_by));
-      if (slug && isActiveJob(job,now)) counts.set(slug,(counts.get(slug)||0)+1);
-    }
-    return sendJson(req,res,200,publicEmployerDirectory(memoryStore.employers || [],db.employers,counts,requestUrl.searchParams));
+    return sendJson(req,res,200,publicEmployerDirectory(memoryStore.employers || [],db.employers,openJobCounts(db),requestUrl.searchParams));
   }
 
   if (path === '/api/public/jobs' && req.method === 'GET') {
@@ -2377,7 +2386,7 @@ startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
 });
 startupReady.then(registerSeoDefaults).catch(error=>console.error('Startup initialization failed:',error.message));
 // Build the catalogue snapshot and search index before the first visitor searches.
-startupReady.then(async()=>{const db=await readCatalogueDb.shared(['jobs']);await publicDirectory(db.jobs,new URLSearchParams({q:'warm'}),async()=>[]);await readCatalogueDb.shared(['jobs','employers']);}).catch(error=>console.error('Catalogue warm-up failed:',error.message));
+startupReady.then(async()=>{const db=await readCatalogueDb.shared(['jobs']);await publicDirectory(db.jobs,new URLSearchParams({q:'warm'}),async()=>[]);await loadMemoryStore();openJobCounts(await readCatalogueDb.shared(['jobs','employers']));await readCatalogueDb.shared(['employers']);}).catch(error=>console.error('Catalogue warm-up failed:',error.message));
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);

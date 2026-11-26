@@ -104,3 +104,12 @@ test('URLs that are not location destinations resolve without loading job counts
   assert.equal(await repo.resolveDestination('healthcare'),null);
   assert.equal(loads,0);
 });
+test('a new process serves saved pages without waiting for its first sync',async()=>{
+  const saved={id:'p1',slug:'nurse-jobs-in-uae',pageType:'main_category',category:'Nurse',status:'Published',indexingStatus:'Index'};
+  let release;const gate=new Promise(r=>release=r);
+  const pool={async query(sql){if(sql.startsWith('SELECT'))return [[{payload:JSON.stringify(saved)}]];return [[]];}};
+  const repo=createSeoRepository(pool,async()=>({jobs:[]}),async()=>{await gate;return {jobs:[],taxonomies:{categories:[],locations:[]}};});
+  const pages=await Promise.race([repo.published(),new Promise(r=>setTimeout(()=>r('waited'),200))]);
+  assert.deepEqual(pages.map(p=>p.slug),['nurse-jobs-in-uae']);
+  release();
+});

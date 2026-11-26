@@ -211,7 +211,9 @@ export function createSeoRepository(pool, readLocalDb, loadRecords) {
     published: async () => {
       if (Date.now() - lastSync < 60000) return cachedRows();
       backgroundSync ||= queue(() => syncUnlocked()).finally(() => { backgroundSync = null; });
-      if (!lastSync) return backgroundSync;
+      // A freshly started process serves the saved pages while its first sync runs;
+      // only an empty table (first deploy) waits for pages to be generated.
+      if (!lastSync) { const saved = await cachedRows(); if (!saved.length) return backgroundSync; }
       backgroundSync.catch(error => console.warn('SEO page sync failed:', error.message));
       return cachedRows();
     },

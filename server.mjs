@@ -148,6 +148,10 @@ const wpDb = retryDisconnectedReads(mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
 }));
+// The database closes a connection after 20 idle seconds (wait_timeout). Saves hold a
+// named lock or a transaction across slower steps, and pooled connections can sit idle
+// longer than that, so every connection asks for a longer limit when it opens.
+wpDb.pool.on('connection', connection => connection.query('SET SESSION wait_timeout=600', () => {}));
 const acquireWordPressSave=createWordPressLock(wpDb);
 const emsSync = createEmsSync(wpDb);
 const googleIndexing=createGoogleIndexing({pool:wpDb});

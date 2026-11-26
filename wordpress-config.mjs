@@ -13,5 +13,7 @@ export function createWordPressLock(pool){return async()=>{
  const connection=await pool.getConnection();
  try{const [rows]=await connection.query("SELECT GET_LOCK('trikonet-wordpress-publisher',10) acquired");if(Number(rows[0]?.acquired)!==1)throw Error('Publisher is busy. Please retry.');}
  catch(error){connection.release();throw error;}
- return async()=>{try{await connection.query("SELECT RELEASE_LOCK('trikonet-wordpress-publisher')");}finally{connection.release();}};
+ // A dropped connection has already given up its named lock. Releasing must never
+ // throw: it runs after the reply is sent, and an error there used to crash the process.
+ return async()=>{try{await connection.query("SELECT RELEASE_LOCK('trikonet-wordpress-publisher')");connection.release();}catch(error){console.warn('WordPress publisher lock release failed:',error.message);try{connection.destroy();}catch{}}};
 };}

@@ -831,6 +831,9 @@ async function sendJson(req, res, status, value) {
   headers['Content-Length'] = body.length;
   if(status===200)publicResponses.set(publicResponseKey(req),body,headers);
   publicRequests.complete(res,status,body,headers);
+  // Responses are prepared asynchronously; a late second reply must not throw
+  // ERR_HTTP_HEADERS_SENT, which would crash the process.
+  if(res.headersSent||res.writableEnded)return;
   res.writeHead(status, headers);
   res.end(body);
 }

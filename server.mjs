@@ -2386,7 +2386,7 @@ startupReady = new Promise(resolve => setImmediate(resolve)).then(async () => {
 });
 startupReady.then(registerSeoDefaults).catch(error=>console.error('Startup initialization failed:',error.message));
 // Build the catalogue snapshot and search index before the first visitor searches.
-startupReady.then(async()=>{const db=await readCatalogueDb.shared(['jobs']);await publicDirectory(db.jobs,new URLSearchParams({q:'warm'}),async()=>[]);await loadMemoryStore();openJobCounts(await readCatalogueDb.shared(['jobs','employers']));await readCatalogueDb.shared(['employers']);}).catch(error=>console.error('Catalogue warm-up failed:',error.message));
+startupReady.then(async()=>{const db=await readCatalogueDb.shared(['jobs']);await publicDirectory(db.jobs,new URLSearchParams({q:'warm'}),async()=>[]);await readCatalogueDb.shared(['jobs','employers']);}).catch(error=>console.error('Catalogue warm-up failed:',error.message));
 server.listen(port, host, () => {
   console.log(`Trikonet Backend API running at: http://${host}:${port}`);
   console.log(`Configured for API domain: https://api.trikonet.com`);
@@ -2399,7 +2399,9 @@ const refreshSeo = createCoordinatedTask(wpDb, 'seo', 5 * 60 * 1000, async () =>
 });
 const seoRefreshTimer = setInterval(() => refreshSeo().catch(error => console.error('SEO page refresh failed:', error.message)), 5 * 60 * 1000);
 seoRefreshTimer.unref();
-const readEmsState = createEmsStateReader(wpDb, readCatalogueDb, () => accountDeletion.ensure());
+// The EMS scan runs every 30 seconds and only reads records, so it uses the shared
+// snapshot instead of parsing a private copy of every job each time.
+const readEmsState = createEmsStateReader(wpDb, fields => readCatalogueDb.shared(fields), () => accountDeletion.ensure());
 let emsScanRunning = false;
 async function refreshEmsUploads() {
   if (emsScanRunning || !process.env.EMS_TRIKONET_SYNC_SECRET) return;

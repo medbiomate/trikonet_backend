@@ -92,3 +92,11 @@ test('Phlebotomist work is credited to Sajna while original creator stays Hasna'
  assert.equal(emsJobOperator({...record,updatedBy:{...record.updatedBy,at:record.emsFirstPublishedAt}}).id,'hasna');
  assert.equal(emsJobOperator({...record,updatedBy:{...record.updatedBy,at:'invalid'}}).id,'hasna');
 });
+test('re-queuing an unchanged record skips the database write', async () => {
+  let writes = 0;
+  const sync = createEmsSync({ query: async sql => { if (sql.startsWith('INSERT')) writes++; return [[]]; } }, { secret: '' });
+  await sync.queue(job, creator); await sync.queue(job, creator);
+  assert.equal(writes, 1);
+  await sync.queue({ ...job, title: 'Senior Nurse' }, creator);
+  assert.equal(writes, 2);
+});

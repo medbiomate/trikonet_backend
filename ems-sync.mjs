@@ -40,6 +40,9 @@ export function emsEmployerPayload(employer, creator) {
 
 export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRET, fetchImpl = fetch } = {}) {
   let ready, running = false;
+  // The scan re-queues every record each run; skip the database write when this
+  // process already queued the same revision.
+  const queued = new Map();
   const ensure = () => ready ||= db.query(`CREATE TABLE IF NOT EXISTS trikonet_ems_outbox (
     job_id VARCHAR(100) PRIMARY KEY, payload LONGTEXT NOT NULL, revision VARCHAR(80) NOT NULL,
     delivered_revision VARCHAR(80), attempts INT NOT NULL DEFAULT 0, last_error VARCHAR(300),
@@ -49,10 +52,14 @@ export function createEmsSync(db, { secret = process.env.EMS_TRIKONET_SYNC_SECRE
     async queue(job, creator, type = 'job') {
       const payload = type === 'company' ? emsEmployerPayload(job, creator) : emsJobPayload(job, creator);
       if (!payload) return false;
+      const id = payload.type === 'company' ? `company:${payload.postId}` : payload.postId;
+      const body = JSON.stringify(payload), revision = createHash('sha256').update(body).digest('hex');
+      if (queued.get(id) === revision) return true;
       await ensure();
       await db.query(`INSERT INTO trikonet_ems_outbox (job_id,payload,revision) VALUES (?,?,?)
         ON DUPLICATE KEY UPDATE next_attempt_at=IF(revision<>VALUES(revision),0,next_attempt_at),payload=VALUES(payload),revision=VALUES(revision)`,
-        [payload.type === 'company' ? `company:${payload.postId}` : payload.postId, JSON.stringify(payload), createHash('sha256').update(JSON.stringify(payload)).digest('hex')]);
+        [id, body, revision]);
+      queued.set(id, revision);
       return true;
     },
     async flush() {

@@ -53,40 +53,59 @@ export function createCatalogueReader(pool, ensure, {maxAgeMs = 10 * 60_000, ref
     }
     return task;
   };
+  // A parsed snapshot replaces its raw text, so each field is held once in memory.
+  const snapshotOf = entry => {
+    if (!entry.snapshot) { entry.snapshot = deepFreeze(shape(JSON.parse(entry.text))); entry.text = null; }
+    return entry.snapshot;
+  };
   async function readCatalogueDb(fields = ['jobs','employers','taxonomies'], {fresh = false} = {}) {
     const keys = fieldsKey(fields);
     if (fresh) cache.delete(keys.join(','));
-    return shape(JSON.parse((await load(keys)).text));
+    const entry = await load(keys);
+    return entry.text != null ? shape(JSON.parse(entry.text)) : structuredClone(entry.snapshot);
   }
   // Public pages must never wait for a catalogue rebuild. Any write to the app state
   // (a candidate saving a profile, an admin edit) moves updated_at, and re-extracting
   // the catalogue then takes seconds. So once a snapshot exists it is served at once,
-  // and a single background refresh per field set swaps in the new version.
+  // and a single background refresh per field swaps in the new version.
+  // Snapshots are kept per field and combined on request: jobs are the bulk of the
+  // catalogue, and holding them once per field set filled the process memory.
   const served = new Map();
-  const snapshotOf = entry => (entry.snapshot ||= deepFreeze(shape(JSON.parse(entry.text))));
-  const refresh = (key, keys) => {
-    const current = served.get(key);
+  const refresh = name => {
+    const current = served.get(name);
     if (current.refreshing || now() - current.checked < refreshIntervalMs) return current.refreshing;
     current.checked = now();
-    current.refreshing = load(keys).then(entry => {
-      if (entry.version !== current.version || entry.version == null) served.set(key, {version: entry.version, snapshot: snapshotOf(entry), checked: now(), refreshing: null});
+    current.refreshing = load([name]).then(entry => {
+      if (entry.version !== current.version || entry.version == null) served.set(name, {version: entry.version, snapshot: snapshotOf(entry), checked: now(), refreshing: null});
     }).catch(() => {}).finally(() => { current.refreshing = null; });
     return current.refreshing;
   };
-  readCatalogueDb.shared = async (fields = ['jobs','employers','taxonomies']) => {
-    const keys = fieldsKey(fields), key = keys.join(',');
-    const ready = served.get(key);
-    if (ready) { refresh(key, keys); return ready.snapshot; }
-    let first = pending.get('first:' + key);
+  const sharedField = name => {
+    const ready = served.get(name);
+    if (ready) { refresh(name); return ready.snapshot; }
+    let first = pending.get('first:' + name);
     if (!first) {
-      first = load(keys).then(entry => {
-        if (!served.has(key)) served.set(key, {version: entry.version, snapshot: snapshotOf(entry), checked: now(), refreshing: null});
-        return served.get(key).snapshot;
-      }).finally(() => pending.delete('first:' + key));
-      pending.set('first:' + key, first);
+      first = load([name]).then(entry => {
+        if (!served.has(name)) served.set(name, {version: entry.version, snapshot: snapshotOf(entry), checked: now(), refreshing: null});
+        return served.get(name).snapshot;
+      }).finally(() => pending.delete('first:' + name));
+      pending.set('first:' + name, first);
     }
     return first;
   };
-  readCatalogueDb.clear = () => { cache.clear(); served.clear(); };
+  const combined = new Map();
+  readCatalogueDb.shared = async (fields = ['jobs','employers','taxonomies']) => {
+    const keys = fieldsKey(fields);
+    const parts = await Promise.all(keys.map(sharedField));
+    if (parts.length === 1) return parts[0];
+    const key = keys.join(','), hit = combined.get(key);
+    if (hit && hit.parts.every((part, index) => part === parts[index])) return hit.value;
+    const value = {...shape({})};
+    keys.forEach((name, index) => { value[name] = parts[index][name]; });
+    deepFreeze(value);
+    combined.set(key, {parts, value});
+    return value;
+  };
+  readCatalogueDb.clear = () => { cache.clear(); served.clear(); combined.clear(); };
   return readCatalogueDb;
 }

@@ -78,3 +78,11 @@ test('a failing version check falls back to a direct read',async()=>{
  let reads=0;const read=createCatalogueReader({query:async sql=>{if(isVersion(sql))throw Error('lock');reads++;return [[{payload:'{"jobs":[]}'}]];}},async()=>{});
  assert.deepEqual((await read(['jobs'])).jobs,[]);await read(['jobs']);assert.equal(reads,2);
 });
+test('field sets share one snapshot per field and keep no raw text',async()=>{
+ const sqls=[];const read=createCatalogueReader({query:async sql=>{if(isVersion(sql))return [[{version:'v',age:60}]];sqls.push(sql);return [[{payload:sql.includes("'jobs'")?'{"jobs":[{"id":1}]}':'{"employers":[{"slug":"e"}]}'}]];}},async()=>{});
+ const jobs=await read.shared(['jobs']);const both=await read.shared(['jobs','employers']);
+ assert.equal(both.jobs,jobs.jobs);assert.deepEqual(both.employers,[{slug:'e'}]);assert.ok(Object.isFrozen(both));
+ assert.equal(await read.shared(['employers','jobs']),both);
+ assert.equal(sqls.length,2);assert.ok(sqls.every(sql=>!(sql.includes("'jobs'")&&sql.includes("'employers'"))));
+ const copy=await read(['jobs']);copy.jobs[0].id=5;assert.equal(jobs.jobs[0].id,1);assert.equal(sqls.length,2);
+});

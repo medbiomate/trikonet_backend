@@ -19,7 +19,7 @@ export function validatePayload(body,config){
  for(const field of ['categories','locations','types','tags'])if(body.job[field]!==undefined&&(!Array.isArray(body.job[field])||body.job[field].length>100||body.job[field].some(value=>typeof value!=='string'||value.length>300)))throw Error('Invalid job terms.');
  if(String(body.job.description||'').length>1000000)throw Error('Description is too large.');
  const logo=body.job.logo;
- if(logo){const u=new URL(logo);if(u.protocol!=='https:'||![new URL(config.origin).hostname,'api.trikonet.com','media.trikonet.com'].includes(u.hostname))throw Error('Logo must use a trusted host.');}
+ if(logo){const u=new URL(logo);if(u.protocol!=='https:'||![new URL(config.origin).hostname,'www.trikonet.com','trikonet.com','api.trikonet.com','media.trikonet.com'].includes(u.hostname))throw Error('Logo must use a trusted host.');}
  return body;
 }
 export function createWordPressBridge({getConfig=()=>readWordPressConfig()}={}){

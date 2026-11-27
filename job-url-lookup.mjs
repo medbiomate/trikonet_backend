@@ -11,5 +11,13 @@ export function findJobByPath(jobs, requested) {
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return null;
   const aliases = jobs.filter(job => (job.urlAliases || []).some(alias => clean(alias) === path || pathSlug(alias) === slug));
-  return aliases.length === 1 ? aliases[0] : null;
+  if (aliases.length) return aliases.length === 1 ? aliases[0] : null;
+  // A job published from WordPress keeps its WordPress address (/job/<post slug>) after the app gives it
+  // a /jobs/ address. The stored source URL may name an older WordPress host, so only its path is compared.
+  if (!path.startsWith('/job/')) return null;
+  const sourced = jobs.filter(job => sourcePath(job.wordpressSource?.url) === path);
+  return sourced.length === 1 ? sourced[0] : null;
+}
+function sourcePath(url) {
+  try { return clean(decodeURIComponent(new URL(String(url || '')).pathname)); } catch { return ''; }
 }

@@ -14,7 +14,7 @@ export function createWordPressEmployers({getConfig=readWordPressConfig}={}){ret
   const body=JSON.parse(raw.toString('utf8')),company=body.employer;
   if(body.siteId!==config.siteId||!Number.isSafeInteger(body.postId)||body.postId<1||!Number.isSafeInteger(body.version)||body.version<1||!['publish','draft','pending','trash','private'].includes(body.status))throw Error('Invalid employer identity.');
   if(!company||typeof company.title!=='string'||!company.title.trim()||company.title.length>300||!/^[a-z0-9][a-z0-9-]{0,250}$/.test(company.slug||''))throw Error('A company name and slug are required.');
-  if(company.logo){const logo=new URL(company.logo);if(logo.protocol!=='https:'||![new URL(config.origin).hostname,'api.trikonet.com','media.trikonet.com'].includes(logo.hostname))throw Error('Untrusted company logo.');}
+  if(company.logo){const logo=new URL(company.logo);if(logo.protocol!=='https:'||![new URL(config.origin).hostname,'www.trikonet.com','trikonet.com','api.trikonet.com','media.trikonet.com'].includes(logo.hostname))throw Error('Untrusted company logo.');}
   for(const field of ['locations','categories'])if(!Array.isArray(company[field])||company[field].some(value=>typeof value!=='string'||value.length>300))throw Error('Invalid company terms.');
   release=await ctx.acquireJobSave();const db=await ctx.readLocalDb();await ctx.loadMemoryStore();db.employers||=[];
   let index=db.employers.findIndex(e=>e.wordpressSource?.siteId===body.siteId&&e.wordpressSource?.postId===body.postId);

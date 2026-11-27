@@ -769,7 +769,7 @@ async function loadSeoRecords() {
 const seoRepository = createSeoRepository(wpDb,()=>readCatalogueDb.shared(['jobs']),loadSeoRecords);
 // Preserve the existing main category URL explicitly requested by the admin.
 // This migration is insert-only: never overwrite saved manual settings.
-const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
+const registerAccountingDestination = () => seoRepository.createMain({category:'Accounting or Finance',slug:'accounting-finance-jobs-in-uae',title:'Accounting & Finance Jobs in UAE',seoTitle:'Accounting & Finance Jobs in UAE - Latest Vacancies | Trikonet',metaDescription:'Explore current accounting and finance jobs across the UAE and apply for relevant opportunities on Trikonet.',onlyIfMissing:true});
 
 async function readJsonBody(req, maxBytes = 2_000_000) {
   let body = '';
@@ -853,7 +853,7 @@ const candidateState=createCandidateStateStore(wpDb,{ensure:ensurePersistentStat
 }});
 function registerSeoDefaults() {
 registerAccountingDestination().catch(error=>console.error('Accounting destination registration failed:',error.message));
-seoRepository.createMain({category:'Education and Training',slug:'education-and-training-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
+seoRepository.createMain({category:'Education and Training',slug:'education-and-training-jobs-in-uae',title:'Education and Training Jobs in UAE',onlyIfMissing:true}).catch(error=>console.error('Education destination registration failed:',error.message));
 }
 const MAX_RESUMES_PER_USER = 3;
 const MAX_PROFILE_PHOTO_BYTES = 100 * 1024;
